@@ -33,6 +33,14 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      am-management-api:
+        condition: service_healthy
     environment:
       - gravitee_management_mongodb_uri=mongodb://mongodb:27017/graviteeam
       - gravitee_oauth2_mongodb_uri=mongodb://mongodb:27017/graviteeam
+    healthcheck:
+      test: curl -sf http://localhost:8092/_node/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

@@ -55,13 +55,23 @@ jobs:
         run: docker compose -f docker-compose.test.yml up -d
       - name: Wait for Gravitee AM
         run: |
-          echo "Waiting for Gravitee AM Management API..."
+          echo "Waiting for Gravitee AM Management API (8093)..."
           for i in $(seq 1 60); do
             if curl -so /dev/null -w '%{http_code}' http://localhost:8093/management/organizations/DEFAULT/environments/DEFAULT 2>/dev/null | grep -q '401\|200'; then
-              echo "Gravitee AM is ready"
-              exit 0
+              echo "Management API is ready"
+              break
             fi
             echo "Attempt $i/60..."
+            sleep 10
+          done
+
+          echo "Waiting for Gravitee AM Gateway (8092)..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8092/_node/health >/dev/null 2>&1; then
+              echo "Gateway is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30..."
             sleep 10
           done
           echo "Gravitee AM did not start in time"
@@ -69,7 +79,7 @@ jobs:
       - name: Run acceptance tests
         env:
           TF_ACC: "1"
-        run: go test ./... -v -timeout 120m
+        run: go test ./... -v -p 1 -timeout 120m
       - name: Stop Gravitee AM
         if: always()
         run: docker compose -f docker-compose.test.yml down
