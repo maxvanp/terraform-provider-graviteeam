@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Gravitee AM Documentation
+    url: https://documentation.gravitee.io/am
+    about: Official Gravitee Access Management documentation

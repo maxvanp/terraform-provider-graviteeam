@@ -1,0 +1,49 @@
+name: Feature Request
+description: Suggest a new resource, data source, or enhancement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement!
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Request Type
+      options:
+        - New Resource
+        - New Data Source
+        - Enhancement to Existing Resource
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the feature you'd like
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Why do you need this? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: Gravitee AM API Reference
+      description: Link to relevant Gravitee AM API endpoints (if known)
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Proposed Terraform Configuration
+      description: How you'd like the resource/data source to look
+      render: hcl
