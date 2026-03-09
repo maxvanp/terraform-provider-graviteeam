@@ -1,14 +1,12 @@
 module github.com/maxvanp/terraform-provider-graviteeam
 
-go 1.22.0
-
-toolchain go1.22.10
+go 1.25.0
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
 	github.com/hashicorp/terraform-plugin-go v0.25.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.36.0
 )
 
 require (
