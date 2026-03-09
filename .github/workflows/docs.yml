@@ -1,0 +1,29 @@
+name: Documentation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-check:
+    name: Verify Generated Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install tfplugindocs
+        run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+      - name: Generate docs
+        run: make docs
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code docs/; then
+            echo "::error::Generated documentation is out of date. Run 'make docs' and commit the changes."
+            git diff docs/
+            exit 1
+          fi

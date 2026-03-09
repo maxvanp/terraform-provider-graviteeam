@@ -1,0 +1,38 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: mongosh --eval "db.runCommand('ping').ok" --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  am-management-api:
+    image: graviteeio/am-management-api:4.6
+    ports:
+      - "8093:8093"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - gravitee_management_mongodb_uri=mongodb://mongodb:27017/graviteeam
+      - gravitee_oauth2_mongodb_uri=mongodb://mongodb:27017/graviteeam
+    healthcheck:
+      test: curl -so /dev/null -w '%{http_code}' http://localhost:8093/management/organizations/DEFAULT/environments/DEFAULT | grep -q '401\|200' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  am-gateway:
+    image: graviteeio/am-gateway:4.6
+    ports:
+      - "8092:8092"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - gravitee_management_mongodb_uri=mongodb://mongodb:27017/graviteeam
+      - gravitee_oauth2_mongodb_uri=mongodb://mongodb:27017/graviteeam

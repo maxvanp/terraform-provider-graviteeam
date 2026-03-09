@@ -1,0 +1,148 @@
+# Terraform Provider for Gravitee Access Management
+
+A Terraform provider for managing [Gravitee Access Management](https://www.gravitee.io/platform/access-management) resources. This provider enables you to configure security domains, applications, identity providers, MFA factors, and more through infrastructure as code.
+
+## Requirements
+
+- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- [Go](https://golang.org/doc/install) >= 1.22 (for building from source)
+- [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
+
+## Installation
+
+### From GitHub Releases
+
+Download the appropriate binary for your platform from the [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases) page, then place it in your Terraform plugins directory.
+
+### Local Development (dev_overrides)
+
+Build the provider and configure `~/.terraformrc` to use the local binary:
+
+```bash
+git clone https://github.com/maxvanp/terraform-provider-graviteeam.git
+cd terraform-provider-graviteeam
+make build
+```
+
+Add to `~/.terraformrc`:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "maxvanp/graviteeam" = "/path/to/terraform-provider-graviteeam"
+  }
+  direct {}
+}
+```
+
+## Usage
+
+```hcl
+terraform {
+  required_providers {
+    graviteeam = {
+      source = "maxvanp/graviteeam"
+    }
+  }
+}
+
+provider "graviteeam" {
+  api_url       = "http://localhost:8093"
+  client_id     = "admin"
+  client_secret = "adminadmin"
+}
+
+resource "graviteeam_domain" "example" {
+  name        = "my-domain"
+  description = "Example security domain"
+  enabled     = true
+
+  oidc {
+    allow_localhost_redirect_uri   = true
+    allow_http_scheme_redirect_uri = true
+  }
+
+  login_settings {
+    register_enabled        = true
+    forgot_password_enabled = true
+  }
+}
+```
+
+## Resources and Data Sources
+
+### Resources (21)
+
+| Resource | Description |
+|----------|-------------|
+| `graviteeam_domain` | Security domain (equivalent Keycloak Realm) |
+| `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings |
+| `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
+| `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
+| `graviteeam_user` | Domain user with pre-registration support |
+| `graviteeam_password_policy` | Password complexity rules |
+| `graviteeam_scope` | OAuth2 scope |
+| `graviteeam_role` | Domain-level role with OAuth scopes |
+| `graviteeam_group` | User group with roles and members |
+| `graviteeam_theme` | UI branding (colors, CSS, logo) |
+| `graviteeam_form` | Custom page template (LOGIN, REGISTRATION, etc.) |
+| `graviteeam_email_template` | Custom email template |
+| `graviteeam_extension_grant` | Custom grant type (JWT Bearer) |
+| `graviteeam_certificate` | Certificate for JWT signing (PKCS12) |
+| `graviteeam_reporter` | Audit reporter plugin |
+| `graviteeam_service_resource` | Shared resource plugin (SMTP, etc.) |
+| `graviteeam_bot_detection` | Bot detection plugin |
+| `graviteeam_device_identifier` | Device fingerprinting plugin |
+| `graviteeam_auth_device_notifier` | CIBA auth device notifier |
+| `graviteeam_i18n_dictionary` | Internationalization dictionary |
+| `graviteeam_alert_notifier` | Alert webhook notifier |
+
+### Data Sources (4)
+
+| Data Source | Description |
+|-------------|-------------|
+| `graviteeam_analytics` | Read analytics data (DATE_HISTO, COUNT, GROUP_BY) |
+| `graviteeam_audits` | Read audit logs for a domain |
+| `graviteeam_entrypoints` | Read domain entrypoints |
+| `graviteeam_flows` | Read domain flows |
+
+All resources support `terraform import`. See the [documentation](docs/) for details on each resource.
+
+## Development
+
+### Build
+
+```bash
+make build
+```
+
+### Install locally
+
+```bash
+make install
+```
+
+### Run tests
+
+```bash
+make test       # Unit tests
+make testacc    # Acceptance tests (requires running Gravitee AM)
+```
+
+### Lint and format
+
+```bash
+make fmt        # Format Go code
+make vet        # Run go vet
+make lint       # Run golangci-lint
+```
+
+### Generate documentation
+
+```bash
+make docs
+```
+
+## License
+
+This project is licensed under the Mozilla Public License 2.0 - see the [LICENSE](LICENSE) file for details.
