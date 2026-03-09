@@ -8,6 +8,10 @@ description: |-
 
 The Gravitee AM provider allows you to manage [Gravitee Access Management](https://www.gravitee.io/platform/access-management) resources using Terraform.
 
+## Compatibility
+
+This provider targets the **Gravitee AM 4.6.x** Management API. It may work with other 4.x versions, but acceptance tests are run against Gravitee AM 4.6.
+
 ## Authentication
 
 The provider authenticates to the Gravitee AM Management API using OAuth2 client credentials.

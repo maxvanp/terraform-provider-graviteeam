@@ -1373,3 +1373,37 @@ func (c *Client) RemoveGroupRole(ctx context.Context, domainID, groupID, roleID 
 	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
 	return err
 }
+
+// --- User Roles ---
+
+func (c *Client) GetUserRoles(ctx context.Context, domainID, userID string) ([]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/users/%s/roles", domainID, userID)
+	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) SetUserRoles(ctx context.Context, domainID, userID string, roleIDs []string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/users/%s/roles", domainID, userID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, roleIDs)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) RemoveUserRole(ctx context.Context, domainID, userID, roleID string) error {
+	path := fmt.Sprintf("/domains/%s/users/%s/roles/%s", domainID, userID, roleID)
+	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
+	return err
+}

@@ -8,6 +8,10 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 - [Go](https://golang.org/doc/install) >= 1.22 (for building from source)
 - [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
 
+## Compatibility
+
+This provider targets the **Gravitee AM 4.6.x** Management API. It may work with other 4.x versions, but acceptance tests are run against Gravitee AM 4.6.
+
 ## Installation
 
 ### From GitHub Releases
