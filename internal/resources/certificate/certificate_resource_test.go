@@ -107,7 +107,10 @@ func generateTestPKCS12(t *testing.T) string {
 	}
 
 	// Cleanup
-	exec.Command("rm", "-f", "/tmp/test-cert-key.pem", "/tmp/test-cert.pem", "/tmp/test-cert.p12").Run()
+	cleanupCmd := exec.Command("rm", "-f", "/tmp/test-cert-key.pem", "/tmp/test-cert.pem", "/tmp/test-cert.p12")
+	if cleanupOut, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
+		t.Fatalf("cleanup generated certificate files: %v\n%s", cleanupErr, cleanupOut)
+	}
 
 	return string(out)
 }

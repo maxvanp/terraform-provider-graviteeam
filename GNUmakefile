@@ -30,7 +30,7 @@ test:
 	go test ./... -v $(TESTARGS) -timeout 120m
 
 testacc:
-	TF_ACC=1 go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 go test ./... -v -p 1 $(TESTARGS) -timeout 120m
 
 docs:
 	tfplugindocs generate --provider-name graviteeam

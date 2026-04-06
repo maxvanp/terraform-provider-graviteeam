@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
@@ -178,8 +179,16 @@ func (r *FactorResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	plan.ID = state.ID
 
+	factorType := plan.FactorType.ValueString()
+	pluginType, ok := factorTypeToPluginType[factorType]
+	if !ok {
+		resp.Diagnostics.AddError("Invalid factor_type", fmt.Sprintf("Unknown factor type: %s", factorType))
+		return
+	}
+
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
+		"type":          pluginType,
 		"configuration": "{}",
 	}
 

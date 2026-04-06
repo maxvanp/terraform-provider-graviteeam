@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
@@ -236,6 +237,7 @@ func (r *IdentityProviderResource) ImportState(ctx context.Context, req resource
 func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 	}
 

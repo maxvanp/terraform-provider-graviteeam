@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/acctest"
 )
 
@@ -27,6 +28,7 @@ resource "graviteeam_domain" "test" {
 					resource.TestCheckResourceAttr("graviteeam_domain.test", "name", "test-acc-domain"),
 					resource.TestCheckResourceAttr("graviteeam_domain.test", "description", "Acceptance test domain"),
 					resource.TestCheckResourceAttr("graviteeam_domain.test", "enabled", "false"),
+					resource.TestCheckResourceAttr("graviteeam_domain.test", "data_plane_id", "default"),
 					resource.TestCheckResourceAttrSet("graviteeam_domain.test", "default_idp_id"),
 				),
 			},

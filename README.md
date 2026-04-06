@@ -5,12 +5,14 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.22 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.25 (for building from source)
 - [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.6.x** Management API. It may work with other 4.x versions, but acceptance tests are run against Gravitee AM 4.6.
+This provider targets the **Gravitee AM 4.11.x** Management API. Acceptance tests are run against Gravitee AM 4.11.
+
+The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM line.
 
 ## Installation
 
@@ -75,12 +77,15 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (21)
+### Resources (31)
 
 | Resource | Description |
 |----------|-------------|
 | `graviteeam_domain` | Security domain (equivalent Keycloak Realm) |
 | `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings |
+| `graviteeam_application_email` | Application email templates and overrides |
+| `graviteeam_application_flow` | Application-specific flows |
+| `graviteeam_application_form` | Application-specific forms |
 | `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
@@ -88,6 +93,8 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_scope` | OAuth2 scope |
 | `graviteeam_role` | Domain-level role with OAuth scopes |
 | `graviteeam_group` | User group with roles and members |
+| `graviteeam_group_members` | Group membership management |
+| `graviteeam_group_roles` | Group role assignments |
 | `graviteeam_theme` | UI branding (colors, CSS, logo) |
 | `graviteeam_form` | Custom page template (LOGIN, REGISTRATION, etc.) |
 | `graviteeam_email_template` | Custom email template |
@@ -99,7 +106,12 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_device_identifier` | Device fingerprinting plugin |
 | `graviteeam_auth_device_notifier` | CIBA auth device notifier |
 | `graviteeam_i18n_dictionary` | Internationalization dictionary |
+| `graviteeam_org_identity_provider` | Organization-level identity provider |
+| `graviteeam_org_role` | Organization-level role |
+| `graviteeam_org_settings` | Organization settings singleton |
+| `graviteeam_org_tag` | Organization tag |
 | `graviteeam_alert_notifier` | Alert webhook notifier |
+| `graviteeam_user_role` | User role assignments |
 
 ### Data Sources (4)
 

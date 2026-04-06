@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
@@ -155,6 +156,7 @@ func (r *ReporterResource) Update(ctx context.Context, req resource.UpdateReques
 
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 		"enabled":       plan.Enabled.ValueBool(),
 	}

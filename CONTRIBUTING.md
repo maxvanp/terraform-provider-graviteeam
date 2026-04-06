@@ -6,7 +6,7 @@ Thank you for your interest in contributing!
 
 ### Requirements
 
-- [Go](https://golang.org/doc/install) >= 1.22
+- [Go](https://golang.org/doc/install) >= 1.25
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose (for acceptance tests)
 
@@ -49,6 +49,12 @@ docker compose -f docker-compose.test.yml up -d
 
 # Wait for it to be ready, then run tests
 TF_ACC=1 make testacc
+```
+
+### Refresh the bundled OpenAPI reference
+
+```bash
+./scripts/update-openapi.sh
 ```
 
 ## Pull Request Process

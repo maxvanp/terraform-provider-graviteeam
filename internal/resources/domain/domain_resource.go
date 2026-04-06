@@ -8,8 +8,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
@@ -54,6 +56,15 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 				Description: "Whether the domain is enabled",
+			},
+			"data_plane_id": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("default"),
+				Description: "The data plane ID used when creating the domain",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"default_idp_id": schema.StringAttribute{
 				Computed:    true,
@@ -141,7 +152,8 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Step 1: Create with minimal payload (name + description only)
 	createBody := map[string]interface{}{
-		"name": plan.Name.ValueString(),
+		"name":        plan.Name.ValueString(),
+		"dataPlaneId": plan.DataPlaneID.ValueString(),
 	}
 	if !plan.Description.IsNull() {
 		createBody["description"] = plan.Description.ValueString()
@@ -291,6 +303,11 @@ func (r *DomainResource) readIntoModel(model *DomainModel, data map[string]inter
 	}
 	if enabled, ok := data["enabled"].(bool); ok {
 		model.Enabled = types.BoolValue(enabled)
+	}
+	if dataPlaneID, ok := data["dataPlaneId"].(string); ok && dataPlaneID != "" {
+		model.DataPlaneID = types.StringValue(dataPlaneID)
+	} else if model.DataPlaneID.IsNull() || model.DataPlaneID.IsUnknown() {
+		model.DataPlaneID = types.StringValue("default")
 	}
 
 	// Read OIDC settings

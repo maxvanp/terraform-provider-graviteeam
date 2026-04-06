@@ -39,6 +39,7 @@ resource "graviteeam_domain" "example" {
 
 ### Optional
 
+- `data_plane_id` (String) The data plane ID used when creating the domain
 - `description` (String) The description of the domain
 - `enabled` (Boolean) Whether the domain is enabled
 - `login_settings` (Block, Optional) Login page settings (see [below for nested schema](#nestedblock--login_settings))

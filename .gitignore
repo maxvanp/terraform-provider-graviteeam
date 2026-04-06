@@ -1,5 +1,6 @@
 # Go binary
 terraform-provider-graviteeam
+dist/
 
 # Terraform
 .terraform/
@@ -11,6 +12,8 @@ terraform-provider-graviteeam
 # IDE
 .idea/
 .vscode/
+.codex
+.codex/
 *.swp
 
 # OS

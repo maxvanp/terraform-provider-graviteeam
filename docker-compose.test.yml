@@ -10,15 +10,16 @@ services:
       retries: 10
 
   am-management-api:
-    image: graviteeio/am-management-api:4.6
+    image: graviteeio/am-management-api:4.11
     ports:
       - "8093:8093"
     depends_on:
       mongodb:
         condition: service_healthy
     environment:
-      - gravitee_management_mongodb_uri=mongodb://mongodb:27017/graviteeam
-      - gravitee_oauth2_mongodb_uri=mongodb://mongodb:27017/graviteeam
+      - gravitee_ds_mongodb_host=mongodb
+      - gravitee_ds_mongodb_port=27017
+      - gravitee_ds_mongodb_dbname=graviteeam
     healthcheck:
       test: curl -so /dev/null -w '%{http_code}' http://localhost:8093/management/organizations/DEFAULT/environments/DEFAULT | grep -q '401\|200' || exit 1
       interval: 10s
@@ -27,7 +28,7 @@ services:
       start_period: 30s
 
   am-gateway:
-    image: graviteeio/am-gateway:4.6
+    image: graviteeio/am-gateway:4.11
     ports:
       - "8092:8092"
     depends_on:
@@ -36,10 +37,11 @@ services:
       am-management-api:
         condition: service_healthy
     environment:
-      - gravitee_management_mongodb_uri=mongodb://mongodb:27017/graviteeam
-      - gravitee_oauth2_mongodb_uri=mongodb://mongodb:27017/graviteeam
+      - gravitee_ds_mongodb_host=mongodb
+      - gravitee_ds_mongodb_port=27017
+      - gravitee_ds_mongodb_dbname=graviteeam
     healthcheck:
-      test: curl -sf http://localhost:8092/_node/health || exit 1
+      test: curl -so /dev/null -w '%{http_code}' http://localhost:18092/health | grep -q '401\|200' || exit 1
       interval: 10s
       timeout: 5s
       retries: 30
