@@ -1,8 +1,14 @@
 name: Documentation
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,19 +17,13 @@ jobs:
   docs-check:
     name: Verify Generated Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - name: Install tfplugindocs
-        run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
-      - name: Generate docs
-        run: make docs
-      - name: Check for uncommitted changes
-        run: |
-          if ! git diff --exit-code docs/; then
-            echo "::error::Generated documentation is out of date. Run 'make docs' and commit the changes."
-            git diff docs/
-            exit 1
-          fi
+        run: 'go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.24.0'
+      - name: Verify docs
+        run: make docs-check TFPLUGINDOCS=$(go env GOPATH)/bin/tfplugindocs

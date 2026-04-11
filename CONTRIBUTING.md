@@ -8,6 +8,8 @@ Thank you for your interest in contributing!
 
 - [Go](https://golang.org/doc/install) >= 1.25
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- `golangci-lint` v2
+- `tfplugindocs` v0.24.0
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose (for acceptance tests)
 
 ### Building
@@ -37,6 +39,13 @@ provider_installation {
 
 ```bash
 make test
+```
+
+### Lint and Format
+
+```bash
+make lint
+make fmt
 ```
 
 ### Acceptance Tests

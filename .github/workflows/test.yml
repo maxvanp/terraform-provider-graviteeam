@@ -6,28 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
+  workflow-lint:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install actionlint
+        run: 'go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12'
+      - name: Lint workflows
+        run: $(go env GOPATH)/bin/actionlint .github/workflows/*.yml
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - name: Install golangci-lint
+        run: 'go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4'
+      - name: Run lint
+        run: make lint GOLANGCI_LINT=$(go env GOPATH)/bin/golangci-lint
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - run: go build -v ./...
@@ -35,9 +56,10 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - run: go test ./... -v -timeout 10m
@@ -45,10 +67,11 @@ jobs:
   acceptance-test:
     name: Acceptance Tests
     runs-on: ubuntu-latest
-    needs: [lint, build, unit-test]
+    needs: [workflow-lint, lint, build, unit-test]
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6.0.0
+      - uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - name: Start Gravitee AM
@@ -83,6 +106,11 @@ jobs:
         env:
           TF_ACC: "1"
         run: go test ./... -v -p 1 -timeout 120m
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.test.yml ps
+          docker compose -f docker-compose.test.yml logs --no-color
       - name: Stop Gravitee AM
         if: always()
         run: docker compose -f docker-compose.test.yml down

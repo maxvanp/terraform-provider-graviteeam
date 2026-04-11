@@ -4,6 +4,9 @@ NAMESPACE=maxvanp
 NAME=graviteeam
 VERSION=0.1.0
 OS_ARCH=$(shell go env GOOS)_$(shell go env GOARCH)
+GOLANGCI_LINT?=golangci-lint
+TFPLUGINDOCS?=tfplugindocs
+LINT_TIMEOUT?=5m
 
 default: build
 
@@ -18,13 +21,14 @@ clean:
 	rm -f $(BINARY)
 
 fmt:
-	gofmt -w internal/ main.go
+	$(GOLANGCI_LINT) fmt
 
 vet:
 	go vet ./...
 
 lint:
-	golangci-lint run ./...
+	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
+	$(GOLANGCI_LINT) fmt --diff
 
 test:
 	go test ./... -v $(TESTARGS) -timeout 120m
@@ -33,7 +37,7 @@ testacc:
 	TF_ACC=1 go test ./... -v -p 1 $(TESTARGS) -timeout 120m
 
 docs:
-	tfplugindocs generate --provider-name graviteeam
+	$(TFPLUGINDOCS) generate --provider-name graviteeam
 
 docs-check: docs
 	@git diff --exit-code docs/ || (echo "docs are out of date, run 'make docs'" && exit 1)

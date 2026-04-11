@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/acctest"
 )
 
