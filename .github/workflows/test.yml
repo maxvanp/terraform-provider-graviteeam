@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -26,7 +29,8 @@ jobs:
       - name: Install actionlint
         run: 'go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12'
       - name: Lint workflows
-        run: $(go env GOPATH)/bin/actionlint .github/workflows/*.yml
+        run: |
+          "$(go env GOPATH)/bin/actionlint" .github/workflows/*.yml
 
   lint:
     name: Lint
@@ -40,7 +44,8 @@ jobs:
       - name: Install golangci-lint
         run: 'go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4'
       - name: Run lint
-        run: make lint GOLANGCI_LINT=$(go env GOPATH)/bin/golangci-lint
+        run: |
+          make lint GOLANGCI_LINT="$(go env GOPATH)/bin/golangci-lint"
 
   build:
     name: Build
