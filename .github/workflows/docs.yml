@@ -29,7 +29,7 @@ jobs:
           check-latest: true
           cache: true
       - name: Install tfplugindocs
-        run: 'go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.24.0'
+        run: 'go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0'
       - name: Verify docs
         run: |
           make docs-check TFPLUGINDOCS="$(go env GOPATH)/bin/tfplugindocs"
