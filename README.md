@@ -14,6 +14,8 @@ This provider targets the **Gravitee AM 4.11.x** Management API. Acceptance test
 
 The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM line.
 
+Current API coverage is intentionally partial. See [`docs/api-coverage.md`](docs/api-coverage.md) for the provider coverage matrix and known OpenAPI gaps.
+
 ## Maintenance Status
 
 This provider is currently **community-maintained** and released on a **best-effort** basis for Gravitee AM use cases covered by the acceptance suite.
