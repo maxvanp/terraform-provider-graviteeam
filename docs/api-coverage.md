@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.3-SNAPSHOT` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `31` |
+| Terraform resources registered | `32` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -45,6 +45,7 @@ Coverage below is grouped by API family, not by every individual OpenAPI path. S
 | `domain:i18n/dictionaries` | `graviteeam_i18n_dictionary` |
 | `domain:identities` | `graviteeam_identity_provider` |
 | `domain:password-policies` | `graviteeam_password_policy` |
+| `domain:protected-resources` | `graviteeam_protected_resource` |
 | `domain:reporters` | `graviteeam_reporter` |
 | `domain:resources` | `graviteeam_service_resource` |
 | `domain:roles` | `graviteeam_role` |
@@ -75,7 +76,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 | API family | Notes |
 |------------|-------|
-| `domain:protected-resources` | Full CRUD family for protected resources. |
 | `domain:protected-resources/members` | Access management for protected resources. |
 | `domain:protected-resources/secrets` | Secret lifecycle for protected resources. |
 | `domain:authorization-engines` | Full CRUD family for authorization engines. |
@@ -150,7 +150,7 @@ The provider also does not currently expose several read-only or platform metada
 
 ## Suggested Implementation Order
 
-1. Add protected resources, including members and secrets.
+1. Add protected resource members and secrets.
 2. Add authorization engines.
 3. Add membership resources for domains, applications, organizations, and organization groups.
 4. Add a managed domain flow resource, keeping `graviteeam_flows` as a data source.

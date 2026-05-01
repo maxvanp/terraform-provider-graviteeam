@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -926,6 +927,56 @@ func (c *Client) UpdateAuthDeviceNotifier(ctx context.Context, domainID, id stri
 func (c *Client) DeleteAuthDeviceNotifier(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/auth-device-notifiers/"+id, nil)
 	return err
+}
+
+// Protected Resource operations
+
+func (c *Client) CreateProtectedResource(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/protected-resources", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetProtectedResource(ctx context.Context, domainID, id, resourceType string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/protected-resources/"+id+protectedResourceTypeQuery(resourceType), nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateProtectedResource(ctx context.Context, domainID, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/protected-resources/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteProtectedResource(ctx context.Context, domainID, id, resourceType string) error {
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/protected-resources/"+id+protectedResourceTypeQuery(resourceType), nil)
+	return err
+}
+
+func protectedResourceTypeQuery(resourceType string) string {
+	if resourceType == "" {
+		resourceType = "MCP_SERVER"
+	}
+	return "?type=" + url.QueryEscape(resourceType)
 }
 
 // I18n Dictionary operations

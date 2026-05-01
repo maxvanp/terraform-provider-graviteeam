@@ -38,6 +38,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgsettings"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgtag"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/passwordpolicy"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresource"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reporter"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/role"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/scope"
@@ -157,6 +158,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		orgsettings.NewOrgSettingsResource,
 		orgtag.NewOrgTagResource,
 		passwordpolicy.NewPasswordPolicyResource,
+		protectedresource.NewProtectedResourceResource,
 		reporter.NewReporterResource,
 		role.NewRoleResource,
 		scope.NewScopeResource,
