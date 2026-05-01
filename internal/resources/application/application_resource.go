@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -79,6 +80,11 @@ func (r *ApplicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"settings_json": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "JSON object for advanced application settings. The value is merged into the Gravitee AM settings payload; typed blocks such as oauth_settings and mfa_settings override matching keys.",
 			},
 			"identity_providers": schema.ListAttribute{
 				Optional:    true,
@@ -192,21 +198,16 @@ func (r *ApplicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// Step 1: Create with minimal payload
-	createBody := map[string]interface{}{
-		"name": plan.Name.ValueString(),
-		"type": plan.Type.ValueString(),
+	updateBody, err := r.buildUpdateBody(plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid application configuration", err.Error())
+		return
 	}
-	if !plan.Description.IsNull() {
-		createBody["description"] = plan.Description.ValueString()
-	}
-	// redirectUris is required at creation time
-	if plan.OAuthSettings != nil && plan.OAuthSettings.RedirectURIs != nil {
-		uris := make([]string, len(plan.OAuthSettings.RedirectURIs))
-		for i, u := range plan.OAuthSettings.RedirectURIs {
-			uris[i] = u.ValueString()
-		}
-		createBody["redirectUris"] = uris
+
+	createBody, err := r.buildCreateBody(plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid application configuration", err.Error())
+		return
 	}
 
 	result, err := r.client.CreateApplication(ctx, plan.DomainID.ValueString(), createBody)
@@ -223,7 +224,6 @@ func (r *ApplicationResource) Create(ctx context.Context, req resource.CreateReq
 	savedSecret := plan.ClientSecret
 
 	// Step 2: Update with full config (identity providers, factors, settings)
-	updateBody := r.buildUpdateBody(plan)
 	result, err = r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), id, updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application after creation", err.Error())
@@ -269,7 +269,12 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody, err := r.buildUpdateBody(plan)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid application configuration", err.Error())
+		return
+	}
+
 	result, err := r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application", err.Error())
@@ -308,7 +313,28 @@ func (r *ApplicationResource) ImportState(ctx context.Context, req resource.Impo
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) map[string]interface{} {
+func (r *ApplicationResource) buildCreateBody(plan ApplicationModel) (map[string]interface{}, error) {
+	body := map[string]interface{}{
+		"name": plan.Name.ValueString(),
+		"type": plan.Type.ValueString(),
+	}
+
+	if !plan.Description.IsNull() {
+		body["description"] = plan.Description.ValueString()
+	}
+
+	redirectURIs, err := redirectURIsForCreate(plan)
+	if err != nil {
+		return nil, err
+	}
+	if len(redirectURIs) > 0 {
+		body["redirectUris"] = redirectURIs
+	}
+
+	return body, nil
+}
+
+func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) (map[string]interface{}, error) {
 	body := map[string]interface{}{
 		"name": plan.Name.ValueString(),
 		// DO NOT include "type" in update - it's only valid at creation
@@ -353,7 +379,13 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) map[string]
 	}
 
 	// Settings
-	settings := map[string]interface{}{}
+	settings, settingsProvided, err := settingsJSONToAPI(plan.SettingsJSON)
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		settings = map[string]interface{}{}
+	}
 
 	// OAuth settings
 	if plan.OAuthSettings != nil {
@@ -405,7 +437,7 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) map[string]
 		if !plan.OAuthSettings.IDTokenValiditySeconds.IsNull() && !plan.OAuthSettings.IDTokenValiditySeconds.IsUnknown() {
 			oauth["idTokenValiditySeconds"] = plan.OAuthSettings.IDTokenValiditySeconds.ValueInt64()
 		}
-		settings["oauth"] = oauth
+		mergeSettingsSection(settings, "oauth", oauth)
 	}
 
 	// MFA settings
@@ -444,14 +476,14 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) map[string]
 			}
 		}
 
-		settings["mfa"] = mfa
+		mergeSettingsSection(settings, "mfa", mfa)
 	}
 
-	if len(settings) > 0 {
+	if settingsProvided || len(settings) > 0 {
 		body["settings"] = settings
 	}
 
-	return body
+	return body, nil
 }
 
 func (r *ApplicationResource) readCredentials(model *ApplicationModel, data map[string]interface{}) {
@@ -535,9 +567,11 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 		}
 	}
 
-	// Read OAuth settings
+	// Read OAuth settings. If settings_json is configured without the typed
+	// block, keep ownership in the raw JSON attribute to avoid synthetic diffs.
 	if settings, ok := data["settings"].(map[string]interface{}); ok {
-		if oauth, ok := settings["oauth"].(map[string]interface{}); ok {
+		if oauth, ok := settings["oauth"].(map[string]interface{}); ok &&
+			(model.OAuthSettings != nil || model.SettingsJSON.IsNull() || model.SettingsJSON.IsUnknown()) {
 			if model.OAuthSettings == nil {
 				model.OAuthSettings = &OAuthSettingsModel{}
 			}
@@ -587,6 +621,75 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 	}
 }
 
+func settingsJSONToAPI(value types.String) (map[string]interface{}, bool, error) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, false, nil
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal([]byte(value.ValueString()), &settings); err != nil {
+		return nil, false, fmt.Errorf("settings_json must be a valid JSON object: %w", err)
+	}
+	if settings == nil {
+		return nil, false, fmt.Errorf("settings_json must be a valid JSON object")
+	}
+	return settings, true, nil
+}
+
+func redirectURIsForCreate(plan ApplicationModel) ([]string, error) {
+	if plan.OAuthSettings != nil && plan.OAuthSettings.RedirectURIs != nil {
+		return toStringSliceFromValues(plan.OAuthSettings.RedirectURIs), nil
+	}
+
+	settings, ok, err := settingsJSONToAPI(plan.SettingsJSON)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	oauth, ok := settings["oauth"].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	redirectURIs, ok := oauth["redirectUris"]
+	if !ok {
+		return nil, nil
+	}
+
+	rawList, ok := redirectURIs.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("settings_json.oauth.redirectUris must be a JSON array of strings")
+	}
+	return jsonStringList(rawList, "settings_json.oauth.redirectUris")
+}
+
+func mergeSettingsSection(settings map[string]interface{}, key string, overlay map[string]interface{}) {
+	if len(overlay) == 0 {
+		return
+	}
+
+	existing, ok := settings[key].(map[string]interface{})
+	if !ok {
+		settings[key] = overlay
+		return
+	}
+
+	mergeStringInterfaceMap(existing, overlay)
+	settings[key] = existing
+}
+
+func mergeStringInterfaceMap(dst, src map[string]interface{}) {
+	for key, value := range src {
+		srcMap, srcIsMap := value.(map[string]interface{})
+		dstMap, dstIsMap := dst[key].(map[string]interface{})
+		if srcIsMap && dstIsMap {
+			mergeStringInterfaceMap(dstMap, srcMap)
+			continue
+		}
+		dst[key] = value
+	}
+}
+
 func toStringSlice(iface []interface{}) []types.String {
 	result := make([]types.String, len(iface))
 	for i, v := range iface {
@@ -595,6 +698,26 @@ func toStringSlice(iface []interface{}) []types.String {
 		}
 	}
 	return result
+}
+
+func toStringSliceFromValues(values []types.String) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.ValueString()
+	}
+	return result
+}
+
+func jsonStringList(values []interface{}, field string) ([]string, error) {
+	result := make([]string, len(values))
+	for i, value := range values {
+		stringValue, ok := value.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s must contain only strings", field)
+		}
+		result[i] = stringValue
+	}
+	return result, nil
 }
 
 func readOptionalInt64(data map[string]interface{}, key string) types.Int64 {

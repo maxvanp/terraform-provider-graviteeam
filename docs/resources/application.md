@@ -20,17 +20,41 @@ resource "graviteeam_application" "example" {
   description = "My Web Application"
 
   oauth_settings {
-    redirect_uris             = ["http://localhost:8080/callback"]
-    post_logout_redirect_uris = ["http://localhost:8080/"]
-    grant_types               = ["authorization_code", "refresh_token"]
-    response_types            = ["code"]
-    scopes                    = ["openid", "profile", "email"]
+    redirect_uris                  = ["http://localhost:8080/callback"]
+    post_logout_redirect_uris      = ["http://localhost:8080/"]
+    grant_types                    = ["authorization_code", "refresh_token"]
+    response_types                 = ["code"]
+    scopes                         = ["openid", "profile", "email"]
+    access_token_validity_seconds  = 3600
+    refresh_token_validity_seconds = 86400
+    id_token_validity_seconds      = 3600
   }
 
   mfa_settings {
     enrollment = "OPTIONAL"
     challenge  = "REQUIRED"
   }
+
+  settings_json = jsonencode({
+    advanced = {
+      skipConsent = true
+    }
+    oauth = {
+      forcePKCE               = true
+      tokenEndpointAuthMethod = "client_secret_post"
+      tokenCustomClaims = [
+        {
+          claimName  = "tenant"
+          claimValue = "{#context.attributes['tenant']}"
+          tokenType  = "ACCESS_TOKEN"
+        }
+      ]
+      tokenExchangeOAuthSettings = {
+        inherited     = false
+        scopeHandling = "DOWNSCOPING"
+      }
+    }
+  })
 }
 ```
 
@@ -51,6 +75,7 @@ resource "graviteeam_application" "example" {
 - `identity_providers` (List of String) List of identity provider IDs to associate with the application
 - `mfa_settings` (Block, Optional) MFA settings (see [below for nested schema](#nestedblock--mfa_settings))
 - `oauth_settings` (Block, Optional) OAuth2/OIDC settings (see [below for nested schema](#nestedblock--oauth_settings))
+- `settings_json` (String, Sensitive) JSON object for advanced application settings. The value is merged into the Gravitee AM settings payload; typed blocks such as oauth_settings and mfa_settings override matching keys.
 
 ### Read-Only
 

@@ -110,6 +110,23 @@ resource "graviteeam_application" "test" {
     enrollment = "OPTIONAL"
     challenge  = "REQUIRED"
   }
+
+  settings_json = jsonencode({
+    advanced = {
+      skipConsent = true
+    }
+    oauth = {
+      forcePKCE               = true
+      tokenEndpointAuthMethod = "client_secret_post"
+      tokenCustomClaims = [
+        {
+          claimName  = "tenant"
+          claimValue = "terraform"
+          tokenType  = "ACCESS_TOKEN"
+        }
+      ]
+    }
+  })
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(

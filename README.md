@@ -90,7 +90,7 @@ resource "graviteeam_domain" "example" {
 | Resource | Description |
 |----------|-------------|
 | `graviteeam_domain` | Security domain (equivalent Keycloak Realm) |
-| `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings |
+| `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings, and raw advanced settings JSON |
 | `graviteeam_application_email` | Application email templates and overrides |
 | `graviteeam_application_flow` | Application-specific flows |
 | `graviteeam_application_form` | Application-specific forms |
