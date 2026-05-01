@@ -89,6 +89,10 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4.0.0
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
       - name: Start Gravitee AM
         run: docker compose -f docker-compose.test.yml up -d
       - name: Wait for Gravitee AM
