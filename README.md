@@ -10,9 +10,9 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.11.x** Management API. Acceptance tests are run against Gravitee AM 4.11.
+This provider targets the **Gravitee AM 4.11.4** Management API. Acceptance tests are run against Gravitee AM 4.11.4.
 
-The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM line.
+The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM version.
 
 Current API coverage is intentionally partial. See [`docs/api-coverage.md`](docs/api-coverage.md) for the provider coverage matrix and known OpenAPI gaps.
 

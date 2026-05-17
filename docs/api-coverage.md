@@ -6,11 +6,11 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM line | `4.11.x` |
+| Target Gravitee AM version | `4.11.4` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.11.3-SNAPSHOT` |
-| OpenAPI path entries | `201` |
-| Path entries with at least one write verb | `123` |
+| Bundled OpenAPI version | `4.11.4` |
+| OpenAPI path entries | `194` |
+| Path entries with at least one write verb | `119` |
 | Terraform resources registered | `32` |
 | Terraform data sources registered | `4` |
 

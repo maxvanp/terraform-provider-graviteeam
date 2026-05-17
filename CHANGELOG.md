@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Align README/CONTRIBUTING with the current Go 1.25 toolchain requirement and full resource inventory
+- Align README/CONTRIBUTING with the current Go 1.26.2 toolchain requirement and full resource inventory
 
 ### Changed
 
-- Updated the local test stack and CI compatibility target from Gravitee AM 4.6.x to 4.11.x
+- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.11.4
+- Refreshed the bundled Gravitee AM Management API reference from the 4.11.4 upstream tag
+- Updated Go module dependencies to their latest compatible versions
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
 
 ## [0.1.0] - TBD
