@@ -6,7 +6,7 @@ Thank you for your interest in contributing!
 
 ### Requirements
 
-- [Go](https://golang.org/doc/install) >= 1.26.2
+- [Go](https://golang.org/doc/install) >= 1.26.3
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - `golangci-lint` v2
 - `tfplugindocs` v0.25.0

@@ -1,6 +1,6 @@
 module github.com/maxvanp/terraform-provider-graviteeam
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
