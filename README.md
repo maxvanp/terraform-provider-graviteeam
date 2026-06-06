@@ -119,6 +119,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_certificate` | Certificate for JWT signing (PKCS12) |
 | `graviteeam_reporter` | Audit reporter plugin |
 | `graviteeam_service_resource` | Shared resource plugin (SMTP, etc.) |
+| `graviteeam_authorization_engine` | Authorization engine plugin |
 | `graviteeam_bot_detection` | Bot detection plugin |
 | `graviteeam_device_identifier` | Device fingerprinting plugin |
 | `graviteeam_domain_flow` | Domain authentication flow list |

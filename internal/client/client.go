@@ -1089,6 +1089,49 @@ func (c *Client) DeleteBotDetection(ctx context.Context, domainID, id string) er
 	return err
 }
 
+// Authorization Engine operations
+
+func (c *Client) CreateAuthorizationEngine(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/authorization-engines", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetAuthorizationEngine(ctx context.Context, domainID, id string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/authorization-engines/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateAuthorizationEngine(ctx context.Context, domainID, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/authorization-engines/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteAuthorizationEngine(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/authorization-engines/"+id, nil)
+	return err
+}
+
 // Device Identifier operations
 
 func (c *Client) CreateDeviceIdentifier(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {

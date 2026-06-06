@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `18` |
+| Uncovered writable families without Terraform resource | `17` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -60,6 +60,7 @@ Current unit coverage baseline:
 | `domain:applications/members` | `graviteeam_application_member` |
 | `domain:applications/secrets` | `graviteeam_application_secret` |
 | `domain:applications/type` | `graviteeam_application` |
+| `domain:authorization-engines` | `graviteeam_authorization_engine` |
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
 | `domain:bot-detections` | `graviteeam_bot_detection` |
 | `domain:certificates` | `graviteeam_certificate` |
@@ -126,9 +127,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-| API family | Notes |
-|------------|-------|
-| `domain:authorization-engines` | Full CRUD family for authorization engines. |
+None currently identified in the local 4.11.4 OpenAPI audit.
 
 ### Action or Lifecycle Endpoints
 

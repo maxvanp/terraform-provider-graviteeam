@@ -23,6 +23,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationmember"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationsecret"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/authdevicenotifier"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/authorizationengine"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/botdetection"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/certificate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/deviceidentifier"
@@ -160,6 +161,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		applicationform.NewApplicationFormResource,
 		applicationmember.NewApplicationMemberResource,
 		applicationsecret.NewApplicationSecretResource,
+		authorizationengine.NewAuthorizationEngineResource,
 		authdevicenotifier.NewAuthDeviceNotifierResource,
 		botdetection.NewBotDetectionResource,
 		certificate.NewCertificateResource,

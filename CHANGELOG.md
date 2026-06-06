@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_alert_trigger` for domain alert trigger configuration
 - Add `graviteeam_org_user_token` for organization user account token lifecycle management
 - Add `graviteeam_user_certificate_credential` for domain user certificate credential lifecycle management
+- Add `graviteeam_authorization_engine` for domain authorization engine plugin management
 
 ### Changed
 
