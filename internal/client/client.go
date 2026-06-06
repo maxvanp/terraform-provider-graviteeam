@@ -1552,6 +1552,10 @@ func (c *Client) GetDomainMetadata(ctx context.Context, domainID, path string) (
 	return c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/"+path, nil)
 }
 
+func (c *Client) GetPermissionsMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {

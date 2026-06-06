@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_plugins` for platform plugin catalogs, plugin details, and plugin schemas
 - Add platform and environment metadata data sources
 - Add `graviteeam_domain_metadata` for active password policy and certificate public key metadata
+- Add `graviteeam_permissions_metadata` for environment, domain, application, and protected resource member permission metadata
 
 ### Changed
 

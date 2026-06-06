@@ -12,7 +12,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
 | Terraform resources registered | `51` |
-| Terraform data sources registered | `13` |
+| Terraform data sources registered | `14` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -35,7 +35,7 @@ Current automated audit summary:
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `16` |
+| Uncovered read-only families | `12` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -117,14 +117,18 @@ Current unit coverage baseline:
 | API family | Terraform data source |
 |------------|-----------------------|
 | `domain:analytics` | `graviteeam_analytics` |
+| `domain:applications/members/permissions` | `graviteeam_permissions_metadata` |
 | `domain:audits` | `graviteeam_audits` |
 | `domain:certificates/key` | `graviteeam_domain_metadata` |
 | `domain:certificates/keys` | `graviteeam_domain_metadata` |
 | `domain:entrypoints` | `graviteeam_entrypoints` |
 | `domain:flows` | `graviteeam_flows` |
+| `domain:members/permissions` | `graviteeam_permissions_metadata` |
 | `domain:password-policies/activePolicy` | `graviteeam_domain_metadata` |
+| `domain:protected-resources/members/permissions` | `graviteeam_permissions_metadata` |
 | `environment:data-planes` | `graviteeam_environment_metadata` |
 | `environment:data-sources` | `graviteeam_environment_metadata` |
+| `environment:members/permissions` | `graviteeam_permissions_metadata` |
 | `platform:audits/events` | `graviteeam_platform_metadata` |
 | `platform:configuration/alerts/status` | `graviteeam_platform_metadata` |
 | `platform:configuration/flow/schema` | `graviteeam_platform_metadata` |
