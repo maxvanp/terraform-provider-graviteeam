@@ -30,6 +30,7 @@ resource "graviteeam_scope" "test" {
   key         = "test_scope"
   name        = "Test Scope"
   description = "A test scope"
+  expires_in  = 3600
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -39,6 +40,7 @@ resource "graviteeam_scope" "test" {
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Test Scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "description", "A test scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "true"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "expires_in", "3600"),
 				),
 			},
 			// ImportState
@@ -76,6 +78,31 @@ resource "graviteeam_scope" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Updated Test Scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "false"),
+				),
+			},
+			// Update: remove optional fields to ensure empty values clear remote state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-scope"
+  description = "Domain for scope acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_scope" "test" {
+  domain_id = graviteeam_domain.test.id
+  key       = "test_scope"
+  name      = "Updated Test Scope"
+  discovery = false
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Updated Test Scope"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "false"),
+					resource.TestCheckNoResourceAttr("graviteeam_scope.test", "description"),
+					resource.TestCheckNoResourceAttr("graviteeam_scope.test", "expires_in"),
 				),
 			},
 		},

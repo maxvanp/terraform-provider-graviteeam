@@ -717,6 +717,18 @@ func (c *Client) GetThemes(ctx context.Context, domainID string) ([]map[string]i
 	return result, nil
 }
 
+func (c *Client) GetTheme(ctx context.Context, domainID, themeID string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/themes/"+themeID, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) CreateTheme(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/themes", body)
 	if err != nil {

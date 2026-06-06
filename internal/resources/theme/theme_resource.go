@@ -126,27 +126,9 @@ func (r *ThemeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	themes, err := r.client.GetThemes(ctx, state.DomainID.ValueString())
+	result, err := r.client.GetTheme(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading theme", err.Error())
-		return
-	}
-
-	if len(themes) == 0 {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
-	// Find our theme by ID, or take the first one
-	var result map[string]interface{}
-	for _, t := range themes {
-		if id, ok := t["id"].(string); ok && id == state.ID.ValueString() {
-			result = t
-			break
-		}
-	}
-	if result == nil {
-		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -169,7 +151,13 @@ func (r *ThemeResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = state.ID
 
-	body := r.buildBody(plan)
+	current, err := r.client.GetTheme(ctx, state.DomainID.ValueString(), state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading current theme before update", err.Error())
+		return
+	}
+
+	body := r.buildUpdateBody(plan, state, current)
 
 	result, err := r.client.UpdateTheme(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -207,33 +195,60 @@ func (r *ThemeResource) ImportState(ctx context.Context, req resource.ImportStat
 
 func (r *ThemeResource) buildBody(plan ThemeModel) map[string]interface{} {
 	body := map[string]interface{}{}
+	applyThemePlan(body, plan, nil)
+	return body
+}
 
+func (r *ThemeResource) buildUpdateBody(plan, state ThemeModel, current map[string]interface{}) map[string]interface{} {
+	body := make(map[string]interface{}, len(current))
+	for k, v := range current {
+		body[k] = v
+	}
+	applyThemePlan(body, plan, &state)
+	return body
+}
+
+func applyThemePlan(body map[string]interface{}, plan ThemeModel, state *ThemeModel) {
 	if !plan.LogoURL.IsNull() && !plan.LogoURL.IsUnknown() {
 		body["logoUrl"] = plan.LogoURL.ValueString()
+	} else if state != nil && !state.LogoURL.IsNull() {
+		body["logoUrl"] = ""
 	}
 	if !plan.LogoWidth.IsNull() && !plan.LogoWidth.IsUnknown() {
 		body["logoWidth"] = plan.LogoWidth.ValueInt64()
+	} else if state != nil && !state.LogoWidth.IsNull() {
+		body["logoWidth"] = 0
 	}
 	if !plan.FaviconURL.IsNull() && !plan.FaviconURL.IsUnknown() {
 		body["faviconUrl"] = plan.FaviconURL.ValueString()
+	} else if state != nil && !state.FaviconURL.IsNull() {
+		body["faviconUrl"] = ""
 	}
 	if !plan.PrimaryButtonColorHex.IsNull() && !plan.PrimaryButtonColorHex.IsUnknown() {
 		body["primaryButtonColorHex"] = plan.PrimaryButtonColorHex.ValueString()
+	} else if state != nil && !state.PrimaryButtonColorHex.IsNull() {
+		body["primaryButtonColorHex"] = ""
 	}
 	if !plan.SecondaryButtonColorHex.IsNull() && !plan.SecondaryButtonColorHex.IsUnknown() {
 		body["secondaryButtonColorHex"] = plan.SecondaryButtonColorHex.ValueString()
+	} else if state != nil && !state.SecondaryButtonColorHex.IsNull() {
+		body["secondaryButtonColorHex"] = ""
 	}
 	if !plan.PrimaryTextColorHex.IsNull() && !plan.PrimaryTextColorHex.IsUnknown() {
 		body["primaryTextColorHex"] = plan.PrimaryTextColorHex.ValueString()
+	} else if state != nil && !state.PrimaryTextColorHex.IsNull() {
+		body["primaryTextColorHex"] = ""
 	}
 	if !plan.SecondaryTextColorHex.IsNull() && !plan.SecondaryTextColorHex.IsUnknown() {
 		body["secondaryTextColorHex"] = plan.SecondaryTextColorHex.ValueString()
+	} else if state != nil && !state.SecondaryTextColorHex.IsNull() {
+		body["secondaryTextColorHex"] = ""
 	}
 	if !plan.CSS.IsNull() && !plan.CSS.IsUnknown() {
 		body["css"] = plan.CSS.ValueString()
+	} else if state != nil && !state.CSS.IsNull() {
+		body["css"] = ""
 	}
-
-	return body
 }
 
 func (r *ThemeResource) readIntoModel(model *ThemeModel, data map[string]interface{}) {
@@ -242,10 +257,11 @@ func (r *ThemeResource) readIntoModel(model *ThemeModel, data map[string]interfa
 	}
 	if v, ok := data["logoUrl"].(string); ok && v != "" {
 		model.LogoURL = types.StringValue(v)
-	} else if model.LogoURL.IsNull() {
+	} else {
 		model.LogoURL = types.StringNull()
 	}
 	if v, ok := data["logoWidth"]; ok {
+		model.LogoWidth = types.Int64Null()
 		switch n := v.(type) {
 		case float64:
 			if n > 0 {
@@ -256,37 +272,37 @@ func (r *ThemeResource) readIntoModel(model *ThemeModel, data map[string]interfa
 				model.LogoWidth = types.Int64Value(n)
 			}
 		}
-	} else if model.LogoWidth.IsNull() {
+	} else {
 		model.LogoWidth = types.Int64Null()
 	}
 	if v, ok := data["faviconUrl"].(string); ok && v != "" {
 		model.FaviconURL = types.StringValue(v)
-	} else if model.FaviconURL.IsNull() {
+	} else {
 		model.FaviconURL = types.StringNull()
 	}
 	if v, ok := data["primaryButtonColorHex"].(string); ok && v != "" {
 		model.PrimaryButtonColorHex = types.StringValue(v)
-	} else if model.PrimaryButtonColorHex.IsNull() {
+	} else {
 		model.PrimaryButtonColorHex = types.StringNull()
 	}
 	if v, ok := data["secondaryButtonColorHex"].(string); ok && v != "" {
 		model.SecondaryButtonColorHex = types.StringValue(v)
-	} else if model.SecondaryButtonColorHex.IsNull() {
+	} else {
 		model.SecondaryButtonColorHex = types.StringNull()
 	}
 	if v, ok := data["primaryTextColorHex"].(string); ok && v != "" {
 		model.PrimaryTextColorHex = types.StringValue(v)
-	} else if model.PrimaryTextColorHex.IsNull() {
+	} else {
 		model.PrimaryTextColorHex = types.StringNull()
 	}
 	if v, ok := data["secondaryTextColorHex"].(string); ok && v != "" {
 		model.SecondaryTextColorHex = types.StringValue(v)
-	} else if model.SecondaryTextColorHex.IsNull() {
+	} else {
 		model.SecondaryTextColorHex = types.StringNull()
 	}
 	if v, ok := data["css"].(string); ok && v != "" {
 		model.CSS = types.StringValue(v)
-	} else if model.CSS.IsNull() {
+	} else {
 		model.CSS = types.StringNull()
 	}
 }

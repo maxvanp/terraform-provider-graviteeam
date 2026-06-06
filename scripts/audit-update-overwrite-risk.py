@@ -54,6 +54,7 @@ REVIEWED_WITHOUT_GET = {
     "protectedresourcesecret/protected_resource_secret_resource.go:ProtectedResourceSecretResource",
     "reporter/reporter_resource.go:ReporterResource",
     "role/role_resource.go:RoleResource",
+    "scope/scope_resource.go:ScopeResource",
     "serviceresource/service_resource_resource.go:ServiceResourceResource",
     "usercertificatecredential/user_certificate_credential_resource.go:UserCertificateCredentialResource",
     "user/user_resource.go:UserResource",

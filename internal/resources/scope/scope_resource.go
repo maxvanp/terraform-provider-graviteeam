@@ -145,7 +145,7 @@ func (r *ScopeResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = state.ID
 
-	body := r.buildUpdateBody(plan)
+	body := r.buildUpdateBody(plan, state)
 
 	result, err := r.client.UpdateScope(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -198,7 +198,7 @@ func (r *ScopeResource) buildBody(plan ScopeModel) map[string]interface{} {
 	return body
 }
 
-func (r *ScopeResource) buildUpdateBody(plan ScopeModel) map[string]interface{} {
+func (r *ScopeResource) buildUpdateBody(plan, state ScopeModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":      plan.Name.ValueString(),
 		"discovery": plan.Discovery.ValueBool(),
@@ -206,9 +206,13 @@ func (r *ScopeResource) buildUpdateBody(plan ScopeModel) map[string]interface{} 
 
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		body["description"] = plan.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
 	}
 	if !plan.ExpiresIn.IsNull() && !plan.ExpiresIn.IsUnknown() {
 		body["expiresIn"] = plan.ExpiresIn.ValueInt64()
+	} else if !state.ExpiresIn.IsNull() {
+		body["expiresIn"] = 0
 	}
 
 	return body
@@ -224,7 +228,7 @@ func (r *ScopeResource) readIntoModel(model *ScopeModel, data map[string]interfa
 	if name, ok := data["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := data["description"].(string); ok {
+	if desc, ok := data["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
 	} else {
 		model.Description = types.StringNull()
@@ -235,9 +239,17 @@ func (r *ScopeResource) readIntoModel(model *ScopeModel, data map[string]interfa
 	if v, ok := data["expiresIn"]; ok {
 		switch n := v.(type) {
 		case float64:
-			model.ExpiresIn = types.Int64Value(int64(n))
+			if n == 0 && model.ExpiresIn.IsNull() {
+				model.ExpiresIn = types.Int64Null()
+			} else {
+				model.ExpiresIn = types.Int64Value(int64(n))
+			}
 		case int64:
-			model.ExpiresIn = types.Int64Value(n)
+			if n == 0 && model.ExpiresIn.IsNull() {
+				model.ExpiresIn = types.Int64Null()
+			} else {
+				model.ExpiresIn = types.Int64Value(n)
+			}
 		}
 	} else {
 		model.ExpiresIn = types.Int64Null()

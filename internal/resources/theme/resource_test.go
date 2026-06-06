@@ -27,19 +27,27 @@ resource "graviteeam_domain" "test" {
 
 resource "graviteeam_theme" "test" {
   domain_id                  = graviteeam_domain.test.id
+  logo_url                   = "https://example.com/logo.png"
+  logo_width                 = 120
+  favicon_url                = "https://example.com/favicon.ico"
   primary_button_color_hex   = "#4CAF50"
   secondary_button_color_hex = "#FF5722"
   primary_text_color_hex     = "#212121"
   secondary_text_color_hex   = "#757575"
+  css                        = "body { color: #212121; }"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("graviteeam_theme.test", "id"),
 					resource.TestCheckResourceAttrSet("graviteeam_theme.test", "domain_id"),
+					resource.TestCheckResourceAttr("graviteeam_theme.test", "logo_url", "https://example.com/logo.png"),
+					resource.TestCheckResourceAttr("graviteeam_theme.test", "logo_width", "120"),
+					resource.TestCheckResourceAttr("graviteeam_theme.test", "favicon_url", "https://example.com/favicon.ico"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "primary_button_color_hex", "#4CAF50"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "secondary_button_color_hex", "#FF5722"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "primary_text_color_hex", "#212121"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "secondary_text_color_hex", "#757575"),
+					resource.TestCheckResourceAttr("graviteeam_theme.test", "css", "body { color: #212121; }"),
 				),
 			},
 			// ImportState
@@ -81,6 +89,32 @@ resource "graviteeam_theme" "test" {
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "primary_text_color_hex", "#000000"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "secondary_text_color_hex", "#616161"),
 					resource.TestCheckResourceAttr("graviteeam_theme.test", "css", "body { font-family: Arial, sans-serif; }"),
+				),
+			},
+			// Update: remove optional fields to ensure empty values clear remote state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-theme"
+  description = "Acceptance test domain for theme"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_theme" "test" {
+  domain_id = graviteeam_domain.test.id
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "logo_url"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "logo_width"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "favicon_url"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "primary_button_color_hex"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "secondary_button_color_hex"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "primary_text_color_hex"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "secondary_text_color_hex"),
+					resource.TestCheckNoResourceAttr("graviteeam_theme.test", "css"),
 				),
 			},
 		},
