@@ -14,6 +14,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/audits"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/flows"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/metadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/plugins"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/usercollections"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/alertnotifier"
@@ -214,6 +215,8 @@ func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.
 		analytics.NewAnalyticsDataSource,
 		audits.NewAuditsDataSource,
 		entrypoints.NewEntrypointsDataSource,
+		metadata.NewEnvironmentMetadataDataSource,
+		metadata.NewPlatformMetadataDataSource,
 		flows.NewFlowsDataSource,
 		plugins.NewPluginsDataSource,
 		usercollections.NewUserConsentsDataSource,

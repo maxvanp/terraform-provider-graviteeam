@@ -1540,6 +1540,14 @@ func (c *Client) GetPlatformPlugin(ctx context.Context, category, pluginID strin
 	return c.DoManagementRequest(ctx, http.MethodGet, path, nil)
 }
 
+func (c *Client) GetPlatformMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoManagementRequest(ctx, http.MethodGet, "/management/"+path, nil)
+}
+
+func (c *Client) GetEnvironmentMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, "/"+path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {

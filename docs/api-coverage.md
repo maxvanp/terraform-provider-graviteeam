@@ -35,7 +35,7 @@ Current automated audit summary:
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `28` |
+| Uncovered read-only families | `19` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -120,6 +120,15 @@ Current unit coverage baseline:
 | `domain:audits` | `graviteeam_audits` |
 | `domain:entrypoints` | `graviteeam_entrypoints` |
 | `domain:flows` | `graviteeam_flows` |
+| `environment:data-planes` | `graviteeam_environment_metadata` |
+| `environment:data-sources` | `graviteeam_environment_metadata` |
+| `platform:audits/events` | `graviteeam_platform_metadata` |
+| `platform:configuration/alerts/status` | `graviteeam_platform_metadata` |
+| `platform:configuration/flow/schema` | `graviteeam_platform_metadata` |
+| `platform:configuration/spel/grammar` | `graviteeam_platform_metadata` |
+| `platform:configuration/users/email-required` | `graviteeam_platform_metadata` |
+| `platform:installation` | `graviteeam_platform_metadata` |
+| `platform:license` | `graviteeam_platform_metadata` |
 | `platform:plugins/auth-device-notifiers` | `graviteeam_plugins` |
 | `platform:plugins/auth-device-notifiers/schema` | `graviteeam_plugins` |
 | `platform:plugins/authorization-engines` | `graviteeam_plugins` |
@@ -188,13 +197,8 @@ The provider also does not currently expose several read-only or platform metada
 
 | API family | Notes |
 |------------|-------|
-| `platform:configuration` | Platform configuration metadata. |
-| `platform:installation` | Installation metadata. |
-| `platform:license` | License metadata. |
 | `platform:plugins/policies/documentation` | Policy plugin documentation. |
 | `platform:roles` | Platform role metadata. |
-| `environment:data-planes` | Environment data-plane listing. |
-| `environment:data-sources` | Environment data-source listing. |
 | `environment:members/permissions` | Environment permissions metadata. |
 | `org:audits` | Organization audit logs. |
 | `org:environments` | Organization environment listing. |

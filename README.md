@@ -141,14 +141,16 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (10)
+### Data Sources (12)
 
 | Data Source | Description |
 |-------------|-------------|
 | `graviteeam_analytics` | Read analytics data (DATE_HISTO, COUNT, GROUP_BY) |
 | `graviteeam_audits` | Read audit logs for a domain |
 | `graviteeam_entrypoints` | Read domain entrypoints |
+| `graviteeam_environment_metadata` | Read environment metadata |
 | `graviteeam_flows` | Read domain flows |
+| `graviteeam_platform_metadata` | Read platform metadata and configuration schemas |
 | `graviteeam_plugins` | Read platform plugin catalogs, plugin details, and plugin schemas |
 | `graviteeam_user_consents` | Read OAuth consent approvals for a user |
 | `graviteeam_user_credentials` | Read credentials for a user |
