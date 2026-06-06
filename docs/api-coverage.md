@@ -35,7 +35,7 @@ Current automated audit summary:
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `11` |
 | Unclassified writable resource candidates | `0` |
-| Writable families covered only by data source | `5` |
+| Writable families covered only by data source | `7` |
 | Uncovered read-only families | `0` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
@@ -134,8 +134,10 @@ Current unit coverage baseline:
 | `domain:certificates/keys` | `graviteeam_domain_metadata` |
 | `domain:entrypoints` | `graviteeam_entrypoints` |
 | `domain:flows` | `graviteeam_flows` |
+| `domain:forms/preview` | `graviteeam_form_preview` |
 | `domain:members/permissions` | `graviteeam_permissions_metadata` |
 | `domain:password-policies/activePolicy` | `graviteeam_domain_metadata` |
+| `domain:password-policies/evaluate` | `graviteeam_password_policy_evaluation` |
 | `domain:protected-resources/members/permissions` | `graviteeam_permissions_metadata` |
 | `environment:data-planes` | `graviteeam_environment_metadata` |
 | `environment:data-sources` | `graviteeam_environment_metadata` |
@@ -195,12 +197,12 @@ None currently identified in the local 4.11.4 OpenAPI audit.
 
 ### Read-Like POST Endpoints Not Covered
 
-These endpoints look closer to calculated reads than durable Terraform resources, but local 4.11.4 compose does not currently provide a reliable fixture to expose them safely.
+These endpoints look closer to calculated reads than durable Terraform resources. They are exposed as data sources, but remain listed here because the coverage audit only counts Terraform resources as full writable-family coverage.
 
 | API family | Notes |
 |------------|-------|
-| `domain:forms/preview` | Template preview operation. Local gap probe returned `400 Invalid template ['LOGIN']`; keep uncovered until a reliable preview fixture proves the endpoint and payload shape. |
-| `domain:password-policies/evaluate` | Password policy evaluation operation. The bundled OpenAPI path omits request and response schemas, and local gap probe timed out against `default/evaluate`. |
+| `domain:forms/preview` | Template preview operation exposed by `graviteeam_form_preview`; the local API requires lower-case template names for preview even though CRUD form resources use upper-case template names. |
+| `domain:password-policies/evaluate` | Password policy evaluation operation exposed by `graviteeam_password_policy_evaluation`; local 4.11.4 accepts concrete policy IDs but the `default` alias timed out. |
 
 ### Action or Lifecycle Endpoints
 

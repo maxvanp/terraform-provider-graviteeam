@@ -124,6 +124,17 @@ class AMProbe:
         user_id = payload.get("id")
         return user_id if isinstance(user_id, str) and user_id else None
 
+    def create_password_policy(self, domain_id: str, name: str) -> str | None:
+        status, payload = self.json_request(
+            "POST",
+            self.management(f"/domains/{domain_id}/password-policies"),
+            {"name": name, "minLength": 8},
+        )
+        if status not in {200, 201}:
+            return None
+        policy_id = payload.get("id")
+        return policy_id if isinstance(policy_id, str) and policy_id else None
+
     def create_org_user(self, username: str) -> str | None:
         status, payload = self.json_request(
             "POST",
@@ -193,20 +204,22 @@ def run_probe(probe: AMProbe) -> list[Result]:
             *probe.json_request(
                 "POST",
                 probe.management(f"/domains/{domain_id}/forms/preview"),
-                {"type": "FORM", "template": "LOGIN", "content": "<html>{{content}}</html>"},
+                {"type": "FORM", "template": "login", "content": "<html>{{content}}</html>"},
             ),
         )
-        add_result(
-            results,
-            "domain:password-policies/evaluate",
-            "POST",
-            f"/domains/{domain_id}/password-policies/default/evaluate",
-            *probe.json_request(
+        policy_id = probe.create_password_policy(domain_id, f"gap-probe-policy-{suffix}")
+        if policy_id:
+            add_result(
+                results,
+                "domain:password-policies/evaluate",
                 "POST",
-                probe.management(f"/domains/{domain_id}/password-policies/default/evaluate"),
-                {"password": "SecurePass123!", "userId": user_id or ""},
-            ),
-        )
+                f"/domains/{domain_id}/password-policies/{policy_id}/evaluate",
+                *probe.json_request(
+                    "POST",
+                    probe.management(f"/domains/{domain_id}/password-policies/{policy_id}/evaluate"),
+                    {"password": "SecurePass123!", "userId": user_id or ""},
+                ),
+            )
         add_result(
             results,
             "domain:users/bulk",

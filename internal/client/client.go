@@ -540,6 +540,10 @@ func (c *Client) DeletePasswordPolicy(ctx context.Context, domainID, id string) 
 	return err
 }
 
+func (c *Client) EvaluatePasswordPolicy(ctx context.Context, domainID, policyID string, body map[string]interface{}) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/password-policies/"+policyID+"/evaluate", body)
+}
+
 // Scope operations
 
 func (c *Client) CreateScope(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
@@ -841,6 +845,10 @@ func (c *Client) DeleteForm(ctx context.Context, domainID, appID, formID string)
 	}
 	_, err := c.DoRequest(ctx, http.MethodDelete, basePath+"/forms/"+formID, nil)
 	return err
+}
+
+func (c *Client) PreviewForm(ctx context.Context, domainID string, body map[string]interface{}) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/forms/preview", body)
 }
 
 // Email template operations

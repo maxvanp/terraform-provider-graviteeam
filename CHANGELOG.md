@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_admin_metadata` for organization audits, organization environments, domain HRID lookup, and user audits
 - Add `graviteeam_application_metadata` for application analytics and UMA resources
 - Add `graviteeam_self_metadata` for authenticated user metadata, newsletter taglines, and notifications
+- Add `graviteeam_form_preview` and `graviteeam_password_policy_evaluation` read-like POST data sources
 - Add policy plugin documentation support to `graviteeam_plugins`
 
 ### Changed
@@ -115,9 +116,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_alert_notifier` — Alert webhook notifier
   - `graviteeam_alert_trigger` — Domain alert trigger configuration
   - `graviteeam_user_role` — User role assignments
-- 4 data sources:
+- 19 data sources:
   - `graviteeam_analytics` — Read analytics data
   - `graviteeam_audits` — Read audit logs
   - `graviteeam_entrypoints` — Read domain entrypoints
   - `graviteeam_flows` — Read domain flows
+  - `graviteeam_form_preview` — Render a domain form or email template preview
+  - `graviteeam_password_policy_evaluation` — Evaluate a password against a domain password policy
 - Import support for all resources (`terraform import`)

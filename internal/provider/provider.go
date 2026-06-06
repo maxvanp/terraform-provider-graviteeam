@@ -17,7 +17,9 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/domainmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/flows"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/formpreview"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/metadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/passwordpolicyevaluation"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/permissionsmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/plugins"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/selfmetadata"
@@ -225,8 +227,10 @@ func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.
 		audits.NewAuditsDataSource,
 		domainmetadata.NewDomainMetadataDataSource,
 		entrypoints.NewEntrypointsDataSource,
+		formpreview.NewFormPreviewDataSource,
 		metadata.NewEnvironmentMetadataDataSource,
 		metadata.NewPlatformMetadataDataSource,
+		passwordpolicyevaluation.NewPasswordPolicyEvaluationDataSource,
 		permissionsmetadata.NewPermissionsMetadataDataSource,
 		flows.NewFlowsDataSource,
 		plugins.NewPluginsDataSource,

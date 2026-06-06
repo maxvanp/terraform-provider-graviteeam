@@ -142,7 +142,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (17)
+### Data Sources (19)
 
 | Data Source | Description |
 |-------------|-------------|
@@ -154,6 +154,8 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_entrypoints` | Read domain entrypoints |
 | `graviteeam_environment_metadata` | Read environment metadata |
 | `graviteeam_flows` | Read domain flows |
+| `graviteeam_form_preview` | Render a domain form or email template preview |
+| `graviteeam_password_policy_evaluation` | Evaluate a password against a domain password policy |
 | `graviteeam_permissions_metadata` | Read member permission metadata |
 | `graviteeam_platform_metadata` | Read platform metadata and configuration schemas |
 | `graviteeam_plugins` | Read platform plugin catalogs, plugin details, and plugin schemas |
