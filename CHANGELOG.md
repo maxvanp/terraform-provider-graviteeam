@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_permissions_metadata` for environment, domain, application, and protected resource member permission metadata
 - Add `graviteeam_admin_metadata` for organization audits, organization environments, domain HRID lookup, and user audits
 - Add `graviteeam_application_metadata` for application analytics and UMA resources
+- Add `graviteeam_self_metadata` for authenticated user metadata, newsletter taglines, and notifications
+- Add policy plugin documentation support to `graviteeam_plugins`
 
 ### Changed
 

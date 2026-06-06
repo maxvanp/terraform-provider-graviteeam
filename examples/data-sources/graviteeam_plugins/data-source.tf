@@ -7,3 +7,9 @@ data "graviteeam_plugins" "http_identity_provider_schema" {
   plugin_id = "http-am-idp"
   schema    = true
 }
+
+data "graviteeam_plugins" "policy_documentation" {
+  category      = "policies"
+  plugin_id      = "groovy"
+  documentation = true
+}

@@ -28,11 +28,18 @@ data "graviteeam_plugins" "identity_http_schema" {
   plugin_id = "http-am-idp"
   schema    = true
 }
+
+data "graviteeam_plugins" "policy_documentation" {
+  category      = "policies"
+  plugin_id      = "groovy"
+  documentation = true
+}
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.graviteeam_plugins.identities", "result_json"),
 					resource.TestCheckResourceAttrSet("data.graviteeam_plugins.identity_http", "result_json"),
 					resource.TestCheckResourceAttrSet("data.graviteeam_plugins.identity_http_schema", "result_json"),
+					resource.TestCheckResourceAttrSet("data.graviteeam_plugins.policy_documentation", "result_json"),
 				),
 			},
 		},

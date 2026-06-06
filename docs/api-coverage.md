@@ -12,7 +12,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
 | Terraform resources registered | `51` |
-| Terraform data sources registered | `16` |
+| Terraform data sources registered | `17` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -35,7 +35,7 @@ Current automated audit summary:
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `6` |
+| Uncovered read-only families | `2` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -161,11 +161,15 @@ Current unit coverage baseline:
 | `platform:plugins/notifiers` | `graviteeam_plugins` |
 | `platform:plugins/notifiers/schema` | `graviteeam_plugins` |
 | `platform:plugins/policies` | `graviteeam_plugins` |
+| `platform:plugins/policies/documentation` | `graviteeam_plugins` |
 | `platform:plugins/policies/schema` | `graviteeam_plugins` |
 | `platform:plugins/reporters` | `graviteeam_plugins` |
 | `platform:plugins/reporters/schema` | `graviteeam_plugins` |
 | `platform:plugins/resources` | `graviteeam_plugins` |
 | `platform:plugins/resources/schema` | `graviteeam_plugins` |
+| `self:_root` | `graviteeam_self_metadata` |
+| `self:newsletter/taglines` | `graviteeam_self_metadata` |
+| `self:notifications` | `graviteeam_self_metadata` |
 | `domain:users/consents` | `graviteeam_user_consents` |
 | `domain:users/credentials` | `graviteeam_user_credentials` |
 | `domain:users/devices` | `graviteeam_user_devices` |

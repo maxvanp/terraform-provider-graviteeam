@@ -19,10 +19,11 @@ type PluginsDataSource struct {
 }
 
 type PluginsModel struct {
-	Category   types.String `tfsdk:"category"`
-	PluginID   types.String `tfsdk:"plugin_id"`
-	Schema     types.Bool   `tfsdk:"schema"`
-	ResultJSON types.String `tfsdk:"result_json"`
+	Category      types.String `tfsdk:"category"`
+	PluginID      types.String `tfsdk:"plugin_id"`
+	Schema        types.Bool   `tfsdk:"schema"`
+	Documentation types.Bool   `tfsdk:"documentation"`
+	ResultJSON    types.String `tfsdk:"result_json"`
 }
 
 var allowedPluginCategories = map[string]struct{}{
@@ -50,7 +51,7 @@ func (d *PluginsDataSource) Metadata(_ context.Context, req datasource.MetadataR
 
 func (d *PluginsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Reads Gravitee AM platform plugin catalogs, plugin details, or plugin configuration schemas",
+		Description: "Reads Gravitee AM platform plugin catalogs, plugin details, plugin configuration schemas, or plugin documentation",
 		Attributes: map[string]schema.Attribute{
 			"category": schema.StringAttribute{
 				Required:    true,
@@ -64,9 +65,13 @@ func (d *PluginsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				Optional:    true,
 				Description: "Whether to read the selected plugin configuration schema. Requires plugin_id.",
 			},
+			"documentation": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Whether to read the selected plugin documentation. Requires plugin_id and is currently supported for policy plugins.",
+			},
 			"result_json": schema.StringAttribute{
 				Computed:    true,
-				Description: "JSON string containing the plugin catalog, plugin details, plugin schema, or null when the API returns no content",
+				Description: "JSON string containing the plugin catalog, plugin details, plugin schema, plugin documentation, or null when the API returns no content",
 			},
 		},
 	}
@@ -106,8 +111,27 @@ func (d *PluginsDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		resp.Diagnostics.AddError("Missing plugin_id", "plugin_id is required when schema is true")
 		return
 	}
+	readDocumentation := !config.Documentation.IsNull() && !config.Documentation.IsUnknown() && config.Documentation.ValueBool()
+	if readDocumentation && pluginID == "" {
+		resp.Diagnostics.AddError("Missing plugin_id", "plugin_id is required when documentation is true")
+		return
+	}
+	if readSchema && readDocumentation {
+		resp.Diagnostics.AddError("Invalid plugin metadata request", "schema and documentation cannot both be true")
+		return
+	}
+	if readDocumentation && category != "policies" {
+		resp.Diagnostics.AddError("Unsupported plugin documentation category", "documentation is currently supported only for policies")
+		return
+	}
 
-	rawJSON, err := d.client.GetPlatformPlugin(ctx, category, pluginID, readSchema)
+	var rawJSON []byte
+	var err error
+	if readDocumentation {
+		rawJSON, err = d.client.GetPlatformPluginDocumentation(ctx, category, pluginID)
+	} else {
+		rawJSON, err = d.client.GetPlatformPlugin(ctx, category, pluginID, readSchema)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading platform plugin", err.Error())
 		return
@@ -129,7 +153,11 @@ func formatJSONResult(raw []byte) (string, error) {
 	}
 	var parsed interface{}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return "", err
+		formatted, marshalErr := json.Marshal(string(raw))
+		if marshalErr != nil {
+			return "", marshalErr
+		}
+		return string(formatted), nil
 	}
 	formatted, err := json.MarshalIndent(parsed, "", "  ")
 	if err != nil {

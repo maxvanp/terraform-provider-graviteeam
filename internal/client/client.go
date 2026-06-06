@@ -1540,6 +1540,11 @@ func (c *Client) GetPlatformPlugin(ctx context.Context, category, pluginID strin
 	return c.DoManagementRequest(ctx, http.MethodGet, path, nil)
 }
 
+func (c *Client) GetPlatformPluginDocumentation(ctx context.Context, category, pluginID string) ([]byte, error) {
+	path := "/management/platform/plugins/" + url.PathEscape(category) + "/" + url.PathEscape(pluginID) + "/documentation"
+	return c.DoManagementRequest(ctx, http.MethodGet, path, nil)
+}
+
 func (c *Client) GetPlatformMetadata(ctx context.Context, path string) ([]byte, error) {
 	return c.DoManagementRequest(ctx, http.MethodGet, "/management/"+path, nil)
 }
@@ -1566,6 +1571,10 @@ func (c *Client) GetOrganizationMetadata(ctx context.Context, path string) ([]by
 
 func (c *Client) GetApplicationMetadata(ctx context.Context, domainID, applicationID, path string) ([]byte, error) {
 	return c.DoRequest(ctx, http.MethodGet, "/domains/"+url.PathEscape(domainID)+"/applications/"+url.PathEscape(applicationID)+path, nil)
+}
+
+func (c *Client) GetSelfMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoManagementRequest(ctx, http.MethodGet, "/management/user"+path, nil)
 }
 
 // Analytics operations

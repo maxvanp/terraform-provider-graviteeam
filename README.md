@@ -141,7 +141,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (16)
+### Data Sources (17)
 
 | Data Source | Description |
 |-------------|-------------|
@@ -156,6 +156,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_permissions_metadata` | Read member permission metadata |
 | `graviteeam_platform_metadata` | Read platform metadata and configuration schemas |
 | `graviteeam_plugins` | Read platform plugin catalogs, plugin details, and plugin schemas |
+| `graviteeam_self_metadata` | Read authenticated user metadata, newsletter taglines, and notifications |
 | `graviteeam_user_consents` | Read OAuth consent approvals for a user |
 | `graviteeam_user_credentials` | Read credentials for a user |
 | `graviteeam_user_devices` | Read registered devices for a user |
