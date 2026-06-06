@@ -112,6 +112,7 @@ func (r *OrgUserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	desiredEnabled := plan.Enabled.ValueBool()
 	result, err := r.client.CreateOrgUser(ctx, buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization user", err.Error())
@@ -119,6 +120,14 @@ func (r *OrgUserResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	readIntoModel(&plan, result)
+	if desiredEnabled != plan.Enabled.ValueBool() {
+		result, err = r.client.UpdateOrgUserStatus(ctx, plan.ID.ValueString(), desiredEnabled)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating organization user status after creation", err.Error())
+			return
+		}
+		readIntoModel(&plan, result)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -154,12 +163,27 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	plan.ID = state.ID
 
-	result, err := r.client.UpdateOrgUser(ctx, plan.ID.ValueString(), buildUpdateBody(plan))
-	if err != nil {
-		resp.Diagnostics.AddError("Error updating organization user", err.Error())
-		return
+	if updateBody := buildUpdateBody(plan); len(updateBody) > 0 {
+		_, err := r.client.UpdateOrgUser(ctx, plan.ID.ValueString(), updateBody)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating organization user", err.Error())
+			return
+		}
 	}
 
+	if plan.Enabled.ValueBool() != state.Enabled.ValueBool() {
+		_, err := r.client.UpdateOrgUserStatus(ctx, plan.ID.ValueString(), plan.Enabled.ValueBool())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating organization user status", err.Error())
+			return
+		}
+	}
+
+	result, err := r.client.GetOrgUser(ctx, plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading organization user after update", err.Error())
+		return
+	}
 	readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -192,7 +216,6 @@ func buildCreateBody(model OrgUserModel) map[string]interface{} {
 
 func buildUpdateBody(model OrgUserModel) map[string]interface{} {
 	body := map[string]interface{}{
-		"enabled":         model.Enabled.ValueBool(),
 		"preRegistration": model.PreRegistration.ValueBool(),
 	}
 	if !model.Email.IsNull() && !model.Email.IsUnknown() {

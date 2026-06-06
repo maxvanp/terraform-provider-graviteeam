@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `24` |
+| Uncovered writable families without Terraform resource | `23` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -103,6 +103,7 @@ Current unit coverage baseline:
 | `org:settings` | `graviteeam_org_settings` |
 | `org:tags` | `graviteeam_org_tag` |
 | `org:users` | `graviteeam_org_user` |
+| `org:users/status` | `graviteeam_org_user` |
 | `org:users/tokens` | `graviteeam_org_user_token` |
 
 ## Covered Data Sources
@@ -146,7 +147,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:users/username` | Username update action. |
 | `org:users/bulk` | Organization bulk user action. |
 | `org:users/resetPassword` | Organization password reset action. |
-| `org:users/status` | Organization user status action. |
 | `org:users/username` | Organization username update action. |
 | `self:newsletter` | Current-user newsletter operation. |
 | `self:notifications` | Current-user notification operation. |

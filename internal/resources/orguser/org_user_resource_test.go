@@ -20,7 +20,7 @@ resource "graviteeam_org_user" "test" {
   email            = "test-acc-org-user@example.com"
   first_name       = "Org"
   last_name        = "User"
-  enabled          = true
+  enabled          = false
   pre_registration = true
 }
 `,
@@ -30,7 +30,7 @@ resource "graviteeam_org_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "email", "test-acc-org-user@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "first_name", "Org"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "last_name", "User"),
-					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "false"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "pre_registration", "true"),
 				),
 			},
@@ -57,6 +57,7 @@ resource "graviteeam_org_user" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "email", "test-acc-org-user-updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "first_name", "Updated"),
+					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "true"),
 				),
 			},
 		},

@@ -1803,6 +1803,20 @@ func (c *Client) UpdateOrgUser(ctx context.Context, id string, body map[string]i
 	return result, nil
 }
 
+func (c *Client) UpdateOrgUserStatus(ctx context.Context, id string, enabled bool) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPut, "/users/"+id+"/status", map[string]interface{}{
+		"enabled": enabled,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteOrgUser(ctx context.Context, id string) error {
 	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/users/"+id, nil)
 	return err
