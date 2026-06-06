@@ -11,7 +11,6 @@ import (
 )
 
 func TestAccDeviceIdentifierResource_basic(t *testing.T) {
-	t.Skip("fingerprintjs-v3-am-device-identifier plugin not deployed in test environment")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -28,15 +27,15 @@ resource "graviteeam_domain" "test_devid" {
 
 resource "graviteeam_device_identifier" "test" {
   domain_id     = graviteeam_domain.test_devid.id
-  name          = "Test FingerprintJS"
-  type          = "fingerprintjs-v3-am-device-identifier"
+  name          = "Test Cookie Device Identifier"
+  type          = "cookie-device-identifier"
   configuration = jsonencode({})
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("graviteeam_device_identifier.test", "id"),
-					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "name", "Test FingerprintJS"),
-					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "type", "fingerprintjs-v3-am-device-identifier"),
+					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "name", "Test Cookie Device Identifier"),
+					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "type", "cookie-device-identifier"),
 				),
 			},
 			// ImportState
@@ -66,13 +65,13 @@ resource "graviteeam_domain" "test_devid" {
 
 resource "graviteeam_device_identifier" "test" {
   domain_id     = graviteeam_domain.test_devid.id
-  name          = "Updated FingerprintJS"
-  type          = "fingerprintjs-v3-am-device-identifier"
+  name          = "Updated Cookie Device Identifier"
+  type          = "cookie-device-identifier"
   configuration = jsonencode({})
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "name", "Updated FingerprintJS"),
+					resource.TestCheckResourceAttr("graviteeam_device_identifier.test", "name", "Updated Cookie Device Identifier"),
 				),
 			},
 		},

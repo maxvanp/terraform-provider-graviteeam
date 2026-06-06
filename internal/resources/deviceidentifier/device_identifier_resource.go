@@ -145,6 +145,7 @@ func (r *DeviceIdentifierResource) Update(ctx context.Context, req resource.Upda
 
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 	}
 

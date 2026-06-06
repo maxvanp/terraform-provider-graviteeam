@@ -42,11 +42,16 @@ Current automated audit summary:
 
 Coverage below is grouped by API family, not by every individual OpenAPI path. Some API paths are action-only or operational endpoints and are not good Terraform resource candidates. Writable families require a Terraform resource to count as covered; a read-only data source is useful, but it does not make the writable API family fully managed.
 
-Current unit coverage baseline:
+Current test coverage baseline:
 
 | Item | Value |
 |------|-------|
+| Terraform types with acceptance coverage | `71/71` |
+| Terraform types executable in stock local compose acceptance | `70/71` |
+| Import-capable resources with import tests | `52/52` |
 | `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `3.6%` total statement coverage |
+
+The remaining local compose acceptance gap is `graviteeam_authorization_engine`, because the bundled Gravitee AM 4.11.4 compose stack reports the `openfga` authorization engine plugin as not deployed.
 
 ## Covered Resources
 
