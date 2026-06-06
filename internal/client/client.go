@@ -413,6 +413,18 @@ func (c *Client) UpdatePasswordPolicy(ctx context.Context, domainID, id string, 
 	return result, nil
 }
 
+func (c *Client) SetDefaultPasswordPolicy(ctx context.Context, domainID, id string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/password-policies/"+id+"/default", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeletePasswordPolicy(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/password-policies/"+id, nil)
 	return err

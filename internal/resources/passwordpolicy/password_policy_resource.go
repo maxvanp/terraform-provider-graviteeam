@@ -149,12 +149,11 @@ func (r *PasswordPolicyResource) Create(ctx context.Context, req resource.Create
 	id := result["id"].(string)
 	plan.ID = types.StringValue(id)
 
-	// Step 2: PUT with defaultPolicy if set
+	// Step 2: call the dedicated default endpoint if set.
 	if !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && plan.DefaultPolicy.ValueBool() {
-		updateBody := r.buildBody(plan, true)
-		result, err = r.client.UpdatePasswordPolicy(ctx, plan.DomainID.ValueString(), id, updateBody)
+		result, err = r.client.SetDefaultPasswordPolicy(ctx, plan.DomainID.ValueString(), id)
 		if err != nil {
-			resp.Diagnostics.AddError("Error updating password policy after creation", err.Error())
+			resp.Diagnostics.AddError("Error setting default password policy after creation", err.Error())
 			return
 		}
 	}
@@ -195,12 +194,21 @@ func (r *PasswordPolicyResource) Update(ctx context.Context, req resource.Update
 
 	plan.ID = state.ID
 
-	body := r.buildBody(plan, true)
+	includeDefaultPolicy := !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && !plan.DefaultPolicy.ValueBool()
+	body := r.buildBody(plan, includeDefaultPolicy)
 
 	result, err := r.client.UpdatePasswordPolicy(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating password policy", err.Error())
 		return
+	}
+
+	if !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && plan.DefaultPolicy.ValueBool() {
+		result, err = r.client.SetDefaultPasswordPolicy(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error setting default password policy", err.Error())
+			return
+		}
 	}
 
 	r.readIntoModel(&plan, result)
@@ -269,7 +277,7 @@ func (r *PasswordPolicyResource) buildBody(plan PasswordPolicyModel, includeDefa
 	if !plan.PasswordHistoryEnabled.IsNull() && !plan.PasswordHistoryEnabled.IsUnknown() {
 		body["passwordHistoryEnabled"] = plan.PasswordHistoryEnabled.ValueBool()
 	}
-	// defaultPolicy is only accepted on PUT, not POST
+	// defaultPolicy is only accepted on PUT, not POST. Setting true uses the dedicated default endpoint.
 	if includeDefaultPolicy && !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() {
 		body["defaultPolicy"] = plan.DefaultPolicy.ValueBool()
 	}

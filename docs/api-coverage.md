@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `31` |
+| Uncovered writable families without Terraform resource | `30` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -75,6 +75,7 @@ Current unit coverage baseline:
 | `domain:identities` | `graviteeam_identity_provider` |
 | `domain:members` | `graviteeam_domain_member` |
 | `domain:password-policies` | `graviteeam_password_policy` |
+| `domain:password-policies/default` | `graviteeam_password_policy` |
 | `domain:protected-resources` | `graviteeam_protected_resource` |
 | `domain:protected-resources/members` | `graviteeam_protected_resource_member` |
 | `domain:protected-resources/secrets` | `graviteeam_protected_resource_secret` |
