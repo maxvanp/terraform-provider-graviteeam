@@ -70,6 +70,12 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:    true,
 				Description: "The last name",
 			},
+			"enabled": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the user is enabled",
+			},
 			"pre_registration": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -101,6 +107,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	body := map[string]interface{}{
 		"username":        plan.Username.ValueString(),
+		"enabled":         plan.Enabled.ValueBool(),
 		"preRegistration": plan.PreRegistration.ValueBool(),
 	}
 	if !plan.Email.IsNull() {
@@ -166,12 +173,28 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		body["lastName"] = plan.LastName.ValueString()
 	}
 
-	_, err := r.client.UpdateUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
-	if err != nil {
-		resp.Diagnostics.AddError("Error updating user", err.Error())
-		return
+	if len(body) > 0 {
+		_, err := r.client.UpdateUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating user", err.Error())
+			return
+		}
 	}
 
+	if plan.Enabled.ValueBool() != state.Enabled.ValueBool() {
+		_, err := r.client.UpdateUserStatus(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.Enabled.ValueBool())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating user status", err.Error())
+			return
+		}
+	}
+
+	result, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading user after update", err.Error())
+		return
+	}
+	r.readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -221,6 +244,9 @@ func (r *UserResource) readIntoModel(model *UserModel, data map[string]interface
 		model.LastName = types.StringValue(lastName)
 	} else {
 		model.LastName = types.StringNull()
+	}
+	if enabled, ok := data["enabled"].(bool); ok {
+		model.Enabled = types.BoolValue(enabled)
 	}
 	if preReg, ok := data["preRegistration"].(bool); ok {
 		model.PreRegistration = types.BoolValue(preReg)

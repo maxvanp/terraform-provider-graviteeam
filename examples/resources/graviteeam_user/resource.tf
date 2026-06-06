@@ -4,5 +4,6 @@ resource "graviteeam_user" "example" {
   email            = "test@example.com"
   first_name       = "Test"
   last_name        = "User"
+  enabled          = true
   pre_registration = true
 }

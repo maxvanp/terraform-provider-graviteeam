@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `25` |
+| Uncovered writable families without Terraform resource | `24` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -90,6 +90,7 @@ Current unit coverage baseline:
 | `domain:users` | `graviteeam_user` |
 | `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/roles` | `graviteeam_user_role` |
+| `domain:users/status` | `graviteeam_user` |
 | `environment:domains` | `graviteeam_domain` |
 | `org:entrypoints` | `graviteeam_org_entrypoint` |
 | `org:forms` | `graviteeam_org_form` |
@@ -141,7 +142,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:users/lock` | User lock action. |
 | `domain:users/resetPassword` | Password reset action. |
 | `domain:users/sendRegistrationConfirmation` | Registration confirmation action. |
-| `domain:users/status` | User status action. |
 | `domain:users/unlock` | User unlock action. |
 | `domain:users/username` | Username update action. |
 | `org:users/bulk` | Organization bulk user action. |

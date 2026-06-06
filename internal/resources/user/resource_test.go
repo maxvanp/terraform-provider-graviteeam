@@ -41,6 +41,7 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "acctest@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Acc"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "Test"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "false"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "pre_registration", "true"),
 				),
 			},
@@ -74,6 +75,7 @@ resource "graviteeam_user" "test" {
   email            = "updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
+  enabled          = true
   pre_registration = true
 }
 `,
@@ -81,6 +83,7 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "User"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
 				),
 			},
 		},

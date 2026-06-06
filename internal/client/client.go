@@ -326,6 +326,20 @@ func (c *Client) UpdateUser(ctx context.Context, domainID, id string, body map[s
 	return result, nil
 }
 
+func (c *Client) UpdateUserStatus(ctx context.Context, domainID, id string, enabled bool) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/users/"+id+"/status", map[string]interface{}{
+		"enabled": enabled,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteUser(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/users/"+id, nil)
 	return err

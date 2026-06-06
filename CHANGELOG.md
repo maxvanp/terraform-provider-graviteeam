@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
 - Use the dedicated i18n dictionary entries endpoint when managing dictionary entries
 - Use the dedicated password policy default endpoint when setting a domain default policy
+- Add `enabled` management to `graviteeam_user` through the dedicated user status endpoint
 
 ## [0.1.0] - TBD
 

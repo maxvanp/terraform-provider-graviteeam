@@ -19,6 +19,7 @@ resource "graviteeam_user" "example" {
   email            = "test@example.com"
   first_name       = "Test"
   last_name        = "User"
+  enabled          = true
   pre_registration = true
 }
 ```
@@ -34,6 +35,7 @@ resource "graviteeam_user" "example" {
 ### Optional
 
 - `email` (String) The email address
+- `enabled` (Boolean) Whether the user is enabled
 - `first_name` (String) The first name
 - `last_name` (String) The last name
 - `pre_registration` (Boolean) Whether this is a pre-registration (user must set password). Defaults to true.
