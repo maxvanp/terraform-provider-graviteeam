@@ -13,3 +13,10 @@ data "graviteeam_application_metadata" "resources" {
   kind           = "resources"
   size           = 50
 }
+
+data "graviteeam_application_metadata" "resource_policies" {
+  domain_id      = graviteeam_domain.example.id
+  application_id = graviteeam_application.example.id
+  resource_id    = "resource-id"
+  kind           = "resource_policies"
+}

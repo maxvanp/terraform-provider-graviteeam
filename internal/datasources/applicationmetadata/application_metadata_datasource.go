@@ -25,6 +25,7 @@ type ApplicationMetadataDataSource struct {
 type ApplicationMetadataModel struct {
 	DomainID      types.String `tfsdk:"domain_id"`
 	ApplicationID types.String `tfsdk:"application_id"`
+	ResourceID    types.String `tfsdk:"resource_id"`
 	Kind          types.String `tfsdk:"kind"`
 	Type          types.String `tfsdk:"type"`
 	Field         types.String `tfsdk:"field"`
@@ -42,6 +43,18 @@ var applicationMetadataPaths = map[string]func(ApplicationMetadataModel) (string
 	"resources": func(config ApplicationMetadataModel) (string, error) {
 		return "/resources" + pagingQuery(config), nil
 	},
+	"resource_policies": func(config ApplicationMetadataModel) (string, error) {
+		if config.ResourceID.IsNull() || config.ResourceID.IsUnknown() || config.ResourceID.ValueString() == "" {
+			return "", metadataError("resource_id is required for resource_policies")
+		}
+		return "/resources/" + url.PathEscape(config.ResourceID.ValueString()) + "/policies", nil
+	},
+}
+
+type metadataError string
+
+func (e metadataError) Error() string {
+	return string(e)
 }
 
 func NewApplicationMetadataDataSource() datasource.DataSource {
@@ -63,6 +76,10 @@ func (d *ApplicationMetadataDataSource) Schema(_ context.Context, _ datasource.S
 			"application_id": schema.StringAttribute{
 				Required:    true,
 				Description: "The ID of the application",
+			},
+			"resource_id": schema.StringAttribute{
+				Optional:    true,
+				Description: "Application resource ID, required for resource_policies kind",
 			},
 			"kind": schema.StringAttribute{
 				Required:    true,

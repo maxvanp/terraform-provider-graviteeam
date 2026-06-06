@@ -36,7 +36,7 @@ Current automated audit summary:
 | Uncovered writable families without Terraform resource | `17` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `2` |
+| Uncovered read-only families | `1` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -122,6 +122,7 @@ Current unit coverage baseline:
 | `domain:applications/analytics` | `graviteeam_application_metadata` |
 | `domain:applications/members/permissions` | `graviteeam_permissions_metadata` |
 | `domain:applications/resources` | `graviteeam_application_metadata` |
+| `domain:applications/resources/policies` | `graviteeam_application_metadata` |
 | `domain:audits` | `graviteeam_audits` |
 | `domain:certificates/key` | `graviteeam_domain_metadata` |
 | `domain:certificates/keys` | `graviteeam_domain_metadata` |
@@ -222,7 +223,6 @@ The provider does not currently expose the following read-only or platform metad
 
 | API family | Notes |
 |------------|-------|
-| `domain:applications/resources/policies` | Application UMA resource policy listing. Local compose does not currently provide a management-API path to create an application resource with policies; keep uncovered until a runtime fixture can prove it. |
 | `platform:roles` | Platform role metadata. Local probes with organization role IDs and common platform role names returned 404; no platform role list endpoint exists in the bundled OpenAPI snapshot to discover a valid ID. |
 
 ## Suggested Implementation Order
