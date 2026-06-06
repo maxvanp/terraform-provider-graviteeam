@@ -36,7 +36,7 @@ Current automated audit summary:
 | Uncovered writable families without Terraform resource | `17` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `1` |
+| Uncovered read-only families | `0` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -169,6 +169,7 @@ Current unit coverage baseline:
 | `platform:plugins/reporters/schema` | `graviteeam_plugins` |
 | `platform:plugins/resources` | `graviteeam_plugins` |
 | `platform:plugins/resources/schema` | `graviteeam_plugins` |
+| `platform:roles` | `graviteeam_platform_metadata` |
 | `self:_root` | `graviteeam_self_metadata` |
 | `self:newsletter/taglines` | `graviteeam_self_metadata` |
 | `self:notifications` | `graviteeam_self_metadata` |
@@ -219,11 +220,11 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 ### Read-Only and Admin Metadata Not Covered
 
-The provider does not currently expose the following read-only or platform metadata families:
+The provider currently exposes all read-only and platform metadata families identified by the audit.
 
 | API family | Notes |
 |------------|-------|
-| `platform:roles` | Platform role metadata. Local probes with organization role IDs and common platform role names returned 404; no platform role list endpoint exists in the bundled OpenAPI snapshot to discover a valid ID. |
+| None | No uncovered read-only families remain in the bundled OpenAPI snapshot. |
 
 ## Suggested Implementation Order
 

@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -20,17 +21,32 @@ type PlatformMetadataDataSource struct {
 
 type PlatformMetadataModel struct {
 	Kind       types.String `tfsdk:"kind"`
+	RoleID     types.String `tfsdk:"role_id"`
 	ResultJSON types.String `tfsdk:"result_json"`
 }
 
-var platformMetadataPaths = map[string]string{
-	"alert_service_status": "platform/configuration/alerts/status",
-	"audit_event_types":    "platform/audits/events",
-	"email_required":       "platform/configuration/users/email-required",
-	"flow_schema":          "platform/configuration/flow/schema",
-	"installation":         "platform/installation",
-	"license":              "platform/license",
-	"spel_grammar":         "platform/configuration/spel/grammar",
+var platformMetadataPaths = map[string]func(PlatformMetadataModel) (string, error){
+	"alert_service_status": func(_ PlatformMetadataModel) (string, error) { return "platform/configuration/alerts/status", nil },
+	"audit_event_types":    func(_ PlatformMetadataModel) (string, error) { return "platform/audits/events", nil },
+	"email_required": func(_ PlatformMetadataModel) (string, error) {
+		return "platform/configuration/users/email-required", nil
+	},
+	"flow_schema":  func(_ PlatformMetadataModel) (string, error) { return "platform/configuration/flow/schema", nil },
+	"installation": func(_ PlatformMetadataModel) (string, error) { return "platform/installation", nil },
+	"license":      func(_ PlatformMetadataModel) (string, error) { return "platform/license", nil },
+	"role": func(config PlatformMetadataModel) (string, error) {
+		if config.RoleID.IsNull() || config.RoleID.IsUnknown() || config.RoleID.ValueString() == "" {
+			return "", metadataError("role_id is required for role kind")
+		}
+		return "platform/roles/" + url.PathEscape(config.RoleID.ValueString()), nil
+	},
+	"spel_grammar": func(_ PlatformMetadataModel) (string, error) { return "platform/configuration/spel/grammar", nil },
+}
+
+type metadataError string
+
+func (e metadataError) Error() string {
+	return string(e)
 }
 
 func NewPlatformMetadataDataSource() datasource.DataSource {
@@ -47,7 +63,11 @@ func (d *PlatformMetadataDataSource) Schema(_ context.Context, _ datasource.Sche
 		Attributes: map[string]schema.Attribute{
 			"kind": schema.StringAttribute{
 				Required:    true,
-				Description: "Metadata kind. Supported values: " + metadataKindList(platformMetadataPaths),
+				Description: "Metadata kind. Supported values: " + platformMetadataKindList(),
+			},
+			"role_id": schema.StringAttribute{
+				Optional:    true,
+				Description: "Platform role ID, required for role kind",
 			},
 			"result_json": schema.StringAttribute{
 				Computed:    true,
@@ -76,9 +96,14 @@ func (d *PlatformMetadataDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	path, ok := platformMetadataPaths[config.Kind.ValueString()]
+	pathBuilder, ok := platformMetadataPaths[config.Kind.ValueString()]
 	if !ok {
-		resp.Diagnostics.AddError("Unsupported platform metadata kind", "Expected one of: "+metadataKindList(platformMetadataPaths))
+		resp.Diagnostics.AddError("Unsupported platform metadata kind", "Expected one of: "+platformMetadataKindList())
+		return
+	}
+	path, err := pathBuilder(config)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid platform metadata configuration", err.Error())
 		return
 	}
 
@@ -95,6 +120,15 @@ func (d *PlatformMetadataDataSource) Read(ctx context.Context, req datasource.Re
 
 	config.ResultJSON = types.StringValue(result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func platformMetadataKindList() string {
+	kinds := make([]string, 0, len(platformMetadataPaths))
+	for kind := range platformMetadataPaths {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	return strings.Join(kinds, ", ")
 }
 
 func metadataKindList(paths map[string]string) string {
