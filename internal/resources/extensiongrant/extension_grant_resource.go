@@ -190,6 +190,18 @@ func (r *ExtensionGrantResource) Update(ctx context.Context, req resource.Update
 
 	plan.ID = state.ID
 
+	body := buildUpdateBody(plan, state)
+
+	_, err := r.client.UpdateExtensionGrant(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error updating extension grant", err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func buildUpdateBody(plan, state ExtensionGrantModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
 		"type":          plan.Type.ValueString(),
@@ -201,15 +213,11 @@ func (r *ExtensionGrantResource) Update(ctx context.Context, req resource.Update
 
 	if !plan.IdentityProvider.IsNull() && !plan.IdentityProvider.IsUnknown() {
 		body["identityProvider"] = plan.IdentityProvider.ValueString()
+	} else if !state.IdentityProvider.IsNull() {
+		body["identityProvider"] = ""
 	}
 
-	_, err := r.client.UpdateExtensionGrant(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
-	if err != nil {
-		resp.Diagnostics.AddError("Error updating extension grant", err.Error())
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	return body
 }
 
 func (r *ExtensionGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
