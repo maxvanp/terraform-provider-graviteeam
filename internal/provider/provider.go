@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/adminmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/analytics"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/audits"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/domainmetadata"
@@ -214,6 +215,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 
 func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		adminmetadata.NewAdminMetadataDataSource,
 		analytics.NewAnalyticsDataSource,
 		audits.NewAuditsDataSource,
 		domainmetadata.NewDomainMetadataDataSource,

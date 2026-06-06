@@ -141,10 +141,11 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (14)
+### Data Sources (15)
 
 | Data Source | Description |
 |-------------|-------------|
+| `graviteeam_admin_metadata` | Read administrative metadata such as organization audits, environments, domain HRID lookups, and user audits |
 | `graviteeam_analytics` | Read analytics data (DATE_HISTO, COUNT, GROUP_BY) |
 | `graviteeam_audits` | Read audit logs for a domain |
 | `graviteeam_domain_metadata` | Read domain metadata such as active password policy and certificate public keys |

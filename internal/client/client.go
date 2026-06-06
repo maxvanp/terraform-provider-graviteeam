@@ -1556,6 +1556,14 @@ func (c *Client) GetPermissionsMetadata(ctx context.Context, path string) ([]byt
 	return c.DoRequest(ctx, http.MethodGet, path, nil)
 }
 
+func (c *Client) GetAdminMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, path, nil)
+}
+
+func (c *Client) GetOrganizationMetadata(ctx context.Context, path string) ([]byte, error) {
+	return c.DoOrgRequest(ctx, http.MethodGet, path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {
