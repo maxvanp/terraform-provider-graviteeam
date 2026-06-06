@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Align README/CONTRIBUTING with the current Go 1.26.3 toolchain requirement and full resource inventory
+- Align README/CONTRIBUTING with the current Go 1.26.4 toolchain requirement and full resource inventory
 
 ### Changed
 

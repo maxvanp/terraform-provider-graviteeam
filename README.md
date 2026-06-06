@@ -5,7 +5,7 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.26.3 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.26.4 (for building from source)
 - [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
 
 ## Compatibility
