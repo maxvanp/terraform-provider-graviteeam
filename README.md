@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (39)
+### Resources (40)
 
 | Resource | Description |
 |----------|-------------|
@@ -121,6 +121,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_org_group` | Organization-level group |
 | `graviteeam_org_group_members` | Organization-level group membership management |
 | `graviteeam_org_identity_provider` | Organization-level identity provider |
+| `graviteeam_org_member` | Organization-level membership role assignment |
 | `graviteeam_org_reporter` | Organization-level reporter |
 | `graviteeam_org_role` | Organization-level role |
 | `graviteeam_org_settings` | Organization settings singleton |
