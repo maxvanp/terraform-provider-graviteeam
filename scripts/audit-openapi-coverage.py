@@ -19,6 +19,29 @@ API_COVERAGE_PATH = ROOT / "docs" / "api-coverage.md"
 WRITE_METHODS = {"post", "put", "patch", "delete"}
 HTTP_METHODS = WRITE_METHODS | {"get"}
 
+READ_LIKE_POST_GAPS = {
+    "domain:forms/preview",
+    "domain:password-policies/evaluate",
+}
+
+ACTION_OR_LIFECYCLE_GAPS = {
+    "domain:applications/secrets/_renew",
+    "domain:certificates/rotate",
+    "domain:protected-resources/secrets/_renew",
+    "domain:users/bulk",
+    "domain:users/consents",
+    "domain:users/credentials",
+    "domain:users/devices",
+    "domain:users/factors",
+    "domain:users/identities",
+    "domain:users/resetPassword",
+    "domain:users/sendRegistrationConfirmation",
+    "org:users/bulk",
+    "org:users/resetPassword",
+    "self:newsletter/_subscribe",
+    "self:notifications/acknowledge",
+}
+
 RESOURCE_DOCS = ROOT / "docs" / "resources"
 DATASOURCE_DOCS = ROOT / "docs" / "data-sources"
 RESOURCE_EXAMPLES = ROOT / "examples" / "resources"
@@ -201,6 +224,14 @@ def check_doc_consistency(
     for family in extra_gaps:
         errors.append(f"unknown or non-writable family listed in Known Gaps: {family}")
 
+    classified_writable_gaps = READ_LIKE_POST_GAPS | ACTION_OR_LIFECYCLE_GAPS
+    unclassified_writable_gaps = sorted(uncovered_writable - classified_writable_gaps)
+    for family in unclassified_writable_gaps:
+        errors.append(f"uncovered writable family is not classified as a known non-resource gap: {family}")
+    stale_classified_writable_gaps = sorted(classified_writable_gaps - uncovered_writable - covered_any)
+    for family in stale_classified_writable_gaps:
+        errors.append(f"classified writable gap is no longer uncovered: {family}")
+
     documented_read_only_gaps = documented_read_only_gap_families()
     stale_read_only_gaps = sorted(documented_read_only_gaps & covered_any)
     for family in stale_read_only_gaps:
@@ -242,6 +273,7 @@ def main() -> None:
     uncovered_writable = sorted(set(writable) - covered_resources)
     writable_datasource_only = sorted((set(writable) & covered_datasources) - covered_resources)
     uncovered_read_only = sorted(set(read_only) - covered_any)
+    resource_candidate_gaps = sorted(set(uncovered_writable) - READ_LIKE_POST_GAPS - ACTION_OR_LIFECYCLE_GAPS)
 
     resource_dirs = source_dirs(RESOURCE_SRC)
     datasource_dirs = source_dirs(DATASOURCE_SRC)
@@ -283,12 +315,17 @@ def main() -> None:
     print(f"Registered resources: {len(resource_names)}")
     print(f"Registered data sources: {len(datasource_names)}")
     print(f"Uncovered writable families: {len(uncovered_writable)}")
+    print(f"Unclassified writable resource candidates: {len(resource_candidate_gaps)}")
     print(f"Writable families covered only by data source: {len(writable_datasource_only)}")
     print(f"Uncovered read-only families: {len(uncovered_read_only)}")
 
     print_section(
         "Uncovered Writable Families",
         [f"- {family}: {', '.join(sorted(writable[family]))}" for family in uncovered_writable],
+    )
+    print_section(
+        "Unclassified Writable Resource Candidates",
+        [f"- {family}: {', '.join(sorted(writable[family]))}" for family in resource_candidate_gaps],
     )
     print_section(
         "Writable Families Covered Only By Data Source",

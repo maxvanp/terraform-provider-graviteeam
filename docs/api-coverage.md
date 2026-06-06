@@ -34,6 +34,7 @@ Current automated audit summary:
 | Writable families | `77` |
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
+| Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
 | Uncovered read-only families | `2` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -184,6 +185,15 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 None currently identified in the local 4.11.4 OpenAPI audit.
 
+### Read-Like POST Endpoints Not Covered
+
+These endpoints look closer to calculated reads than durable Terraform resources, but local 4.11.4 compose does not currently provide a reliable fixture to expose them safely.
+
+| API family | Notes |
+|------------|-------|
+| `domain:forms/preview` | Template preview operation. Local admin-token probe returned `403 Permission denied`; keep uncovered until an acceptance fixture can prove the endpoint and permissions. |
+| `domain:password-policies/evaluate` | Password policy evaluation operation. The bundled OpenAPI snapshot omits request and response schemas, and local admin-token probes returned `403 Permission denied` or `400 Malformed json` depending on payload shape. |
+
 ### Action or Lifecycle Endpoints
 
 These endpoints may be better represented as explicit resources, one-shot actions, or left unmanaged depending on Terraform semantics.
@@ -192,8 +202,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 |------------|-------|
 | `domain:applications/secrets/_renew` | Application client secret renewal action. |
 | `domain:certificates/rotate` | Certificate rotation action. |
-| `domain:forms/preview` | Preview action, probably not Terraform-managed. |
-| `domain:password-policies/evaluate` | Password policy evaluation action. |
 | `domain:protected-resources/secrets/_renew` | Protected resource secret renewal action. |
 | `domain:users/bulk` | Bulk user action. |
 | `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged. |
