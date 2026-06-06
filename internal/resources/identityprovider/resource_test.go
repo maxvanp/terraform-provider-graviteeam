@@ -81,6 +81,12 @@ resource "graviteeam_group" "test" {
   description = "Group mapped by identity provider test"
 }
 
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Role"
+  description = "Role mapped by identity provider test"
+}
+
 resource "graviteeam_identity_provider" "test" {
   domain_id     = graviteeam_domain.test.id
   name          = "Updated Inline IdP"
@@ -105,12 +111,19 @@ resource "graviteeam_identity_provider" "test" {
       graviteeam_group.test.id
     ]
   }
+  role_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('test-idp-role')}" = [
+      graviteeam_role.test.id
+    ]
+  }
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "name", "Updated Inline IdP"),
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "mappers.email", "email"),
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "mappers.username", "username"),
+					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "group_mapper.%", "1"),
+					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "role_mapper.%", "1"),
 				),
 			},
 			// Update: remove mappers and group mapper to ensure PUT clears API state
@@ -128,6 +141,12 @@ resource "graviteeam_group" "test" {
   domain_id   = graviteeam_domain.test.id
   name        = "Test IdP Mapped Group"
   description = "Group mapped by identity provider test"
+}
+
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Role"
+  description = "Role mapped by identity provider test"
 }
 
 resource "graviteeam_identity_provider" "test" {
@@ -150,6 +169,7 @@ resource "graviteeam_identity_provider" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "mappers.email"),
 					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "group_mapper.%"),
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "role_mapper.%"),
 				),
 			},
 		},

@@ -20,4 +20,9 @@ resource "graviteeam_identity_provider" "example" {
       graviteeam_group.example.id
     ]
   }
+  role_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('admin-role')}" = [
+      graviteeam_role.example.id
+    ]
+  }
 }
