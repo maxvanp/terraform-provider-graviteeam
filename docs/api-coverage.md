@@ -241,6 +241,7 @@ After changing API coverage, run:
 ```bash
 ./scripts/audit-openapi-coverage.py
 ./scripts/audit-openapi-coverage.py --check-doc
+./scripts/audit-test-coverage.py --check
 ./scripts/probe-openapi-gaps.py
 go test ./...
 go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
