@@ -73,6 +73,12 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Default:     booldefault.StaticBool(false),
 				Description: "Whether the user is enabled",
 			},
+			"locked": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the user account is locked",
+			},
 			"pre_registration": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -124,6 +130,18 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	plan.ID = types.StringValue(result["id"].(string))
+	if plan.Locked.ValueBool() {
+		if err := r.client.LockUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error locking user", err.Error())
+			return
+		}
+		result, err = r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading user after lock", err.Error())
+			return
+		}
+		r.readIntoModel(&plan, result)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -194,6 +212,22 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		}
 	}
 
+	if plan.Locked.ValueBool() != state.Locked.ValueBool() {
+		if plan.Locked.ValueBool() {
+			err := r.client.LockUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Error locking user", err.Error())
+				return
+			}
+		} else {
+			err := r.client.UnlockUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Error unlocking user", err.Error())
+				return
+			}
+		}
+	}
+
 	result, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading user after update", err.Error())
@@ -252,6 +286,9 @@ func (r *UserResource) readIntoModel(model *UserModel, data map[string]interface
 	}
 	if enabled, ok := data["enabled"].(bool); ok {
 		model.Enabled = types.BoolValue(enabled)
+	}
+	if accountNonLocked, ok := data["accountNonLocked"].(bool); ok {
+		model.Locked = types.BoolValue(!accountNonLocked)
 	}
 	if preReg, ok := data["preRegistration"].(bool); ok {
 		model.PreRegistration = types.BoolValue(preReg)

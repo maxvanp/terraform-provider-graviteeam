@@ -12,5 +12,6 @@ type UserModel struct {
 	FirstName       types.String `tfsdk:"first_name"`
 	LastName        types.String `tfsdk:"last_name"`
 	Enabled         types.Bool   `tfsdk:"enabled"`
+	Locked          types.Bool   `tfsdk:"locked"`
 	PreRegistration types.Bool   `tfsdk:"pre_registration"`
 }

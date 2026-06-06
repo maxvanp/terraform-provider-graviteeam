@@ -38,6 +38,7 @@ resource "graviteeam_user" "example" {
 - `enabled` (Boolean) Whether the user is enabled
 - `first_name` (String) The first name
 - `last_name` (String) The last name
+- `locked` (Boolean) Whether the user account is locked
 - `pre_registration` (Boolean) Whether this is a pre-registration (user must set password). Defaults to true.
 
 ### Read-Only

@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use the dedicated organization user status endpoint when managing `graviteeam_org_user.enabled`
 - Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
 - Use the dedicated application type endpoint when updating `graviteeam_application.type`
+- Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
 
 ## [0.1.0] - TBD
 

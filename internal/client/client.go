@@ -354,6 +354,16 @@ func (c *Client) UpdateUserStatus(ctx context.Context, domainID, id string, enab
 	return result, nil
 }
 
+func (c *Client) LockUser(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/users/"+id+"/lock", nil)
+	return err
+}
+
+func (c *Client) UnlockUser(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/users/"+id+"/unlock", nil)
+	return err
+}
+
 func (c *Client) UpdateUsername(ctx context.Context, domainID, id, username string) (map[string]interface{}, error) {
 	data, err := c.DoRequest(ctx, http.MethodPatch, "/domains/"+domainID+"/users/"+id+"/username", map[string]interface{}{
 		"username": username,
