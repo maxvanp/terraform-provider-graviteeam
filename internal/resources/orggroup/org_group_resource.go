@@ -101,7 +101,7 @@ func (r *OrgGroupResource) Create(ctx context.Context, req resource.CreateReques
 	plan.ID = types.StringValue(result["id"].(string))
 
 	if plan.Roles != nil {
-		updateBody := buildBody(plan)
+		updateBody := buildBody(plan, OrgGroupModel{})
 		result, err = r.client.UpdateOrgGroup(ctx, plan.ID.ValueString(), updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating organization group after creation", err.Error())
@@ -165,7 +165,7 @@ func (r *OrgGroupResource) Update(ctx context.Context, req resource.UpdateReques
 
 	plan.ID = state.ID
 
-	result, err := r.client.UpdateOrgGroup(ctx, plan.ID.ValueString(), buildBody(plan))
+	result, err := r.client.UpdateOrgGroup(ctx, plan.ID.ValueString(), buildBody(plan, state))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating organization group", err.Error())
 		return
@@ -200,18 +200,24 @@ func (r *OrgGroupResource) ImportState(ctx context.Context, req resource.ImportS
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func buildBody(model OrgGroupModel) map[string]interface{} {
+func buildBody(model, state OrgGroupModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name": model.Name.ValueString(),
 	}
 	if !model.Description.IsNull() && !model.Description.IsUnknown() {
 		body["description"] = model.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
 	}
 	if model.Members != nil {
 		body["members"] = stringValues(model.Members)
+	} else if state.Members != nil {
+		body["members"] = []string{}
 	}
 	if model.Roles != nil {
 		body["roles"] = stringValues(model.Roles)
+	} else if state.Roles != nil {
+		body["roles"] = []string{}
 	}
 	return body
 }
@@ -223,7 +229,7 @@ func readIntoModel(model *OrgGroupModel, result map[string]interface{}) {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := result["description"].(string); ok {
+	if desc, ok := result["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
 	} else {
 		model.Description = types.StringNull()

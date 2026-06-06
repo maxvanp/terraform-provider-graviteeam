@@ -168,19 +168,7 @@ func (r *OrgRoleResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	}
-	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		body["description"] = plan.Description.ValueString()
-	}
-	if len(plan.Permissions) > 0 {
-		perms := make([]string, len(plan.Permissions))
-		for i, p := range plan.Permissions {
-			perms[i] = p.ValueString()
-		}
-		body["permissions"] = perms
-	}
+	body := buildUpdateBody(plan, state)
 
 	_, err := r.client.UpdateOrgRole(ctx, plan.ID.ValueString(), body)
 	if err != nil {
@@ -208,12 +196,35 @@ func (r *OrgRoleResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+func buildUpdateBody(plan, state OrgRoleModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name": plan.Name.ValueString(),
+	}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		body["description"] = plan.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
+	}
+	if plan.Permissions != nil {
+		perms := make([]string, len(plan.Permissions))
+		for i, p := range plan.Permissions {
+			perms[i] = p.ValueString()
+		}
+		body["permissions"] = perms
+	} else if state.Permissions != nil {
+		body["permissions"] = []string{}
+	}
+	return body
+}
+
 func readIntoModel(model *OrgRoleModel, result map[string]interface{}) {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := result["description"].(string); ok {
+	if desc, ok := result["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
+	} else {
+		model.Description = types.StringNull()
 	}
 	if at, ok := result["assignableType"].(string); ok {
 		model.AssignableType = types.StringValue(strings.ToUpper(at))
