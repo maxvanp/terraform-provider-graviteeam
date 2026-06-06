@@ -127,6 +127,8 @@ func (r *OrgTagResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		body["description"] = plan.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
 	}
 
 	_, err := r.client.UpdateOrgTag(ctx, plan.ID.ValueString(), body)
@@ -159,7 +161,9 @@ func readIntoModel(model *OrgTagModel, result map[string]interface{}) {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := result["description"].(string); ok {
+	if desc, ok := result["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
+	} else {
+		model.Description = types.StringNull()
 	}
 }

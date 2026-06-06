@@ -42,6 +42,17 @@ resource "graviteeam_org_tag" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_tag.test", "description", "Updated tag"),
 				),
 			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_org_tag" "test" {
+  name = "test-acc-tag-updated"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_org_tag.test", "name", "test-acc-tag-updated"),
+					resource.TestCheckNoResourceAttr("graviteeam_org_tag.test", "description"),
+				),
+			},
 		},
 	})
 }

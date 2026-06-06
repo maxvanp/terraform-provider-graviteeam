@@ -163,10 +163,21 @@ func (r *OrgFormResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	plan.ID = state.ID
 
-	result, err := r.client.UpdateOrgForm(ctx, plan.ID.ValueString(), map[string]interface{}{
+	current, err := r.client.GetOrgForm(ctx, state.Template.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading current organization form before update", err.Error())
+		return
+	}
+
+	body := map[string]interface{}{
 		"enabled": plan.Enabled.ValueBool(),
 		"content": plan.Content.ValueString(),
-	})
+	}
+	if assets, ok := current["assets"]; ok {
+		body["assets"] = assets
+	}
+
+	result, err := r.client.UpdateOrgForm(ctx, plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating organization form", err.Error())
 		return

@@ -131,7 +131,7 @@ func (r *OrgEntrypointResource) Update(ctx context.Context, req resource.UpdateR
 
 	plan.ID = state.ID
 
-	result, err := r.client.UpdateOrgEntrypoint(ctx, plan.ID.ValueString(), buildBody(plan))
+	result, err := r.client.UpdateOrgEntrypoint(ctx, plan.ID.ValueString(), buildBody(plan, state))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating organization entrypoint", err.Error())
 		return
@@ -158,7 +158,7 @@ func (r *OrgEntrypointResource) ImportState(ctx context.Context, req resource.Im
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func buildBody(model OrgEntrypointModel) map[string]interface{} {
+func buildBody(model OrgEntrypointModel, state ...OrgEntrypointModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name": model.Name.ValueString(),
 		"url":  model.URL.ValueString(),
@@ -166,6 +166,8 @@ func buildBody(model OrgEntrypointModel) map[string]interface{} {
 	}
 	if !model.Description.IsNull() && !model.Description.IsUnknown() {
 		body["description"] = model.Description.ValueString()
+	} else if len(state) > 0 && !state[0].Description.IsNull() {
+		body["description"] = ""
 	}
 	return body
 }
@@ -177,7 +179,7 @@ func readIntoModel(model *OrgEntrypointModel, result map[string]interface{}) {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := result["description"].(string); ok {
+	if desc, ok := result["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
 	} else {
 		model.Description = types.StringNull()

@@ -37,13 +37,13 @@ resource "graviteeam_org_form" "test" {
 				Config: acctest.ProviderConfig + `
 resource "graviteeam_org_form" "test" {
   template = "LOGIN"
-  enabled  = true
+  enabled  = false
   content  = "<html><body><h1>Welcome</h1><p>Please sign in</p></body></html>"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_org_form.test", "template", "LOGIN"),
-					resource.TestCheckResourceAttr("graviteeam_org_form.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_org_form.test", "enabled", "false"),
 					resource.TestCheckResourceAttr("graviteeam_org_form.test", "content", "<html><body><h1>Welcome</h1><p>Please sign in</p></body></html>"),
 				),
 			},

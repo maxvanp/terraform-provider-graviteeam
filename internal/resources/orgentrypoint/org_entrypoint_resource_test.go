@@ -59,6 +59,25 @@ resource "graviteeam_org_entrypoint" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_entrypoint.test", "url", "https://login-updated.example.com"),
 				),
 			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_org_tag" "test" {
+  name        = "test-acc-entrypoint-tag"
+  description = "Acceptance test entrypoint tag"
+}
+
+resource "graviteeam_org_entrypoint" "test" {
+  name = "test-acc-entrypoint-updated"
+  url  = "https://login-updated.example.com"
+  tags = [graviteeam_org_tag.test.id]
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_org_entrypoint.test", "name", "test-acc-entrypoint-updated"),
+					resource.TestCheckResourceAttr("graviteeam_org_entrypoint.test", "url", "https://login-updated.example.com"),
+					resource.TestCheckNoResourceAttr("graviteeam_org_entrypoint.test", "description"),
+				),
+			},
 		},
 	})
 }
