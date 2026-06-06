@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `33` |
+| Terraform resources registered | `34` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,8 +33,8 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `44` |
-| Writable families covered only by data source | `1` |
+| Uncovered writable families without Terraform resource | `43` |
+| Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
@@ -63,6 +63,7 @@ Current unit coverage baseline:
 | `domain:emails` | `graviteeam_email_template` |
 | `domain:extensionGrants` | `graviteeam_extension_grant` |
 | `domain:factors` | `graviteeam_factor` |
+| `domain:flows` | `graviteeam_domain_flow` |
 | `domain:forms` | `graviteeam_form` |
 | `domain:groups` | `graviteeam_group` |
 | `domain:groups/members` | `graviteeam_group_members` |
@@ -108,7 +109,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `domain:members` | Domain membership management. |
 | `domain:applications/members` | Application membership management. |
 | `domain:applications/secrets` | Application secret lifecycle. |
-| `domain:flows` | Domain flow management is read-only today via `graviteeam_flows`. |
 | `domain:alerts/triggers` | Alert trigger configuration. |
 | `domain:certificate-settings` | Domain certificate settings. |
 | `org:users` | Organization-level user management. |
@@ -178,9 +178,8 @@ The provider also does not currently expose several read-only or platform metada
 1. Add protected resource members and secrets.
 2. Add authorization engines.
 3. Add membership resources for domains, applications, organizations, and organization groups.
-4. Add a managed domain flow resource, keeping `graviteeam_flows` as a data source.
-5. Add organization-level users, reporters, forms, and entrypoints.
-6. Revisit action-only endpoints and decide case by case whether Terraform should model them.
+4. Add organization-level users, reporters, forms, and entrypoints.
+5. Revisit action-only endpoints and decide case by case whether Terraform should model them.
 
 ## Verification
 

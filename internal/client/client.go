@@ -1094,6 +1094,18 @@ func (c *Client) ListFlows(ctx context.Context, domainID string) ([]interface{},
 	return result, nil
 }
 
+func (c *Client) UpdateDomainFlows(ctx context.Context, domainID string, body []interface{}) ([]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/flows", body)
+	if err != nil {
+		return nil, err
+	}
+	var result []interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Entrypoint operations
 
 func (c *Client) ListEntrypoints(ctx context.Context, domainID string) ([]byte, error) {

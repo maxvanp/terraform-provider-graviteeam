@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `group_mapper` support to `graviteeam_identity_provider`
 - Add an OpenAPI coverage audit script and document the current resource/data source gaps
 - Add `graviteeam_org_group` for organization-level group management
+- Add `graviteeam_domain_flow` for domain-level authentication flow management
 
 ### Changed
 
@@ -26,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 33 resources:
+- 34 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
+  - `graviteeam_domain_flow` — Domain authentication flow list
   - `graviteeam_application` — OAuth2/OIDC application with IdP rules, MFA, OAuth settings
   - `graviteeam_application_email` — Application email templates and overrides
   - `graviteeam_application_flow` — Application-specific flows

@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (33)
+### Resources (34)
 
 | Resource | Description |
 |----------|-------------|
@@ -113,6 +113,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_service_resource` | Shared resource plugin (SMTP, etc.) |
 | `graviteeam_bot_detection` | Bot detection plugin |
 | `graviteeam_device_identifier` | Device fingerprinting plugin |
+| `graviteeam_domain_flow` | Domain authentication flow list |
 | `graviteeam_auth_device_notifier` | CIBA auth device notifier |
 | `graviteeam_i18n_dictionary` | Internationalization dictionary |
 | `graviteeam_org_group` | Organization-level group |
