@@ -35,7 +35,7 @@ Current automated audit summary:
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
 | Writable families covered only by data source | `5` |
-| Uncovered read-only families | `52` |
+| Uncovered read-only families | `28` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -120,6 +120,30 @@ Current unit coverage baseline:
 | `domain:audits` | `graviteeam_audits` |
 | `domain:entrypoints` | `graviteeam_entrypoints` |
 | `domain:flows` | `graviteeam_flows` |
+| `platform:plugins/auth-device-notifiers` | `graviteeam_plugins` |
+| `platform:plugins/auth-device-notifiers/schema` | `graviteeam_plugins` |
+| `platform:plugins/authorization-engines` | `graviteeam_plugins` |
+| `platform:plugins/authorization-engines/schema` | `graviteeam_plugins` |
+| `platform:plugins/bot-detections` | `graviteeam_plugins` |
+| `platform:plugins/bot-detections/schema` | `graviteeam_plugins` |
+| `platform:plugins/certificates` | `graviteeam_plugins` |
+| `platform:plugins/certificates/schema` | `graviteeam_plugins` |
+| `platform:plugins/device-identifiers` | `graviteeam_plugins` |
+| `platform:plugins/device-identifiers/schema` | `graviteeam_plugins` |
+| `platform:plugins/extensionGrants` | `graviteeam_plugins` |
+| `platform:plugins/extensionGrants/schema` | `graviteeam_plugins` |
+| `platform:plugins/factors` | `graviteeam_plugins` |
+| `platform:plugins/factors/schema` | `graviteeam_plugins` |
+| `platform:plugins/identities` | `graviteeam_plugins` |
+| `platform:plugins/identities/schema` | `graviteeam_plugins` |
+| `platform:plugins/notifiers` | `graviteeam_plugins` |
+| `platform:plugins/notifiers/schema` | `graviteeam_plugins` |
+| `platform:plugins/policies` | `graviteeam_plugins` |
+| `platform:plugins/policies/schema` | `graviteeam_plugins` |
+| `platform:plugins/reporters` | `graviteeam_plugins` |
+| `platform:plugins/reporters/schema` | `graviteeam_plugins` |
+| `platform:plugins/resources` | `graviteeam_plugins` |
+| `platform:plugins/resources/schema` | `graviteeam_plugins` |
 | `domain:users/consents` | `graviteeam_user_consents` |
 | `domain:users/credentials` | `graviteeam_user_credentials` |
 | `domain:users/devices` | `graviteeam_user_devices` |
@@ -167,7 +191,7 @@ The provider also does not currently expose several read-only or platform metada
 | `platform:configuration` | Platform configuration metadata. |
 | `platform:installation` | Installation metadata. |
 | `platform:license` | License metadata. |
-| `platform:plugins/*` | Plugin catalogs and schemas. |
+| `platform:plugins/policies/documentation` | Policy plugin documentation. |
 | `platform:roles` | Platform role metadata. |
 | `environment:data-planes` | Environment data-plane listing. |
 | `environment:data-sources` | Environment data-source listing. |

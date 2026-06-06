@@ -1526,6 +1526,20 @@ func (c *Client) ListEntrypoints(ctx context.Context, domainID string) ([]byte, 
 	return data, nil
 }
 
+// Platform plugin operations
+
+func (c *Client) GetPlatformPlugin(ctx context.Context, category, pluginID string, schema bool) ([]byte, error) {
+	path := "/management/platform/plugins/" + url.PathEscape(category)
+	if pluginID != "" {
+		path += "/" + url.PathEscape(pluginID)
+		if schema {
+			path += "/schema"
+		}
+	}
+
+	return c.DoManagementRequest(ctx, http.MethodGet, path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {
@@ -1544,6 +1558,45 @@ func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[s
 		return nil, err
 	}
 	return result, nil
+}
+
+// DoManagementRequest performs an HTTP request using the management API root.
+func (c *Client) DoManagementRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+	var reqBody io.Reader
+	if body != nil {
+		jsonBytes, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling request body: %w", err)
+		}
+		reqBody = bytes.NewReader(jsonBytes)
+	}
+
+	url := c.BaseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error executing request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	return respBody, nil
 }
 
 // orgPath returns the base path for organization-level API endpoints.
