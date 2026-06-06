@@ -112,6 +112,44 @@ resource "graviteeam_group" "test" {
 					resource.TestCheckResourceAttr("graviteeam_group.test", "members.#", "1"),
 				),
 			},
+			// Update: remove roles and members to ensure empty lists clear remote state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-group"
+  description = "Domain for group acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Group Test Role"
+  description = "Role for group test"
+}
+
+resource "graviteeam_user" "test" {
+  domain_id        = graviteeam_domain.test.id
+  username         = "group-test-user"
+  email            = "grouptest@example.com"
+  first_name       = "Group"
+  last_name        = "Tester"
+  pre_registration = true
+}
+
+resource "graviteeam_group" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Updated Test Group"
+  description = "Updated acceptance test group"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_group.test", "name", "Updated Test Group"),
+					resource.TestCheckNoResourceAttr("graviteeam_group.test", "roles.#"),
+					resource.TestCheckNoResourceAttr("graviteeam_group.test", "members.#"),
+				),
+			},
 		},
 	})
 }

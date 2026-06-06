@@ -83,6 +83,35 @@ resource "graviteeam_role" "test" {
 					resource.TestCheckResourceAttr("graviteeam_role.test", "oauth_scopes.0", "test-role-scope"),
 				),
 			},
+			// Update: remove oauth_scopes to ensure empty lists clear remote state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-role"
+  description = "Domain for role acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_scope" "role_scope" {
+  domain_id   = graviteeam_domain.test.id
+  key         = "test-role-scope"
+  name        = "Test Role Scope"
+  description = "Scope for role testing"
+}
+
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Updated Test Role"
+  description = "An updated test role"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_role.test", "name", "Updated Test Role"),
+					resource.TestCheckNoResourceAttr("graviteeam_role.test", "oauth_scopes.#"),
+				),
+			},
 		},
 	})
 }

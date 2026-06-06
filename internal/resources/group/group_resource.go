@@ -117,7 +117,7 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Step 2: Update with roles (create-then-update pattern)
 	if len(plan.Roles) > 0 {
-		updateBody := r.buildUpdateBody(plan)
+		updateBody := r.buildUpdateBody(plan, nil)
 		result, err = r.client.UpdateGroup(ctx, plan.DomainID.ValueString(), id, updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating group after creation", err.Error())
@@ -182,7 +182,7 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody := r.buildUpdateBody(plan, &state)
 	result, err := r.client.UpdateGroup(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating group", err.Error())
@@ -222,7 +222,7 @@ func (r *GroupResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} {
+func (r *GroupResource) buildUpdateBody(plan GroupModel, state *GroupModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name": plan.Name.ValueString(),
 	}
@@ -237,6 +237,8 @@ func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} 
 			members[i] = m.ValueString()
 		}
 		body["members"] = members
+	} else if state != nil && state.Members != nil {
+		body["members"] = []string{}
 	}
 
 	if plan.Roles != nil {
@@ -245,6 +247,8 @@ func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} 
 			roles[i] = r.ValueString()
 		}
 		body["roles"] = roles
+	} else if state != nil && state.Roles != nil {
+		body["roles"] = []string{}
 	}
 
 	return body
