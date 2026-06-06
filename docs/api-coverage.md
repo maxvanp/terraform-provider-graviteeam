@@ -189,6 +189,7 @@ After changing API coverage, run:
 
 ```bash
 ./scripts/audit-openapi-coverage.py
+./scripts/audit-openapi-coverage.py --check-doc
 go test ./...
 go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
 go tool cover -func=/tmp/graviteeam-coverage.out

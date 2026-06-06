@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -140,7 +142,43 @@ def print_section(title: str, rows: list[str]) -> None:
         print("none")
 
 
+def doc_summary_counts() -> dict[str, int]:
+    text = API_COVERAGE_PATH.read_text(encoding="utf-8")
+    counts: dict[str, int] = {}
+    for label, value in re.findall(r"\| ([^|`]+?) \| `(\d+)` \|", text):
+        counts[label.strip()] = int(value)
+    return counts
+
+
+def documented_known_gap_families() -> set[str]:
+    text = API_COVERAGE_PATH.read_text(encoding="utf-8")
+    match = re.search(r"## Known Gaps\n(?P<body>.*?)(?:\n## |\Z)", text, re.DOTALL)
+    if not match:
+        return set()
+    return set(re.findall(r"\| `([^`]+)` \|", match.group("body")))
+
+
+def check_doc_consistency(expected_counts: dict[str, int], covered_any: set[str]) -> list[str]:
+    errors: list[str] = []
+    actual_counts = doc_summary_counts()
+    for label, expected in expected_counts.items():
+        actual = actual_counts.get(label)
+        if actual is None:
+            errors.append(f"missing summary row: {label}")
+        elif actual != expected:
+            errors.append(f"summary mismatch for {label}: doc has {actual}, audit has {expected}")
+
+    stale_gaps = sorted(documented_known_gap_families() & covered_any)
+    for family in stale_gaps:
+        errors.append(f"covered family still listed in Known Gaps: {family}")
+    return errors
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-doc", action="store_true", help="fail if docs/api-coverage.md summary or known gaps are stale")
+    args = parser.parse_args()
+
     spec = load_spec()
     methods_by_family = family_methods(spec)
     covered_resources, covered_datasources = covered_families()
@@ -222,6 +260,22 @@ def main() -> None:
     )
     print_section("Missing Resource Artifacts", missing_resource_artifacts)
     print_section("Missing Data Source Artifacts", missing_datasource_artifacts)
+
+    if args.check_doc:
+        expected_counts = {
+            "OpenAPI families": len(methods_by_family),
+            "Writable families": len(writable),
+            "Read-only families": len(read_only),
+            "Uncovered writable families without Terraform resource": len(uncovered_writable),
+            "Writable families covered only by data source": len(writable_datasource_only),
+            "Uncovered read-only families": len(uncovered_read_only),
+            "Registered resources missing test/doc/example artifact": len(missing_resource_artifacts),
+            "Registered data sources missing test/doc/example artifact": len(missing_datasource_artifacts),
+        }
+        errors = check_doc_consistency(expected_counts, covered_any)
+        print_section("Documentation Consistency", [f"- {error}" for error in errors])
+        if errors:
+            sys.exit(1)
 
 
 if __name__ == "__main__":
