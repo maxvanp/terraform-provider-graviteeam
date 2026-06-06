@@ -63,6 +63,40 @@ resource "graviteeam_protected_resource_secret" "test" {
 					"secret",
 				},
 			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name = "test-acc-protected-resource-secret"
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_protected_resource" "test" {
+  domain_id            = graviteeam_domain.test.id
+  name                 = "Test Protected Resource Secret"
+  type                 = "MCP_SERVER"
+  resource_identifiers = ["https://api.example.com/secret-test/mcp"]
+
+  feature {
+    key         = "list_items"
+    type        = "MCP_TOOL"
+    description = "List items"
+    scopes      = ["openid"]
+  }
+}
+
+resource "graviteeam_protected_resource_secret" "test" {
+  domain_id             = graviteeam_domain.test.id
+  protected_resource_id = graviteeam_protected_resource.test.id
+  name                  = "test-acc-protected-resource-secret"
+  renew_trigger         = "rotation-1"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("graviteeam_protected_resource_secret.test", "secret"),
+					resource.TestCheckResourceAttr("graviteeam_protected_resource_secret.test", "renew_trigger", "rotation-1"),
+				),
+			},
 		},
 	})
 }

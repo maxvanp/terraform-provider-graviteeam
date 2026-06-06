@@ -21,4 +21,5 @@ resource "graviteeam_application_secret" "example" {
   domain_id      = graviteeam_domain.example.id
   application_id = graviteeam_application.example.id
   name           = "terraform-managed"
+  renew_trigger  = "rotation-2026-01"
 }

@@ -64,6 +64,10 @@ func (r *ProtectedResourceSecretResource) Schema(_ context.Context, _ resource.S
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"renew_trigger": schema.StringAttribute{
+				Optional:    true,
+				Description: "Arbitrary value used to explicitly renew the secret. Changing this value calls the Gravitee AM renewal endpoint and stores the newly returned secret.",
+			},
 			"secret": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
@@ -134,7 +138,33 @@ func (r *ProtectedResourceSecretResource) Read(ctx context.Context, req resource
 }
 
 func (r *ProtectedResourceSecretResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Unsupported Protected Resource Secret Update", "Protected resource secret attributes require replacement. Use a replacement or a renewal-specific resource/action for rotation.")
+	var plan ProtectedResourceSecretModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state ProtectedResourceSecretModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	plan.ID = state.ID
+	plan.Secret = state.Secret
+	plan.SettingsID = state.SettingsID
+	plan.ExpiresAt = state.ExpiresAt
+
+	if shouldRenew(plan.RenewTrigger, state.RenewTrigger) {
+		result, err := r.client.RenewProtectedResourceSecret(ctx, plan.DomainID.ValueString(), plan.ProtectedResourceID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error renewing protected resource secret", err.Error())
+			return
+		}
+		readIntoModel(&plan, result, state.Secret)
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *ProtectedResourceSecretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -203,4 +233,14 @@ func readIntoModel(model *ProtectedResourceSecretModel, data map[string]interfac
 	} else {
 		model.ExpiresAt = types.StringNull()
 	}
+}
+
+func shouldRenew(planTrigger, stateTrigger types.String) bool {
+	if planTrigger.IsNull() || planTrigger.IsUnknown() {
+		return false
+	}
+	if stateTrigger.IsNull() || stateTrigger.IsUnknown() {
+		return true
+	}
+	return planTrigger.ValueString() != stateTrigger.ValueString()
 }

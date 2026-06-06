@@ -255,6 +255,19 @@ func (c *Client) DeleteApplicationSecret(ctx context.Context, domainID, applicat
 	return err
 }
 
+func (c *Client) RenewApplicationSecret(ctx context.Context, domainID, applicationID, secretID string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/applications/%s/secrets/%s/_renew", domainID, applicationID, secretID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Application Member operations
 
 func (c *Client) ListApplicationMembers(ctx context.Context, domainID, applicationID string) ([]map[string]interface{}, error) {
@@ -1309,6 +1322,19 @@ func (c *Client) DeleteProtectedResourceSecret(ctx context.Context, domainID, pr
 	path := fmt.Sprintf("/domains/%s/protected-resources/%s/secrets/%s", domainID, protectedResourceID, secretID)
 	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
 	return err
+}
+
+func (c *Client) RenewProtectedResourceSecret(ctx context.Context, domainID, protectedResourceID, secretID string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/secrets/%s/_renew", domainID, protectedResourceID, secretID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Protected Resource Member operations

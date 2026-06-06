@@ -37,6 +37,7 @@ resource "graviteeam_protected_resource_secret" "example" {
   domain_id             = graviteeam_domain.example.id
   protected_resource_id = graviteeam_protected_resource.example.id
   name                  = "terraform-managed"
+  renew_trigger         = "rotation-2026-01"
 }
 ```
 
@@ -48,6 +49,10 @@ resource "graviteeam_protected_resource_secret" "example" {
 - `domain_id` (String) The ID of the domain
 - `name` (String) The name of the protected resource secret
 - `protected_resource_id` (String) The ID of the protected resource
+
+### Optional
+
+- `renew_trigger` (String) Arbitrary value used to explicitly renew the secret. Changing this value calls the Gravitee AM renewal endpoint and stores the newly returned secret.
 
 ### Read-Only
 

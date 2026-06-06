@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `17` |
+| Uncovered writable families without Terraform resource | `15` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
 | Uncovered read-only families | `0` |
@@ -60,6 +60,7 @@ Current unit coverage baseline:
 | `domain:applications/forms` | `graviteeam_application_form` |
 | `domain:applications/members` | `graviteeam_application_member` |
 | `domain:applications/secrets` | `graviteeam_application_secret` |
+| `domain:applications/secrets/_renew` | `graviteeam_application_secret` |
 | `domain:applications/type` | `graviteeam_application` |
 | `domain:authorization-engines` | `graviteeam_authorization_engine` |
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
@@ -85,6 +86,7 @@ Current unit coverage baseline:
 | `domain:protected-resources` | `graviteeam_protected_resource` |
 | `domain:protected-resources/members` | `graviteeam_protected_resource_member` |
 | `domain:protected-resources/secrets` | `graviteeam_protected_resource_secret` |
+| `domain:protected-resources/secrets/_renew` | `graviteeam_protected_resource_secret` |
 | `domain:reporters` | `graviteeam_reporter` |
 | `domain:resources` | `graviteeam_service_resource` |
 | `domain:roles` | `graviteeam_role` |
@@ -202,9 +204,7 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 | API family | Notes |
 |------------|-------|
-| `domain:applications/secrets/_renew` | Application client secret renewal action. |
 | `domain:certificates/rotate` | Certificate rotation action. |
-| `domain:protected-resources/secrets/_renew` | Protected resource secret renewal action. |
 | `domain:users/bulk` | Bulk user action. |
 | `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged. |
 | `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged. |

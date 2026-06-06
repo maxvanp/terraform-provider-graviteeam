@@ -62,6 +62,39 @@ resource "graviteeam_application_secret" "test" {
 					"secret",
 				},
 			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name = "test-acc-application-secret"
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_application" "test" {
+  domain_id = graviteeam_domain.test.id
+  name      = "Test Application Secret"
+  type      = "WEB"
+
+  oauth_settings {
+    redirect_uris  = ["https://example.com/auth"]
+    grant_types    = ["authorization_code"]
+    response_types = ["code"]
+    scopes         = ["openid"]
+  }
+}
+
+resource "graviteeam_application_secret" "test" {
+  domain_id      = graviteeam_domain.test.id
+  application_id = graviteeam_application.test.id
+  name           = "test-acc-application-secret"
+  renew_trigger  = "rotation-1"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("graviteeam_application_secret.test", "secret"),
+					resource.TestCheckResourceAttr("graviteeam_application_secret.test", "renew_trigger", "rotation-1"),
+				),
+			},
 		},
 	})
 }

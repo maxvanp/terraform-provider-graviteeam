@@ -64,6 +64,10 @@ func (r *ApplicationSecretResource) Schema(_ context.Context, _ resource.SchemaR
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"renew_trigger": schema.StringAttribute{
+				Optional:    true,
+				Description: "Arbitrary value used to explicitly renew the secret. Changing this value calls the Gravitee AM renewal endpoint and stores the newly returned secret.",
+			},
 			"secret": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
@@ -134,7 +138,33 @@ func (r *ApplicationSecretResource) Read(ctx context.Context, req resource.ReadR
 }
 
 func (r *ApplicationSecretResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Unsupported Application Secret Update", "Application secret attributes require replacement. Use a replacement or a renewal-specific resource/action for rotation.")
+	var plan ApplicationSecretModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var state ApplicationSecretModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	plan.ID = state.ID
+	plan.Secret = state.Secret
+	plan.SettingsID = state.SettingsID
+	plan.ExpiresAt = state.ExpiresAt
+
+	if shouldRenew(plan.RenewTrigger, state.RenewTrigger) {
+		result, err := r.client.RenewApplicationSecret(ctx, plan.DomainID.ValueString(), plan.ApplicationID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error renewing application secret", err.Error())
+			return
+		}
+		readIntoModel(&plan, result, state.Secret)
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *ApplicationSecretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -203,4 +233,14 @@ func readIntoModel(model *ApplicationSecretModel, data map[string]interface{}, p
 	} else {
 		model.ExpiresAt = types.StringNull()
 	}
+}
+
+func shouldRenew(planTrigger, stateTrigger types.String) bool {
+	if planTrigger.IsNull() || planTrigger.IsUnknown() {
+		return false
+	}
+	if stateTrigger.IsNull() || stateTrigger.IsUnknown() {
+		return true
+	}
+	return planTrigger.ValueString() != stateTrigger.ValueString()
 }

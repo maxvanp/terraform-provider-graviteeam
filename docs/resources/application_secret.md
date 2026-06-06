@@ -36,6 +36,7 @@ resource "graviteeam_application_secret" "example" {
   domain_id      = graviteeam_domain.example.id
   application_id = graviteeam_application.example.id
   name           = "terraform-managed"
+  renew_trigger  = "rotation-2026-01"
 }
 ```
 
@@ -47,6 +48,10 @@ resource "graviteeam_application_secret" "example" {
 - `application_id` (String) The ID of the application
 - `domain_id` (String) The ID of the domain
 - `name` (String) The name of the application secret
+
+### Optional
+
+- `renew_trigger` (String) Arbitrary value used to explicitly renew the secret. Changing this value calls the Gravitee AM renewal endpoint and stores the newly returned secret.
 
 ### Read-Only
 
