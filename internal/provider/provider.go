@@ -12,6 +12,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/adminmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/analytics"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/applicationmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/audits"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/domainmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
@@ -217,6 +218,7 @@ func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		adminmetadata.NewAdminMetadataDataSource,
 		analytics.NewAnalyticsDataSource,
+		applicationmetadata.NewApplicationMetadataDataSource,
 		audits.NewAuditsDataSource,
 		domainmetadata.NewDomainMetadataDataSource,
 		entrypoints.NewEntrypointsDataSource,

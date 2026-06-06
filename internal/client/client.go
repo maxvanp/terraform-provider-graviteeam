@@ -1564,6 +1564,10 @@ func (c *Client) GetOrganizationMetadata(ctx context.Context, path string) ([]by
 	return c.DoOrgRequest(ctx, http.MethodGet, path, nil)
 }
 
+func (c *Client) GetApplicationMetadata(ctx context.Context, domainID, applicationID, path string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, "/domains/"+url.PathEscape(domainID)+"/applications/"+url.PathEscape(applicationID)+path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {
