@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `34` |
+| Terraform resources registered | `35` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `43` |
+| Uncovered writable families without Terraform resource | `42` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -82,6 +82,7 @@ Current unit coverage baseline:
 | `environment:domains` | `graviteeam_domain` |
 | `org:groups` | `graviteeam_org_group` |
 | `org:identities` | `graviteeam_org_identity_provider` |
+| `org:reporters` | `graviteeam_org_reporter` |
 | `org:roles` | `graviteeam_org_role` |
 | `org:settings` | `graviteeam_org_settings` |
 | `org:tags` | `graviteeam_org_tag` |
@@ -114,7 +115,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `org:users` | Organization-level user management. |
 | `org:groups/members` | Organization group membership management. |
 | `org:members` | Organization membership management. |
-| `org:reporters` | Organization-level reporter management. |
 | `org:forms` | Organization-level form management. |
 | `org:entrypoints` | Organization-level entrypoint management. |
 | `org:users/tokens` | Organization user token lifecycle. |
@@ -178,7 +178,7 @@ The provider also does not currently expose several read-only or platform metada
 1. Add protected resource members and secrets.
 2. Add authorization engines.
 3. Add membership resources for domains, applications, organizations, and organization groups.
-4. Add organization-level users, reporters, forms, and entrypoints.
+4. Add organization-level users, forms, and entrypoints.
 5. Revisit action-only endpoints and decide case by case whether Terraform should model them.
 
 ## Verification

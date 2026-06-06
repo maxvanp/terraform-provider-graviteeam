@@ -36,6 +36,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/identityprovider"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orggroup"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgidentityprovider"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgreporter"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgrole"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgsettings"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgtag"
@@ -158,6 +159,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		identityprovider.NewIdentityProviderResource,
 		orggroup.NewOrgGroupResource,
 		orgidentityprovider.NewOrgIdentityProviderResource,
+		orgreporter.NewOrgReporterResource,
 		orgrole.NewOrgRoleResource,
 		orgsettings.NewOrgSettingsResource,
 		orgtag.NewOrgTagResource,

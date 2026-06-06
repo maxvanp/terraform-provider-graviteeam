@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (34)
+### Resources (35)
 
 | Resource | Description |
 |----------|-------------|
@@ -118,6 +118,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_i18n_dictionary` | Internationalization dictionary |
 | `graviteeam_org_group` | Organization-level group |
 | `graviteeam_org_identity_provider` | Organization-level identity provider |
+| `graviteeam_org_reporter` | Organization-level reporter |
 | `graviteeam_org_role` | Organization-level role |
 | `graviteeam_org_settings` | Organization settings singleton |
 | `graviteeam_org_tag` | Organization tag |
