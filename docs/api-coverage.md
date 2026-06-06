@@ -34,7 +34,7 @@ Current automated audit summary:
 | Writable families | `77` |
 | Read-only families | `55` |
 | Uncovered writable families without Terraform resource | `17` |
-| Writable families covered only by data source | `0` |
+| Writable families covered only by data source | `5` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
@@ -120,6 +120,11 @@ Current unit coverage baseline:
 | `domain:audits` | `graviteeam_audits` |
 | `domain:entrypoints` | `graviteeam_entrypoints` |
 | `domain:flows` | `graviteeam_flows` |
+| `domain:users/consents` | `graviteeam_user_consents` |
+| `domain:users/credentials` | `graviteeam_user_credentials` |
+| `domain:users/devices` | `graviteeam_user_devices` |
+| `domain:users/factors` | `graviteeam_user_factors` |
+| `domain:users/identities` | `graviteeam_user_identities` |
 
 ## Known Gaps
 
@@ -141,11 +146,11 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:password-policies/evaluate` | Password policy evaluation action. |
 | `domain:protected-resources/secrets/_renew` | Protected resource secret renewal action. |
 | `domain:users/bulk` | Bulk user action. |
-| `domain:users/consents` | User consent lifecycle. |
-| `domain:users/credentials` | User credential lifecycle. |
-| `domain:users/devices` | User device lifecycle. |
-| `domain:users/factors` | User factor lifecycle. |
-| `domain:users/identities` | User identity lifecycle. |
+| `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged. |
+| `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged. |
+| `domain:users/devices` | User device lifecycle; read-only state is exposed by `graviteeam_user_devices`, deletion remains unmanaged. |
+| `domain:users/factors` | User factor lifecycle; read-only state is exposed by `graviteeam_user_factors`, revocation remains unmanaged. |
+| `domain:users/identities` | User identity lifecycle; read-only state is exposed by `graviteeam_user_identities`, unlink remains unmanaged. |
 | `domain:users/resetPassword` | Password reset action. |
 | `domain:users/sendRegistrationConfirmation` | Registration confirmation action. |
 | `org:users/bulk` | Organization bulk user action. |
@@ -173,18 +178,12 @@ The provider also does not currently expose several read-only or platform metada
 | `domain:applications/resources` | Application resource listing. |
 | `domain:applications/resources/policies` | Application resource policy listing. |
 | `domain:users/audits` | User audit logs. |
-| `domain:users/credentials` | User credential listing. |
-| `domain:users/devices` | User device listing. |
-| `domain:users/factors` | User factor listing. |
-| `domain:users/identities` | User identity listing. |
 
 ## Suggested Implementation Order
 
-1. Add protected resource members and secrets.
-2. Add authorization engines.
-3. Add membership resources for domains, applications, organizations, and organization groups.
-4. Add organization-level users and entrypoints.
-5. Revisit action-only endpoints and decide case by case whether Terraform should model them.
+1. Revisit action-only endpoints and decide case by case whether Terraform should model them.
+2. Add read-only data sources for useful runtime and platform metadata families.
+3. Reassess local compose plugins when plugin-backed resources are skipped because plugins are unavailable.
 
 ## Verification
 

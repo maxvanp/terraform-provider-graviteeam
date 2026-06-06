@@ -165,6 +165,7 @@ def documented_known_gap_families() -> set[str]:
 def check_doc_consistency(
     expected_counts: dict[str, int],
     uncovered_writable: set[str],
+    covered_resources: set[str],
     covered_any: set[str],
 ) -> list[str]:
     errors: list[str] = []
@@ -177,7 +178,7 @@ def check_doc_consistency(
             errors.append(f"summary mismatch for {label}: doc has {actual}, audit has {expected}")
 
     documented_gaps = documented_known_gap_families()
-    stale_gaps = sorted(documented_gaps & covered_any)
+    stale_gaps = sorted(documented_gaps & covered_resources)
     for family in stale_gaps:
         errors.append(f"covered family still listed in Known Gaps: {family}")
     missing_gaps = sorted(uncovered_writable - documented_gaps)
@@ -287,7 +288,7 @@ def main() -> None:
             "Registered resources missing test/doc/example artifact": len(missing_resource_artifacts),
             "Registered data sources missing test/doc/example artifact": len(missing_datasource_artifacts),
         }
-        errors = check_doc_consistency(expected_counts, set(uncovered_writable), covered_any)
+        errors = check_doc_consistency(expected_counts, set(uncovered_writable), covered_resources, covered_any)
         print_section("Documentation Consistency", [f"- {error}" for error in errors])
         if errors:
             sys.exit(1)

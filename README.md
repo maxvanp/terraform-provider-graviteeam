@@ -141,7 +141,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (4)
+### Data Sources (9)
 
 | Data Source | Description |
 |-------------|-------------|
@@ -149,6 +149,11 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_audits` | Read audit logs for a domain |
 | `graviteeam_entrypoints` | Read domain entrypoints |
 | `graviteeam_flows` | Read domain flows |
+| `graviteeam_user_consents` | Read OAuth consent approvals for a user |
+| `graviteeam_user_credentials` | Read credentials for a user |
+| `graviteeam_user_devices` | Read registered devices for a user |
+| `graviteeam_user_factors` | Read enrolled MFA factors for a user |
+| `graviteeam_user_identities` | Read linked identities for a user |
 
 All resources support `terraform import`. See the [documentation](docs/) for details on each resource.
 

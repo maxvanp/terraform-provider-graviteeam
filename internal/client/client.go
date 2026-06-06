@@ -328,6 +328,10 @@ func (c *Client) GetUser(ctx context.Context, domainID, id string) (map[string]i
 	return result, nil
 }
 
+func (c *Client) ListUserCollection(ctx context.Context, domainID, id, collection string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/users/"+id+"/"+collection, nil)
+}
+
 func (c *Client) UpdateUser(ctx context.Context, domainID, id string, body map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/users/"+id, body)
 	if err != nil {
