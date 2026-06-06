@@ -29,8 +29,8 @@ resource "graviteeam_org_group" "example" {
 ### Optional
 
 - `description` (String) The description of the organization group
-- `members` (List of String) List of organization user IDs that are members of this group
-- `roles` (List of String) List of organization role IDs assigned to this group
+- `members` (List of String) List of organization user IDs that are members of this group. Do not manage this attribute together with graviteeam_org_group_members for the same group.
+- `roles` (List of String) List of organization role IDs assigned to this group. Use either this inline attribute or separate membership resources for a given group collection, not both.
 
 ### Read-Only
 

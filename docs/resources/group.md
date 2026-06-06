@@ -33,8 +33,8 @@ resource "graviteeam_group" "example" {
 ### Optional
 
 - `description` (String) The description of the group
-- `members` (List of String) List of user IDs that are members of this group
-- `roles` (List of String) List of role IDs assigned to this group
+- `members` (List of String) List of user IDs that are members of this group. Do not manage this attribute together with graviteeam_group_members for the same group.
+- `roles` (List of String) List of role IDs assigned to this group. Do not manage this attribute together with graviteeam_group_roles for the same group.
 
 ### Read-Only
 

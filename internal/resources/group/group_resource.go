@@ -60,12 +60,12 @@ func (r *GroupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"members": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of user IDs that are members of this group",
+				Description: "List of user IDs that are members of this group. Do not manage this attribute together with graviteeam_group_members for the same group.",
 				ElementType: types.StringType,
 			},
 			"roles": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of role IDs assigned to this group",
+				Description: "List of role IDs assigned to this group. Do not manage this attribute together with graviteeam_group_roles for the same group.",
 				ElementType: types.StringType,
 			},
 		},

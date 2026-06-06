@@ -51,12 +51,12 @@ func (r *OrgGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 			"members": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of organization user IDs that are members of this group",
+				Description: "List of organization user IDs that are members of this group. Do not manage this attribute together with graviteeam_org_group_members for the same group.",
 				ElementType: types.StringType,
 			},
 			"roles": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of organization role IDs assigned to this group",
+				Description: "List of organization role IDs assigned to this group. Use either this inline attribute or separate membership resources for a given group collection, not both.",
 				ElementType: types.StringType,
 			},
 		},
