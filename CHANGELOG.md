@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
 - Use the dedicated application type endpoint when updating `graviteeam_application.type`
 - Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
+- Update indirect Go dependencies
 
 ## [0.1.0] - TBD
 
