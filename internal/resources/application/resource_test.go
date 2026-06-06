@@ -94,15 +94,15 @@ resource "graviteeam_factor" "totp" {
 resource "graviteeam_application" "test" {
   domain_id   = graviteeam_domain.test.id
   name        = "Updated Test Application"
-  type        = "WEB"
+  type        = "BROWSER"
   description = "Updated acceptance test application"
 
   factors = [graviteeam_factor.totp.id]
 
   oauth_settings {
     redirect_uris  = ["http://localhost:5000/auth", "http://localhost:5000/callback"]
-    grant_types    = ["authorization_code", "refresh_token"]
-    response_types = ["code"]
+    grant_types    = ["authorization_code"]
+    response_types = ["code", "code id_token token", "code id_token", "code token"]
     scopes         = ["openid", "profile", "email"]
   }
 
@@ -131,9 +131,12 @@ resource "graviteeam_application" "test" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_application.test", "name", "Updated Test Application"),
+					resource.TestCheckResourceAttr("graviteeam_application.test", "type", "BROWSER"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "description", "Updated acceptance test application"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.#", "2"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.1", "http://localhost:5000/callback"),
+					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.grant_types.#", "1"),
+					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.response_types.#", "4"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "factors.#", "1"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "mfa_settings.enrollment", "OPTIONAL"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "mfa_settings.challenge", "REQUIRED"),

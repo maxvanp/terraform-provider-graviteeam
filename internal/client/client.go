@@ -202,6 +202,20 @@ func (c *Client) UpdateApplication(ctx context.Context, domainID, id string, bod
 	return result, nil
 }
 
+func (c *Client) UpdateApplicationType(ctx context.Context, domainID, id, appType string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/applications/"+id+"/type", map[string]interface{}{
+		"type": appType,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteApplication(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/applications/"+id, nil)
 	return err

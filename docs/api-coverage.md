@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `21` |
+| Uncovered writable families without Terraform resource | `20` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -59,6 +59,7 @@ Current unit coverage baseline:
 | `domain:applications/forms` | `graviteeam_application_form` |
 | `domain:applications/members` | `graviteeam_application_member` |
 | `domain:applications/secrets` | `graviteeam_application_secret` |
+| `domain:applications/type` | `graviteeam_application` |
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
 | `domain:bot-detections` | `graviteeam_bot_detection` |
 | `domain:certificates` | `graviteeam_certificate` |
@@ -133,7 +134,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 | API family | Notes |
 |------------|-------|
-| `domain:applications/type` | Application type change endpoint. |
 | `domain:certificates/rotate` | Certificate rotation action. |
 | `domain:forms/preview` | Preview action, probably not Terraform-managed. |
 | `domain:users/bulk` | Bulk user action. |

@@ -58,9 +58,6 @@ func (r *ApplicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"type": schema.StringAttribute{
 				Required:    true,
 				Description: "The type of the application (WEB, NATIVE, BROWSER, SERVICE, RESOURCE_SERVER)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,
@@ -268,6 +265,7 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	plan.ID = state.ID
+	plan.ClientSecret = state.ClientSecret
 
 	updateBody, err := r.buildUpdateBody(plan)
 	if err != nil {
@@ -279,6 +277,14 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application", err.Error())
 		return
+	}
+
+	if !plan.Type.Equal(state.Type) {
+		result, err = r.client.UpdateApplicationType(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.Type.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating application type", err.Error())
+			return
+		}
 	}
 
 	// Refresh full state from API response
