@@ -331,6 +331,35 @@ func (c *Client) DeleteUser(ctx context.Context, domainID, id string) error {
 	return err
 }
 
+func (c *Client) CreateUserCertificateCredential(ctx context.Context, domainID, userID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/users/"+userID+"/cert-credentials", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetUserCertificateCredential(ctx context.Context, domainID, userID, credentialID string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/users/"+userID+"/cert-credentials/"+credentialID, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteUserCertificateCredential(ctx context.Context, domainID, userID, credentialID string) error {
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/users/"+userID+"/cert-credentials/"+credentialID, nil)
+	return err
+}
+
 // Domain Member operations
 
 func (c *Client) ListDomainMembers(ctx context.Context, domainID string) ([]map[string]interface{}, error) {

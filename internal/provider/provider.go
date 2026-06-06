@@ -62,6 +62,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/serviceresource"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/theme"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/user"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/usercertificatecredential"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/userrole"
 )
 
@@ -199,6 +200,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		serviceresource.NewServiceResourceResource,
 		theme.NewThemeResource,
 		user.NewUserResource,
+		usercertificatecredential.NewUserCertificateCredentialResource,
 		userrole.NewUserRoleResource,
 	}
 }

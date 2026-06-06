@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `49` |
+| Terraform resources registered | `50` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `26` |
+| Uncovered writable families without Terraform resource | `25` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -88,6 +88,7 @@ Current unit coverage baseline:
 | `domain:scopes` | `graviteeam_scope` |
 | `domain:themes` | `graviteeam_theme` |
 | `domain:users` | `graviteeam_user` |
+| `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/roles` | `graviteeam_user_role` |
 | `environment:domains` | `graviteeam_domain` |
 | `org:entrypoints` | `graviteeam_org_entrypoint` |
@@ -132,7 +133,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:certificates/rotate` | Certificate rotation action. |
 | `domain:forms/preview` | Preview action, probably not Terraform-managed. |
 | `domain:users/bulk` | Bulk user action. |
-| `domain:users/cert-credentials` | User certificate credentials. |
 | `domain:users/consents` | User consent lifecycle. |
 | `domain:users/credentials` | User credential lifecycle. |
 | `domain:users/devices` | User device lifecycle. |

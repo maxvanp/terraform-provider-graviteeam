@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (49)
+### Resources (50)
 
 | Resource | Description |
 |----------|-------------|
@@ -102,6 +102,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_identity_provider_password_policy` | Identity provider password policy assignment |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
+| `graviteeam_user_certificate_credential` | Domain user certificate credential |
 | `graviteeam_password_policy` | Password complexity rules |
 | `graviteeam_protected_resource` | Protected MCP server resource with generated OAuth credentials |
 | `graviteeam_protected_resource_member` | Protected resource membership role assignment |
