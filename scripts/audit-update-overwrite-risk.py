@@ -24,6 +24,7 @@ DEDICATED_UPDATE_METHODS = {
 # merge/clear pattern, dedicated subresource APIs, or intentionally reject updates.
 REVIEWED_WITHOUT_GET = {
     "application/application_resource.go:ApplicationResource",
+    "applicationemail/application_email_resource.go:ApplicationEmailResource",
     "applicationflow/application_flow_resource.go:ApplicationFlowResource",
     "applicationmember/application_member_resource.go:ApplicationMemberResource",
     "applicationsecret/application_secret_resource.go:ApplicationSecretResource",
@@ -31,6 +32,7 @@ REVIEWED_WITHOUT_GET = {
     "domainflow/domain_flow_resource.go:DomainFlowResource",
     "domainmember/domain_member_resource.go:DomainMemberResource",
     "domaincertificatesettings/domain_certificate_settings_resource.go:DomainCertificateSettingsResource",
+    "emailtemplate/email_template_resource.go:EmailTemplateResource",
     "grouproles/group_roles_resource.go:GroupRolesResource",
     "groupmembers/group_members_resource.go:GroupMembersResource",
     "identityproviderpasswordpolicy/identity_provider_password_policy_resource.go:IdentityProviderPasswordPolicyResource",
