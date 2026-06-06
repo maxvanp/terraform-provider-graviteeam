@@ -154,20 +154,34 @@ func (r *ReporterResource) Update(ctx context.Context, req resource.UpdateReques
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-		"enabled":       plan.Enabled.ValueBool(),
+	current, err := r.client.GetReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading reporter before update", err.Error())
+		return
 	}
 
-	_, err := r.client.UpdateReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	body := buildBody(plan, current)
+
+	_, err = r.client.UpdateReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating reporter", err.Error())
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func buildBody(plan ReporterModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+		"enabled":       plan.Enabled.ValueBool(),
+	}
+	if inherited, ok := current["inherited"]; ok {
+		body["inherited"] = inherited
+	}
+	return body
 }
 
 func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

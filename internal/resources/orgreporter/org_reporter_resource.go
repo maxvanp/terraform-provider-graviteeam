@@ -86,7 +86,7 @@ func (r *OrgReporterResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	result, err := r.client.CreateOrgReporter(ctx, buildBody(plan))
+	result, err := r.client.CreateOrgReporter(ctx, buildBody(plan, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization reporter", err.Error())
 		return
@@ -137,7 +137,13 @@ func (r *OrgReporterResource) Update(ctx context.Context, req resource.UpdateReq
 
 	plan.ID = state.ID
 
-	_, err := r.client.UpdateOrgReporter(ctx, plan.ID.ValueString(), buildBody(plan))
+	current, err := r.client.GetOrgReporter(ctx, plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading organization reporter before update", err.Error())
+		return
+	}
+
+	_, err = r.client.UpdateOrgReporter(ctx, plan.ID.ValueString(), buildBody(plan, current))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating organization reporter", err.Error())
 		return
@@ -163,11 +169,15 @@ func (r *OrgReporterResource) ImportState(ctx context.Context, req resource.Impo
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func buildBody(model OrgReporterModel) map[string]interface{} {
-	return map[string]interface{}{
+func buildBody(model OrgReporterModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
 		"name":          model.Name.ValueString(),
 		"type":          model.Type.ValueString(),
 		"configuration": model.Configuration.ValueString(),
 		"enabled":       model.Enabled.ValueBool(),
 	}
+	if inherited, ok := current["inherited"]; ok {
+		body["inherited"] = inherited
+	}
+	return body
 }
