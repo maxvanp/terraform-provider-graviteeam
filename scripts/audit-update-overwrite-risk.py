@@ -41,6 +41,7 @@ REVIEWED_WITHOUT_GET = {
     "orgmember/org_member_resource.go:OrgMemberResource",
     "orgsettings/org_settings_resource.go:OrgSettingsResource",
     "orgusertoken/org_user_token_resource.go:OrgUserTokenResource",
+    "protectedresource/protected_resource_resource.go:ProtectedResourceResource",
     "protectedresourcemember/protected_resource_member_resource.go:ProtectedResourceMemberResource",
     "protectedresourcesecret/protected_resource_secret_resource.go:ProtectedResourceSecretResource",
     "usercertificatecredential/user_certificate_credential_resource.go:UserCertificateCredentialResource",
