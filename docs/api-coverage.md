@@ -135,8 +135,11 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 | API family | Notes |
 |------------|-------|
+| `domain:applications/secrets/_renew` | Application client secret renewal action. |
 | `domain:certificates/rotate` | Certificate rotation action. |
 | `domain:forms/preview` | Preview action, probably not Terraform-managed. |
+| `domain:password-policies/evaluate` | Password policy evaluation action. |
+| `domain:protected-resources/secrets/_renew` | Protected resource secret renewal action. |
 | `domain:users/bulk` | Bulk user action. |
 | `domain:users/consents` | User consent lifecycle. |
 | `domain:users/credentials` | User credential lifecycle. |
@@ -147,8 +150,8 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:users/sendRegistrationConfirmation` | Registration confirmation action. |
 | `org:users/bulk` | Organization bulk user action. |
 | `org:users/resetPassword` | Organization password reset action. |
-| `self:newsletter` | Current-user newsletter operation. |
-| `self:notifications` | Current-user notification operation. |
+| `self:newsletter/_subscribe` | Current-user newsletter subscription operation. |
+| `self:notifications/acknowledge` | Current-user notification acknowledgement operation. |
 
 ### Read-Only and Admin Metadata Not Covered
 
