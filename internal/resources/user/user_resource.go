@@ -185,19 +185,19 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		}
 	}
 
-	body := map[string]interface{}{}
-	if !plan.Email.IsNull() {
-		body["email"] = plan.Email.ValueString()
-	}
-	if !plan.FirstName.IsNull() {
-		body["firstName"] = plan.FirstName.ValueString()
-	}
-	if !plan.LastName.IsNull() {
-		body["lastName"] = plan.LastName.ValueString()
-	}
+	profileChanged := !plan.Email.Equal(state.Email) ||
+		!plan.FirstName.Equal(state.FirstName) ||
+		!plan.LastName.Equal(state.LastName) ||
+		plan.PreRegistration.ValueBool() != state.PreRegistration.ValueBool()
 
-	if len(body) > 0 {
-		_, err := r.client.UpdateUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	if profileChanged {
+		current, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading user before update", err.Error())
+			return
+		}
+		body := buildMergedUpdateBody(current, plan)
+		_, err = r.client.UpdateUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating user", err.Error())
 			return
@@ -293,4 +293,51 @@ func (r *UserResource) readIntoModel(model *UserModel, data map[string]interface
 	if preReg, ok := data["preRegistration"].(bool); ok {
 		model.PreRegistration = types.BoolValue(preReg)
 	}
+}
+
+func buildMergedUpdateBody(current map[string]interface{}, plan UserModel) map[string]interface{} {
+	body := copyUserUpdateFields(current)
+	if !plan.Email.IsNull() && !plan.Email.IsUnknown() {
+		body["email"] = plan.Email.ValueString()
+	}
+	if !plan.FirstName.IsNull() && !plan.FirstName.IsUnknown() {
+		body["firstName"] = plan.FirstName.ValueString()
+	}
+	if !plan.LastName.IsNull() && !plan.LastName.IsUnknown() {
+		body["lastName"] = plan.LastName.ValueString()
+	}
+	body["preRegistration"] = plan.PreRegistration.ValueBool()
+	return body
+}
+
+func copyUserUpdateFields(current map[string]interface{}) map[string]interface{} {
+	allowed := []string{
+		"accountNonExpired",
+		"accountNonLocked",
+		"additionalInformation",
+		"client",
+		"createdAt",
+		"credentialsNonExpired",
+		"displayName",
+		"email",
+		"enabled",
+		"externalId",
+		"firstName",
+		"forceResetPassword",
+		"lastName",
+		"loggedAt",
+		"loginsCount",
+		"preRegistration",
+		"preferredLanguage",
+		"registrationCompleted",
+		"source",
+		"updatedAt",
+	}
+	body := make(map[string]interface{}, len(allowed))
+	for _, field := range allowed {
+		if value, ok := current[field]; ok {
+			body[field] = value
+		}
+	}
+	return body
 }

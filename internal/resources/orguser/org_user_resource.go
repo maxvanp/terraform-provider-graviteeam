@@ -168,8 +168,19 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
-	if updateBody := buildUpdateBody(plan); len(updateBody) > 0 {
-		_, err := r.client.UpdateOrgUser(ctx, plan.ID.ValueString(), updateBody)
+	profileChanged := !plan.Email.Equal(state.Email) ||
+		!plan.FirstName.Equal(state.FirstName) ||
+		!plan.LastName.Equal(state.LastName) ||
+		plan.PreRegistration.ValueBool() != state.PreRegistration.ValueBool()
+
+	if profileChanged {
+		current, err := r.client.GetOrgUser(ctx, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading organization user before update", err.Error())
+			return
+		}
+		updateBody := buildMergedUpdateBody(current, plan)
+		_, err = r.client.UpdateOrgUser(ctx, plan.ID.ValueString(), updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating organization user", err.Error())
 			return
@@ -231,6 +242,53 @@ func buildUpdateBody(model OrgUserModel) map[string]interface{} {
 	}
 	if !model.LastName.IsNull() && !model.LastName.IsUnknown() {
 		body["lastName"] = model.LastName.ValueString()
+	}
+	return body
+}
+
+func buildMergedUpdateBody(current map[string]interface{}, plan OrgUserModel) map[string]interface{} {
+	body := copyUserUpdateFields(current)
+	if !plan.Email.IsNull() && !plan.Email.IsUnknown() {
+		body["email"] = plan.Email.ValueString()
+	}
+	if !plan.FirstName.IsNull() && !plan.FirstName.IsUnknown() {
+		body["firstName"] = plan.FirstName.ValueString()
+	}
+	if !plan.LastName.IsNull() && !plan.LastName.IsUnknown() {
+		body["lastName"] = plan.LastName.ValueString()
+	}
+	body["preRegistration"] = plan.PreRegistration.ValueBool()
+	return body
+}
+
+func copyUserUpdateFields(current map[string]interface{}) map[string]interface{} {
+	allowed := []string{
+		"accountNonExpired",
+		"accountNonLocked",
+		"additionalInformation",
+		"client",
+		"createdAt",
+		"credentialsNonExpired",
+		"displayName",
+		"email",
+		"enabled",
+		"externalId",
+		"firstName",
+		"forceResetPassword",
+		"lastName",
+		"loggedAt",
+		"loginsCount",
+		"preRegistration",
+		"preferredLanguage",
+		"registrationCompleted",
+		"source",
+		"updatedAt",
+	}
+	body := make(map[string]interface{}, len(allowed))
+	for _, field := range allowed {
+		if value, ok := current[field]; ok {
+			body[field] = value
+		}
 	}
 	return body
 }
