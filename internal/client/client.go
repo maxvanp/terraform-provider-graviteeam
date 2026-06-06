@@ -1323,6 +1323,30 @@ func (c *Client) DeleteAlertNotifier(ctx context.Context, domainID, id string) e
 	return err
 }
 
+func (c *Client) ListAlertTriggers(ctx context.Context, domainID string) ([]map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/alerts/triggers", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) PatchAlertTriggers(ctx context.Context, domainID string, body []map[string]interface{}) ([]map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPatch, "/domains/"+domainID+"/alerts/triggers", body)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Audit operations
 
 func (c *Client) ListAudits(ctx context.Context, domainID string, page, size int) (map[string]interface{}, error) {

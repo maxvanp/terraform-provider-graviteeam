@@ -85,10 +85,11 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (47)
+### Resources (48)
 
 | Resource | Description |
 |----------|-------------|
+| `graviteeam_alert_trigger` | Domain alert trigger configuration |
 | `graviteeam_domain` | Security domain (equivalent Keycloak Realm) |
 | `graviteeam_domain_certificate_settings` | Domain fallback certificate settings |
 | `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings, and raw advanced settings JSON |

@@ -15,6 +15,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/flows"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/alertnotifier"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/alerttrigger"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/application"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationemail"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationflow"
@@ -150,6 +151,7 @@ func (p *GraviteeAMProvider) Configure(ctx context.Context, req provider.Configu
 func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		alertnotifier.NewAlertNotifierResource,
+		alerttrigger.NewAlertTriggerResource,
 		application.NewApplicationResource,
 		applicationemail.NewApplicationEmailResource,
 		applicationflow.NewApplicationFlowResource,
