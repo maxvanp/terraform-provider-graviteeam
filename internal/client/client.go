@@ -597,6 +597,22 @@ func (c *Client) UpdateIdentityProvider(ctx context.Context, domainID, id string
 	return result, nil
 }
 
+func (c *Client) AssignIdentityProviderPasswordPolicy(ctx context.Context, domainID, id, passwordPolicyID string) error {
+	body := map[string]interface{}{
+		"passwordPolicy": passwordPolicyID,
+	}
+	_, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/identities/"+id+"/password-policy", body)
+	return err
+}
+
+func (c *Client) ClearIdentityProviderPasswordPolicy(ctx context.Context, domainID, id string) error {
+	body := map[string]interface{}{
+		"passwordPolicy": nil,
+	}
+	_, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/identities/"+id+"/password-policy", body)
+	return err
+}
+
 func (c *Client) DeleteIdentityProvider(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/identities/"+id, nil)
 	return err

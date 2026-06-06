@@ -37,6 +37,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/grouproles"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/i18ndictionary"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/identityprovider"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/identityproviderpasswordpolicy"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgentrypoint"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgform"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orggroup"
@@ -170,6 +171,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		grouproles.NewGroupRolesResource,
 		i18ndictionary.NewI18nDictionaryResource,
 		identityprovider.NewIdentityProviderResource,
+		identityproviderpasswordpolicy.NewIdentityProviderPasswordPolicyResource,
 		orgentrypoint.NewOrgEntrypointResource,
 		orgform.NewOrgFormResource,
 		orggroup.NewOrgGroupResource,

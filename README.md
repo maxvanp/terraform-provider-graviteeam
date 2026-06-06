@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (45)
+### Resources (46)
 
 | Resource | Description |
 |----------|-------------|
@@ -97,6 +97,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_application_member` | Application membership role assignment |
 | `graviteeam_application_secret` | Application client secret |
 | `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
+| `graviteeam_identity_provider_password_policy` | Identity provider password policy assignment |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
 | `graviteeam_password_policy` | Password complexity rules |
