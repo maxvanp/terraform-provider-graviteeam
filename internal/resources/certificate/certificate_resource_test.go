@@ -73,6 +73,35 @@ resource "graviteeam_certificate" "test" {
 				},
 				ImportStateVerifyIgnore: []string{"configuration"},
 			},
+			// Update name
+			{
+				Config: acctest.ProviderConfig + fmt.Sprintf(`
+resource "graviteeam_domain" "test_cert" {
+  name        = "test-cert-domain"
+  description = "Domain for certificate test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_certificate" "test" {
+  domain_id     = graviteeam_domain.test_cert.id
+  name          = "Updated Certificate"
+  type          = "pkcs12-am-certificate"
+  configuration = jsonencode({
+    content   = %q
+    storepass = "changeit"
+    alias     = "mykey"
+    keypass   = "changeit"
+    algorithm = "RS256"
+  })
+}
+`, innerContentStr),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_certificate.test", "name", "Updated Certificate"),
+					resource.TestCheckResourceAttr("graviteeam_certificate.test", "type", "pkcs12-am-certificate"),
+				),
+			},
 		},
 	})
 }

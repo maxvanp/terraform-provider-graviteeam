@@ -146,6 +146,7 @@ func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateReq
 
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 	}
 
