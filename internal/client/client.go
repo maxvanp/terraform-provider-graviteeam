@@ -1223,6 +1223,18 @@ func (c *Client) UpdateI18nDictionary(ctx context.Context, domainID, id string, 
 	return result, nil
 }
 
+func (c *Client) ReplaceI18nDictionaryEntries(ctx context.Context, domainID, id string, entries map[string]string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/i18n/dictionaries/"+id+"/entries", entries)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteI18nDictionary(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/i18n/dictionaries/"+id, nil)
 	return err

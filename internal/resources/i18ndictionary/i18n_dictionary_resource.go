@@ -107,13 +107,7 @@ func (r *I18nDictionaryResource) Create(ctx context.Context, req resource.Create
 			return
 		}
 
-		updateBody := map[string]interface{}{
-			"name":    plan.Name.ValueString(),
-			"locale":  plan.Locale.ValueString(),
-			"entries": entries,
-		}
-
-		_, err := r.client.UpdateI18nDictionary(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
+		_, err := r.client.ReplaceI18nDictionaryEntries(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), entries)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating i18n dictionary entries", err.Error())
 			return
@@ -177,19 +171,24 @@ func (r *I18nDictionaryResource) Update(ctx context.Context, req resource.Update
 		"locale": plan.Locale.ValueString(),
 	}
 
+	_, err := r.client.UpdateI18nDictionary(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error updating i18n dictionary", err.Error())
+		return
+	}
+
 	if !plan.Entries.IsNull() && !plan.Entries.IsUnknown() {
 		entries := make(map[string]string)
 		resp.Diagnostics.Append(plan.Entries.ElementsAs(ctx, &entries, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		body["entries"] = entries
-	}
 
-	_, err := r.client.UpdateI18nDictionary(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
-	if err != nil {
-		resp.Diagnostics.AddError("Error updating i18n dictionary", err.Error())
-		return
+		_, err := r.client.ReplaceI18nDictionaryEntries(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), entries)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating i18n dictionary entries", err.Error())
+			return
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

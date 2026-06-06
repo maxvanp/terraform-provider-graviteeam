@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refreshed the bundled Gravitee AM Management API reference from the 4.11.4 upstream tag
 - Updated Go module dependencies to their latest compatible versions
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
+- Use the dedicated i18n dictionary entries endpoint when managing dictionary entries
 
 ## [0.1.0] - TBD
 
