@@ -14,5 +14,6 @@ type IdentityProviderModel struct {
 	Mappers          map[string]types.String `tfsdk:"mappers"`
 	DomainWhitelist  []types.String          `tfsdk:"domain_whitelist"`
 	PasswordPolicyID types.String            `tfsdk:"password_policy_id"`
+	GroupMapper      types.Map               `tfsdk:"group_mapper"`
 	RoleMapper       types.Map               `tfsdk:"role_mapper"`
 }

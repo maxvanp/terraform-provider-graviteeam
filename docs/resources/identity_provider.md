@@ -30,6 +30,11 @@ resource "graviteeam_identity_provider" "example" {
     username = "username"
     email    = "email"
   }
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('admin-group')}" = [
+      graviteeam_group.example.id
+    ]
+  }
 }
 ```
 
@@ -47,6 +52,7 @@ resource "graviteeam_identity_provider" "example" {
 
 - `domain_whitelist` (List of String) List of whitelisted email domains
 - `external` (Boolean) Whether this is an external/social identity provider (shows a separate login button). Can only be set at creation time.
+- `group_mapper` (Map of List of String) Group mapping rules: key is an EL condition (e.g. "{true}"), value is a list of group IDs
 - `mappers` (Map of String) Attribute mapping (e.g. username = "uid", email = "mail")
 - `password_policy_id` (String) The ID of the password policy to associate with this identity provider
 - `role_mapper` (Map of List of String) Role mapping rules: key is an EL condition (e.g. "{true}"), value is a list of role IDs

@@ -88,6 +88,11 @@ func (r *IdentityProviderResource) Schema(_ context.Context, _ resource.SchemaRe
 				Optional:    true,
 				Description: "The ID of the password policy to associate with this identity provider",
 			},
+			"group_mapper": schema.MapAttribute{
+				Optional:    true,
+				Description: "Group mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of group IDs",
+				ElementType: types.ListType{ElemType: types.StringType},
+			},
 			"role_mapper": schema.MapAttribute{
 				Optional:    true,
 				Description: "Role mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of role IDs",
@@ -133,10 +138,11 @@ func (r *IdentityProviderResource) Create(ctx context.Context, req resource.Crea
 	id := result["id"].(string)
 	plan.ID = types.StringValue(id)
 
-	// Step 2: Update with full config (mappers, domainWhitelist, passwordPolicy, roleMapper)
+	// Step 2: Update with full config (mappers, domainWhitelist, passwordPolicy, groupMapper, roleMapper)
 	needsUpdate := len(plan.Mappers) > 0 ||
 		len(plan.DomainWhitelist) > 0 ||
 		(!plan.PasswordPolicyID.IsNull() && !plan.PasswordPolicyID.IsUnknown()) ||
+		(!plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown()) ||
 		(!plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown())
 
 	if needsUpdate {
@@ -261,24 +267,12 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 		body["passwordPolicy"] = plan.PasswordPolicyID.ValueString()
 	}
 
+	if !plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown() {
+		body["groupMapper"] = invertConditionMapperToAPI(plan.GroupMapper)
+	}
+
 	if !plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown() {
-		// HCL format: condition => [roleIds]
-		// API format: roleId => [conditions]
-		// We need to invert the map
-		apiRM := make(map[string][]string)
-		for condition, v := range plan.RoleMapper.Elements() {
-			listVal, ok := v.(types.List)
-			if !ok {
-				continue
-			}
-			for _, elem := range listVal.Elements() {
-				if s, ok := elem.(types.String); ok {
-					roleID := s.ValueString()
-					apiRM[roleID] = append(apiRM[roleID], condition)
-				}
-			}
-		}
-		body["roleMapper"] = apiRM
+		body["roleMapper"] = invertConditionMapperToAPI(plan.RoleMapper)
 	}
 
 	return body
@@ -335,34 +329,56 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 		model.PasswordPolicyID = types.StringNull()
 	}
 
-	// Role mapper: API format is roleId => [conditions], HCL format is condition => [roleIds]
-	// Invert from API to HCL format
+	// API format is targetId => [conditions], HCL format is condition => [targetIds].
 	listType := types.ListType{ElemType: types.StringType}
-	if rm, ok := data["roleMapper"].(map[string]interface{}); ok && len(rm) > 0 {
-		// First invert: roleId => [conditions] → condition => [roleIds]
-		inverted := make(map[string][]string)
-		for roleID, v := range rm {
-			if conditions, ok := v.([]interface{}); ok {
-				for _, c := range conditions {
-					if cond, ok := c.(string); ok {
-						inverted[cond] = append(inverted[cond], roleID)
-					}
+	model.GroupMapper = readAPIConditionMapper(data, "groupMapper", listType)
+	model.RoleMapper = readAPIConditionMapper(data, "roleMapper", listType)
+}
+
+func invertConditionMapperToAPI(tfMap types.Map) map[string][]string {
+	apiMapper := make(map[string][]string)
+	for condition, v := range tfMap.Elements() {
+		listVal, ok := v.(types.List)
+		if !ok {
+			continue
+		}
+		for _, elem := range listVal.Elements() {
+			if s, ok := elem.(types.String); ok {
+				id := s.ValueString()
+				apiMapper[id] = append(apiMapper[id], condition)
+			}
+		}
+	}
+	return apiMapper
+}
+
+func readAPIConditionMapper(data map[string]interface{}, key string, listType types.ListType) types.Map {
+	mapper, ok := data[key].(map[string]interface{})
+	if !ok || len(mapper) == 0 {
+		return types.MapNull(listType)
+	}
+
+	inverted := make(map[string][]string)
+	for id, v := range mapper {
+		if conditions, ok := v.([]interface{}); ok {
+			for _, c := range conditions {
+				if cond, ok := c.(string); ok {
+					inverted[cond] = append(inverted[cond], id)
 				}
 			}
 		}
-		// Convert to Terraform types
-		elems := make(map[string]attr.Value, len(inverted))
-		for condition, roleIDs := range inverted {
-			roleVals := make([]attr.Value, len(roleIDs))
-			for i, r := range roleIDs {
-				roleVals[i] = types.StringValue(r)
-			}
-			listVal, _ := types.ListValue(types.StringType, roleVals)
-			elems[condition] = listVal
-		}
-		mapVal, _ := types.MapValue(listType, elems)
-		model.RoleMapper = mapVal
-	} else {
-		model.RoleMapper = types.MapNull(listType)
 	}
+
+	elems := make(map[string]attr.Value, len(inverted))
+	for condition, ids := range inverted {
+		values := make([]attr.Value, len(ids))
+		for i, id := range ids {
+			values[i] = types.StringValue(id)
+		}
+		listVal, _ := types.ListValue(types.StringType, values)
+		elems[condition] = listVal
+	}
+
+	mapVal, _ := types.MapValue(listType, elems)
+	return mapVal
 }

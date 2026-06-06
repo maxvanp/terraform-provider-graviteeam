@@ -9,9 +9,9 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Target Gravitee AM version | `4.11.4` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
 | Bundled OpenAPI version | `4.11.4` |
-| OpenAPI path entries | `194` |
-| Path entries with at least one write verb | `119` |
-| Terraform resources registered | `32` |
+| OpenAPI path entries | `201` |
+| Path entries with at least one write verb | `123` |
+| Terraform resources registered | `33` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -20,7 +20,32 @@ The OpenAPI file is a reference snapshot only. Refresh it from the official Grav
 ./scripts/update-openapi.sh
 ```
 
-Coverage below is grouped by API family, not by every individual OpenAPI path. Some API paths are action-only or operational endpoints and are not good Terraform resource candidates.
+Run the coverage audit with:
+
+```bash
+./scripts/audit-openapi-coverage.py
+```
+
+Current automated audit summary:
+
+| Item | Value |
+|------|-------|
+| OpenAPI families | `132` |
+| Writable families | `77` |
+| Read-only families | `55` |
+| Uncovered writable families without Terraform resource | `44` |
+| Writable families covered only by data source | `1` |
+| Uncovered read-only families | `52` |
+| Registered resources missing test/doc/example artifact | `0` |
+| Registered data sources missing test/doc/example artifact | `0` |
+
+Coverage below is grouped by API family, not by every individual OpenAPI path. Some API paths are action-only or operational endpoints and are not good Terraform resource candidates. Writable families require a Terraform resource to count as covered; a read-only data source is useful, but it does not make the writable API family fully managed.
+
+Current unit coverage baseline:
+
+| Item | Value |
+|------|-------|
+| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `3.6%` total statement coverage |
 
 ## Covered Resources
 
@@ -54,6 +79,7 @@ Coverage below is grouped by API family, not by every individual OpenAPI path. S
 | `domain:users` | `graviteeam_user` |
 | `domain:users/roles` | `graviteeam_user_role` |
 | `environment:domains` | `graviteeam_domain` |
+| `org:groups` | `graviteeam_org_group` |
 | `org:identities` | `graviteeam_org_identity_provider` |
 | `org:roles` | `graviteeam_org_role` |
 | `org:settings` | `graviteeam_org_settings` |
@@ -86,7 +112,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `domain:alerts/triggers` | Alert trigger configuration. |
 | `domain:certificate-settings` | Domain certificate settings. |
 | `org:users` | Organization-level user management. |
-| `org:groups` | Organization-level group management. |
 | `org:groups/members` | Organization group membership management. |
 | `org:members` | Organization membership management. |
 | `org:reporters` | Organization-level reporter management. |
@@ -154,7 +179,7 @@ The provider also does not currently expose several read-only or platform metada
 2. Add authorization engines.
 3. Add membership resources for domains, applications, organizations, and organization groups.
 4. Add a managed domain flow resource, keeping `graviteeam_flows` as a data source.
-5. Add organization-level users, groups, reporters, forms, and entrypoints.
+5. Add organization-level users, reporters, forms, and entrypoints.
 6. Revisit action-only endpoints and decide case by case whether Terraform should model them.
 
 ## Verification
@@ -162,7 +187,15 @@ The provider also does not currently expose several read-only or platform metada
 After changing API coverage, run:
 
 ```bash
+./scripts/audit-openapi-coverage.py
 go test ./...
+go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
+go tool cover -func=/tmp/graviteeam-coverage.out
+go vet ./...
+go build ./...
+go mod verify
+go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+make docs-check
 make lint
 ```
 

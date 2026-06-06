@@ -1255,6 +1255,49 @@ func (c *Client) DeleteOrgRole(ctx context.Context, id string) error {
 	return err
 }
 
+// Organization Group operations
+
+func (c *Client) CreateOrgGroup(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPost, "/groups", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetOrgGroup(ctx context.Context, id string) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodGet, "/groups/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateOrgGroup(ctx context.Context, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPut, "/groups/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteOrgGroup(ctx context.Context, id string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/groups/"+id, nil)
+	return err
+}
+
 // Organization Tag operations
 
 func (c *Client) CreateOrgTag(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {

@@ -75,6 +75,12 @@ resource "graviteeam_domain" "test" {
   login_settings {}
 }
 
+resource "graviteeam_group" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Group"
+  description = "Group mapped by identity provider test"
+}
+
 resource "graviteeam_identity_provider" "test" {
   domain_id     = graviteeam_domain.test.id
   name          = "Updated Inline IdP"
@@ -93,6 +99,11 @@ resource "graviteeam_identity_provider" "test" {
   mappers = {
     "email"    = "email"
     "username" = "username"
+  }
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('test-idp-group')}" = [
+      graviteeam_group.test.id
+    ]
   }
 }
 `,
