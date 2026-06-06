@@ -25,6 +25,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/deviceidentifier"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domain"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainflow"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainmember"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/emailtemplate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/extensiongrant"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/factor"
@@ -153,6 +154,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		deviceidentifier.NewDeviceIdentifierResource,
 		domain.NewDomainResource,
 		domainflow.NewDomainFlowResource,
+		domainmember.NewDomainMemberResource,
 		emailtemplate.NewEmailTemplateResource,
 		extensiongrant.NewExtensionGrantResource,
 		factor.NewFactorResource,

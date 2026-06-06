@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `40` |
+| Terraform resources registered | `41` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `37` |
+| Uncovered writable families without Terraform resource | `36` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -70,6 +70,7 @@ Current unit coverage baseline:
 | `domain:groups/roles` | `graviteeam_group_roles` |
 | `domain:i18n/dictionaries` | `graviteeam_i18n_dictionary` |
 | `domain:identities` | `graviteeam_identity_provider` |
+| `domain:members` | `graviteeam_domain_member` |
 | `domain:password-policies` | `graviteeam_password_policy` |
 | `domain:protected-resources` | `graviteeam_protected_resource` |
 | `domain:reporters` | `graviteeam_reporter` |
@@ -112,7 +113,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `domain:protected-resources/members` | Access management for protected resources. |
 | `domain:protected-resources/secrets` | Secret lifecycle for protected resources. |
 | `domain:authorization-engines` | Full CRUD family for authorization engines. |
-| `domain:members` | Domain membership management. |
 | `domain:applications/members` | Application membership management. |
 | `domain:applications/secrets` | Application secret lifecycle. |
 | `domain:alerts/triggers` | Alert trigger configuration. |

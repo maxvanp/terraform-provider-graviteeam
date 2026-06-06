@@ -250,6 +250,50 @@ func (c *Client) DeleteUser(ctx context.Context, domainID, id string) error {
 	return err
 }
 
+// Domain Member operations
+
+func (c *Client) ListDomainMembers(ctx context.Context, domainID string) ([]map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/members", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	memberships, ok := result["memberships"].([]interface{})
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+	items := make([]map[string]interface{}, 0, len(memberships))
+	for _, membership := range memberships {
+		if item, ok := membership.(map[string]interface{}); ok {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func (c *Client) AddOrUpdateDomainMember(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/members", body)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return map[string]interface{}{}, nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteDomainMember(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/members/"+id, nil)
+	return err
+}
+
 // Password Policy operations
 
 func (c *Client) CreatePasswordPolicy(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
