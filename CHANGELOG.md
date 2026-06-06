@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_org_group_members` for organization-level group membership management
 - Add `graviteeam_org_member` for organization-level membership role assignments
 - Add `graviteeam_domain_member` for domain membership role assignments
+- Add `graviteeam_application_member` for application membership role assignments
 
 ### Changed
 
@@ -34,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 41 resources:
+- 42 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_flow` — Domain authentication flow list
   - `graviteeam_domain_member` — Domain membership role assignment
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_application_email` — Application email templates and overrides
   - `graviteeam_application_flow` — Application-specific flows
   - `graviteeam_application_form` — Application-specific forms
+  - `graviteeam_application_member` — Application membership role assignment
   - `graviteeam_identity_provider` — Identity provider (inline, JDBC, HTTP, OAuth2) with mappers and role mapping
   - `graviteeam_factor` — MFA factor (TOTP, EMAIL, SMS)
   - `graviteeam_user` — Domain user with pre-registration support

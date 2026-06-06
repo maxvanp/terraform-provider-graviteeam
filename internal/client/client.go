@@ -207,6 +207,53 @@ func (c *Client) DeleteApplication(ctx context.Context, domainID, id string) err
 	return err
 }
 
+// Application Member operations
+
+func (c *Client) ListApplicationMembers(ctx context.Context, domainID, applicationID string) ([]map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/applications/%s/members", domainID, applicationID)
+	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	memberships, ok := result["memberships"].([]interface{})
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+	items := make([]map[string]interface{}, 0, len(memberships))
+	for _, membership := range memberships {
+		if item, ok := membership.(map[string]interface{}); ok {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func (c *Client) AddOrUpdateApplicationMember(ctx context.Context, domainID, applicationID string, body map[string]interface{}) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/applications/%s/members", domainID, applicationID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return map[string]interface{}{}, nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteApplicationMember(ctx context.Context, domainID, applicationID, id string) error {
+	path := fmt.Sprintf("/domains/%s/applications/%s/members/%s", domainID, applicationID, id)
+	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
+	return err
+}
+
 // User operations
 
 func (c *Client) CreateUser(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {

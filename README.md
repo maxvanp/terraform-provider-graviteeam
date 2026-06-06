@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (41)
+### Resources (42)
 
 | Resource | Description |
 |----------|-------------|
@@ -94,6 +94,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_application_email` | Application email templates and overrides |
 | `graviteeam_application_flow` | Application-specific flows |
 | `graviteeam_application_form` | Application-specific forms |
+| `graviteeam_application_member` | Application membership role assignment |
 | `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
