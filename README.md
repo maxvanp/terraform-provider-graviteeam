@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (42)
+### Resources (43)
 
 | Resource | Description |
 |----------|-------------|
@@ -100,6 +100,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_user` | Domain user with pre-registration support |
 | `graviteeam_password_policy` | Password complexity rules |
 | `graviteeam_protected_resource` | Protected MCP server resource with generated OAuth credentials |
+| `graviteeam_protected_resource_member` | Protected resource membership role assignment |
 | `graviteeam_scope` | OAuth2 scope |
 | `graviteeam_role` | Domain-level role with OAuth scopes |
 | `graviteeam_group` | User group with roles and members |

@@ -1063,6 +1063,53 @@ func (c *Client) DeleteProtectedResource(ctx context.Context, domainID, id, reso
 	return err
 }
 
+// Protected Resource Member operations
+
+func (c *Client) ListProtectedResourceMembers(ctx context.Context, domainID, protectedResourceID string) ([]map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/members", domainID, protectedResourceID)
+	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	memberships, ok := result["memberships"].([]interface{})
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+	items := make([]map[string]interface{}, 0, len(memberships))
+	for _, membership := range memberships {
+		if item, ok := membership.(map[string]interface{}); ok {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func (c *Client) AddOrUpdateProtectedResourceMember(ctx context.Context, domainID, protectedResourceID string, body map[string]interface{}) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/members", domainID, protectedResourceID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return map[string]interface{}{}, nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteProtectedResourceMember(ctx context.Context, domainID, protectedResourceID, id string) error {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/members/%s", domainID, protectedResourceID, id)
+	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
+	return err
+}
+
 func protectedResourceTypeQuery(resourceType string) string {
 	if resourceType == "" {
 		resourceType = "MCP_SERVER"

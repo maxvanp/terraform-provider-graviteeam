@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_org_member` for organization-level membership role assignments
 - Add `graviteeam_domain_member` for domain membership role assignments
 - Add `graviteeam_application_member` for application membership role assignments
+- Add `graviteeam_protected_resource_member` for protected resource membership role assignments
 
 ### Changed
 
@@ -35,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 42 resources:
+- 43 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_flow` — Domain authentication flow list
   - `graviteeam_domain_member` — Domain membership role assignment
@@ -49,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_user` — Domain user with pre-registration support
   - `graviteeam_password_policy` — Password complexity rules
   - `graviteeam_protected_resource` — Protected MCP server resource with generated OAuth credentials
+  - `graviteeam_protected_resource_member` — Protected resource membership role assignment
   - `graviteeam_scope` — OAuth2 scope
   - `graviteeam_role` — Domain-level role with OAuth scopes
   - `graviteeam_group` — User group with roles and members
