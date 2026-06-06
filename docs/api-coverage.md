@@ -210,19 +210,12 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 ### Read-Only and Admin Metadata Not Covered
 
-The provider also does not currently expose several read-only or platform metadata families, including:
+The provider does not currently expose the following read-only or platform metadata families:
 
 | API family | Notes |
 |------------|-------|
-| `platform:plugins/policies/documentation` | Policy plugin documentation. |
-| `platform:roles` | Platform role metadata. |
-| `environment:members/permissions` | Environment permissions metadata. |
-| `org:audits` | Organization audit logs. |
-| `org:environments` | Organization environment listing. |
-| `domain:applications/analytics` | Application analytics. |
-| `domain:applications/resources` | Application resource listing. |
-| `domain:applications/resources/policies` | Application resource policy listing. |
-| `domain:users/audits` | User audit logs. |
+| `domain:applications/resources/policies` | Application UMA resource policy listing. Local compose does not currently provide a management-API path to create an application resource with policies; keep uncovered until a runtime fixture can prove it. |
+| `platform:roles` | Platform role metadata. Local probes with organization role IDs and common platform role names returned 404; no platform role list endpoint exists in the bundled OpenAPI snapshot to discover a valid ID. |
 
 ## Suggested Implementation Order
 

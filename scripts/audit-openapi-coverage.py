@@ -162,9 +162,22 @@ def documented_known_gap_families() -> set[str]:
     return set(re.findall(r"\| `([^`]+)` \|", match.group("body")))
 
 
+def documented_read_only_gap_families() -> set[str]:
+    text = API_COVERAGE_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"### Read-Only and Admin Metadata Not Covered\n(?P<body>.*?)(?:\n## |\Z)",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        return set()
+    return set(re.findall(r"\| `([^`]+)` \|", match.group("body")))
+
+
 def check_doc_consistency(
     expected_counts: dict[str, int],
     uncovered_writable: set[str],
+    uncovered_read_only: set[str],
     covered_resources: set[str],
     covered_any: set[str],
 ) -> list[str]:
@@ -187,6 +200,17 @@ def check_doc_consistency(
     extra_gaps = sorted(documented_gaps - uncovered_writable - covered_any)
     for family in extra_gaps:
         errors.append(f"unknown or non-writable family listed in Known Gaps: {family}")
+
+    documented_read_only_gaps = documented_read_only_gap_families()
+    stale_read_only_gaps = sorted(documented_read_only_gaps & covered_any)
+    for family in stale_read_only_gaps:
+        errors.append(f"covered family still listed in Read-Only gaps: {family}")
+    missing_read_only_gaps = sorted(uncovered_read_only - documented_read_only_gaps)
+    for family in missing_read_only_gaps:
+        errors.append(f"uncovered read-only family missing from Read-Only gaps: {family}")
+    extra_read_only_gaps = sorted(documented_read_only_gaps - uncovered_read_only - covered_any)
+    for family in extra_read_only_gaps:
+        errors.append(f"unknown or non-read-only family listed in Read-Only gaps: {family}")
     return errors
 
 
@@ -288,7 +312,13 @@ def main() -> None:
             "Registered resources missing test/doc/example artifact": len(missing_resource_artifacts),
             "Registered data sources missing test/doc/example artifact": len(missing_datasource_artifacts),
         }
-        errors = check_doc_consistency(expected_counts, set(uncovered_writable), covered_resources, covered_any)
+        errors = check_doc_consistency(
+            expected_counts,
+            set(uncovered_writable),
+            set(uncovered_read_only),
+            covered_resources,
+            covered_any,
+        )
         print_section("Documentation Consistency", [f"- {error}" for error in errors])
         if errors:
             sys.exit(1)
