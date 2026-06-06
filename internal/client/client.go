@@ -1548,6 +1548,10 @@ func (c *Client) GetEnvironmentMetadata(ctx context.Context, path string) ([]byt
 	return c.DoRequest(ctx, http.MethodGet, "/"+path, nil)
 }
 
+func (c *Client) GetDomainMetadata(ctx context.Context, domainID, path string) ([]byte, error) {
+	return c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/"+path, nil)
+}
+
 // Analytics operations
 
 func (c *Client) GetAnalytics(ctx context.Context, domainID string, params map[string]string) (map[string]interface{}, error) {

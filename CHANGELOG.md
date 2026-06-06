@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add user runtime collection data sources for consents, credentials, devices, factors, and identities
 - Add `graviteeam_plugins` for platform plugin catalogs, plugin details, and plugin schemas
 - Add platform and environment metadata data sources
+- Add `graviteeam_domain_metadata` for active password policy and certificate public key metadata
 
 ### Changed
 
