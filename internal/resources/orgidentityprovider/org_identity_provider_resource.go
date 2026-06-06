@@ -170,6 +170,8 @@ func (r *OrgIdentityProviderResource) Update(ctx context.Context, req resource.U
 			wl[i] = d.ValueString()
 		}
 		body["domainWhitelist"] = wl
+	} else if state.DomainWhitelist != nil {
+		body["domainWhitelist"] = []string{}
 	}
 
 	result, err := r.client.UpdateOrgIdentityProvider(ctx, plan.ID.ValueString(), body)
@@ -234,5 +236,7 @@ func readIntoModel(model *OrgIdentityProviderModel, data map[string]interface{})
 				model.DomainWhitelist[i] = types.StringValue(s)
 			}
 		}
+	} else {
+		model.DomainWhitelist = nil
 	}
 }

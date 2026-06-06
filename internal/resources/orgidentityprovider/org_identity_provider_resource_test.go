@@ -38,10 +38,24 @@ resource "graviteeam_org_identity_provider" "test" {
   name          = "test-acc-org-idp-updated"
   type          = "inline-am-idp"
   configuration = jsonencode({})
+  domain_whitelist = ["example.com"]
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_org_identity_provider.test", "name", "test-acc-org-idp-updated"),
+					resource.TestCheckResourceAttr("graviteeam_org_identity_provider.test", "domain_whitelist.0", "example.com"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_org_identity_provider" "test" {
+  name          = "test-acc-org-idp-updated"
+  type          = "inline-am-idp"
+  configuration = jsonencode({})
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_org_identity_provider.test", "domain_whitelist.0"),
 				),
 			},
 		},
