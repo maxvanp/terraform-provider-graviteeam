@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (48)
+### Resources (49)
 
 | Resource | Description |
 |----------|-------------|
@@ -135,6 +135,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_org_settings` | Organization settings singleton |
 | `graviteeam_org_tag` | Organization tag |
 | `graviteeam_org_user` | Organization-level user |
+| `graviteeam_org_user_token` | Organization user account token |
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 

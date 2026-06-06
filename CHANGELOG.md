@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_identity_provider_password_policy` for identity provider password policy assignments
 - Add `graviteeam_domain_certificate_settings` for domain fallback certificate settings
 - Add `graviteeam_alert_trigger` for domain alert trigger configuration
+- Add `graviteeam_org_user_token` for organization user account token lifecycle management
 
 ### Changed
 
@@ -43,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 48 resources:
+- 49 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_certificate_settings` — Domain fallback certificate settings
   - `graviteeam_domain_flow` — Domain authentication flow list
@@ -89,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_org_settings` — Organization settings singleton
   - `graviteeam_org_tag` — Organization tag
   - `graviteeam_org_user` — Organization-level user
+  - `graviteeam_org_user_token` — Organization user account token
   - `graviteeam_alert_notifier` — Alert webhook notifier
   - `graviteeam_alert_trigger` — Domain alert trigger configuration
   - `graviteeam_user_role` — User role assignments

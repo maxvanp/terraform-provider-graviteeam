@@ -1765,6 +1765,35 @@ func (c *Client) DeleteOrgUser(ctx context.Context, id string) error {
 	return err
 }
 
+func (c *Client) ListOrgUserTokens(ctx context.Context, userID string) ([]map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodGet, "/users/"+userID+"/tokens", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) CreateOrgUserToken(ctx context.Context, userID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPost, "/users/"+userID+"/tokens", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteOrgUserToken(ctx context.Context, userID, tokenID string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/users/"+userID+"/tokens/"+tokenID, nil)
+	return err
+}
+
 // Organization Member operations
 
 func (c *Client) ListOrgMembers(ctx context.Context) ([]map[string]interface{}, error) {

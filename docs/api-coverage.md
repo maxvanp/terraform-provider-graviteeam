@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `45` |
+| Terraform resources registered | `49` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `27` |
+| Uncovered writable families without Terraform resource | `26` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -101,6 +101,7 @@ Current unit coverage baseline:
 | `org:settings` | `graviteeam_org_settings` |
 | `org:tags` | `graviteeam_org_tag` |
 | `org:users` | `graviteeam_org_user` |
+| `org:users/tokens` | `graviteeam_org_user_token` |
 
 ## Covered Data Sources
 
@@ -120,7 +121,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | API family | Notes |
 |------------|-------|
 | `domain:authorization-engines` | Full CRUD family for authorization engines. |
-| `org:users/tokens` | Organization user token lifecycle. |
 
 ### Action or Lifecycle Endpoints
 
