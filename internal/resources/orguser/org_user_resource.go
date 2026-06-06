@@ -78,6 +78,15 @@ func (r *OrgUserResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether this is a pre-registration user",
 			},
+			"reset_password": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Password value to send to the Gravitee AM reset password endpoint when reset_password_trigger changes.",
+			},
+			"reset_password_trigger": schema.StringAttribute{
+				Optional:    true,
+				Description: "Arbitrary value used to explicitly reset the organization user password. Changing this value calls the Gravitee AM reset password endpoint with reset_password.",
+			},
 		},
 	}
 }
@@ -159,6 +168,8 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	plan.ID = state.ID
+	plannedPassword := plan.Password
+	plannedResetPassword := plan.ResetPassword
 
 	if plan.Username.ValueString() != state.Username.ValueString() {
 		_, err := r.client.UpdateOrgUsername(ctx, plan.ID.ValueString(), plan.Username.ValueString())
@@ -195,12 +206,29 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
+	if shouldResetPassword(plan.ResetTrigger, state.ResetTrigger) {
+		if plan.ResetPassword.IsNull() || plan.ResetPassword.IsUnknown() || plan.ResetPassword.ValueString() == "" {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("reset_password"),
+				"Missing Reset Password",
+				"reset_password must be set when reset_password_trigger is changed.",
+			)
+			return
+		}
+		if err := r.client.ResetOrgUserPassword(ctx, plan.ID.ValueString(), plan.ResetPassword.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error resetting organization user password", err.Error())
+			return
+		}
+	}
+
 	result, err := r.client.GetOrgUser(ctx, plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading organization user after update", err.Error())
 		return
 	}
 	readIntoModel(&plan, result)
+	plan.Password = plannedPassword
+	plan.ResetPassword = plannedResetPassword
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -215,6 +243,16 @@ func (r *OrgUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err != nil {
 		resp.Diagnostics.AddError("Error deleting organization user", err.Error())
 	}
+}
+
+func shouldResetPassword(planTrigger, stateTrigger types.String) bool {
+	if planTrigger.IsNull() || planTrigger.IsUnknown() {
+		return false
+	}
+	if stateTrigger.IsNull() || stateTrigger.IsUnknown() {
+		return true
+	}
+	return planTrigger.ValueString() != stateTrigger.ValueString()
 }
 
 func (r *OrgUserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

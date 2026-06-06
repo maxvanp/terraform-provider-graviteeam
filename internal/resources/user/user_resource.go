@@ -85,6 +85,19 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether this is a pre-registration (user must set password). Defaults to true.",
 			},
+			"reset_password": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Password value to send to the Gravitee AM reset password endpoint when reset_password_trigger changes.",
+			},
+			"reset_password_trigger": schema.StringAttribute{
+				Optional:    true,
+				Description: "Arbitrary value used to explicitly reset the user password. Changing this value calls the Gravitee AM reset password endpoint with reset_password.",
+			},
+			"registration_confirmation_trigger": schema.StringAttribute{
+				Optional:    true,
+				Description: "Arbitrary value used to explicitly send the user registration confirmation email. Changing this value calls the Gravitee AM send registration confirmation endpoint.",
+			},
 		},
 	}
 }
@@ -176,6 +189,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	plan.ID = state.ID
+	plannedResetPassword := plan.ResetPassword
 
 	if plan.Username.ValueString() != state.Username.ValueString() {
 		_, err := r.client.UpdateUsername(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.Username.ValueString())
@@ -228,12 +242,35 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		}
 	}
 
+	if shouldResetPassword(plan.ResetTrigger, state.ResetTrigger) {
+		if plan.ResetPassword.IsNull() || plan.ResetPassword.IsUnknown() || plan.ResetPassword.ValueString() == "" {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("reset_password"),
+				"Missing Reset Password",
+				"reset_password must be set when reset_password_trigger is changed.",
+			)
+			return
+		}
+		if err := r.client.ResetUserPassword(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.ResetPassword.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error resetting user password", err.Error())
+			return
+		}
+	}
+
+	if shouldTrigger(plan.RegistrationTrigger, state.RegistrationTrigger) {
+		if err := r.client.SendUserRegistrationConfirmation(ctx, plan.DomainID.ValueString(), plan.ID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error sending user registration confirmation", err.Error())
+			return
+		}
+	}
+
 	result, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading user after update", err.Error())
 		return
 	}
 	r.readIntoModel(&plan, result)
+	plan.ResetPassword = plannedResetPassword
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -248,6 +285,20 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError("Error deleting user", err.Error())
 	}
+}
+
+func shouldResetPassword(planTrigger, stateTrigger types.String) bool {
+	return shouldTrigger(planTrigger, stateTrigger)
+}
+
+func shouldTrigger(planTrigger, stateTrigger types.String) bool {
+	if planTrigger.IsNull() || planTrigger.IsUnknown() {
+		return false
+	}
+	if stateTrigger.IsNull() || stateTrigger.IsUnknown() {
+		return true
+	}
+	return planTrigger.ValueString() != stateTrigger.ValueString()
 }
 
 func (r *UserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

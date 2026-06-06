@@ -381,6 +381,18 @@ func (c *Client) UnlockUser(ctx context.Context, domainID, id string) error {
 	return err
 }
 
+func (c *Client) ResetUserPassword(ctx context.Context, domainID, id, password string) error {
+	_, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/users/"+id+"/resetPassword", map[string]interface{}{
+		"password": password,
+	})
+	return err
+}
+
+func (c *Client) SendUserRegistrationConfirmation(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/users/"+id+"/sendRegistrationConfirmation", nil)
+	return err
+}
+
 func (c *Client) UpdateUsername(ctx context.Context, domainID, id, username string) (map[string]interface{}, error) {
 	data, err := c.DoRequest(ctx, http.MethodPatch, "/domains/"+domainID+"/users/"+id+"/username", map[string]interface{}{
 		"username": username,
@@ -2058,6 +2070,13 @@ func (c *Client) UpdateOrgUsername(ctx context.Context, id, username string) (ma
 
 func (c *Client) DeleteOrgUser(ctx context.Context, id string) error {
 	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/users/"+id, nil)
+	return err
+}
+
+func (c *Client) ResetOrgUserPassword(ctx context.Context, id, password string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodPost, "/users/"+id+"/resetPassword", map[string]interface{}{
+		"password": password,
+	})
 	return err
 }
 

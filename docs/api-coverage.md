@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `14` |
+| Uncovered writable families without Terraform resource | `11` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
 | Uncovered read-only families | `0` |
@@ -96,7 +96,9 @@ Current unit coverage baseline:
 | `domain:users` | `graviteeam_user` |
 | `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/lock` | `graviteeam_user` |
+| `domain:users/resetPassword` | `graviteeam_user` |
 | `domain:users/roles` | `graviteeam_user_role` |
+| `domain:users/sendRegistrationConfirmation` | `graviteeam_user` |
 | `domain:users/status` | `graviteeam_user` |
 | `domain:users/unlock` | `graviteeam_user` |
 | `domain:users/username` | `graviteeam_user` |
@@ -112,6 +114,7 @@ Current unit coverage baseline:
 | `org:settings` | `graviteeam_org_settings` |
 | `org:tags` | `graviteeam_org_tag` |
 | `org:users` | `graviteeam_org_user` |
+| `org:users/resetPassword` | `graviteeam_org_user` |
 | `org:users/status` | `graviteeam_org_user` |
 | `org:users/tokens` | `graviteeam_org_user_token` |
 | `org:users/username` | `graviteeam_org_user` |
@@ -196,8 +199,8 @@ These endpoints look closer to calculated reads than durable Terraform resources
 
 | API family | Notes |
 |------------|-------|
-| `domain:forms/preview` | Template preview operation. Local admin-token probe returned `403 Permission denied`; keep uncovered until an acceptance fixture can prove the endpoint and permissions. |
-| `domain:password-policies/evaluate` | Password policy evaluation operation. The bundled OpenAPI snapshot omits request and response schemas, and local admin-token probes returned `403 Permission denied` or `400 Malformed json` depending on payload shape. |
+| `domain:forms/preview` | Template preview operation. Local gap probe returned `400 Invalid template ['LOGIN']`; keep uncovered until a reliable preview fixture proves the endpoint and payload shape. |
+| `domain:password-policies/evaluate` | Password policy evaluation operation. The bundled OpenAPI path omits request and response schemas, and local gap probe timed out against `default/evaluate`. |
 
 ### Action or Lifecycle Endpoints
 
@@ -205,18 +208,15 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 | API family | Notes |
 |------------|-------|
-| `domain:users/bulk` | Bulk user action. |
-| `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged. |
-| `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged. |
-| `domain:users/devices` | User device lifecycle; read-only state is exposed by `graviteeam_user_devices`, deletion remains unmanaged. |
-| `domain:users/factors` | User factor lifecycle; read-only state is exposed by `graviteeam_user_factors`, revocation remains unmanaged. |
-| `domain:users/identities` | User identity lifecycle; read-only state is exposed by `graviteeam_user_identities`, unlink remains unmanaged. |
-| `domain:users/resetPassword` | Password reset action. |
-| `domain:users/sendRegistrationConfirmation` | Registration confirmation action. |
-| `org:users/bulk` | Organization bulk user action. |
-| `org:users/resetPassword` | Organization password reset action. |
-| `self:newsletter/_subscribe` | Current-user newsletter subscription operation. |
-| `self:notifications/acknowledge` | Current-user notification acknowledgement operation. |
+| `domain:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_user` create/update/delete rather than a distinct durable object. |
+| `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged until a consent fixture can prove safe desired-state semantics. |
+| `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged until a credential fixture can prove safe desired-state semantics. |
+| `domain:users/devices` | User device lifecycle; read-only state is exposed by `graviteeam_user_devices`, deletion remains unmanaged until a device fixture can prove safe desired-state semantics. |
+| `domain:users/factors` | User factor lifecycle; read-only state is exposed by `graviteeam_user_factors`, revocation remains unmanaged; local gap probe returned `204` for a missing factor id. |
+| `domain:users/identities` | User identity lifecycle; read-only state is exposed by `graviteeam_user_identities`, unlink remains unmanaged; local gap probe returned `204` for a missing identity id. |
+| `org:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_org_user` create/update/delete rather than a distinct durable object. |
+| `self:newsletter/_subscribe` | Current-user newsletter subscription operation; reachable in local gap probe and reflected by `current_user.email` / `newsletter_enabled`, but scoped to the provider credential principal, not a Terraform-managed object. |
+| `self:notifications/acknowledge` | Current-user notification acknowledgement operation; reachable in local gap probe but scoped to ephemeral current-user notification state. |
 
 ### Read-Only and Admin Metadata Not Covered
 
@@ -239,6 +239,7 @@ After changing API coverage, run:
 ```bash
 ./scripts/audit-openapi-coverage.py
 ./scripts/audit-openapi-coverage.py --check-doc
+./scripts/probe-openapi-gaps.py
 go test ./...
 go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
 go tool cover -func=/tmp/graviteeam-coverage.out

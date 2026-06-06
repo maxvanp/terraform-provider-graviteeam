@@ -11,4 +11,6 @@ type OrgUserModel struct {
 	LastName        types.String `tfsdk:"last_name"`
 	Enabled         types.Bool   `tfsdk:"enabled"`
 	PreRegistration types.Bool   `tfsdk:"pre_registration"`
+	ResetPassword   types.String `tfsdk:"reset_password"`
+	ResetTrigger    types.String `tfsdk:"reset_password_trigger"`
 }

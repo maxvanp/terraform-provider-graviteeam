@@ -79,6 +79,7 @@ resource "graviteeam_user" "test" {
   enabled          = true
   locked           = true
   pre_registration = true
+  registration_confirmation_trigger = "confirmation-1"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -88,6 +89,7 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "User"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "true"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "registration_confirmation_trigger", "confirmation-1"),
 				),
 			},
 			// Update: unlock through the dedicated endpoint
@@ -110,11 +112,16 @@ resource "graviteeam_user" "test" {
   enabled          = true
   locked           = false
   pre_registration = true
+  reset_password   = "SecurePass123!"
+  reset_password_trigger = "reset-1"
+  registration_confirmation_trigger = "confirmation-1"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "false"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "reset_password_trigger", "reset-1"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "registration_confirmation_trigger", "confirmation-1"),
 				),
 			},
 		},

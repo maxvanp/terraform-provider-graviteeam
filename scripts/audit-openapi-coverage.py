@@ -31,10 +31,7 @@ ACTION_OR_LIFECYCLE_GAPS = {
     "domain:users/devices",
     "domain:users/factors",
     "domain:users/identities",
-    "domain:users/resetPassword",
-    "domain:users/sendRegistrationConfirmation",
     "org:users/bulk",
-    "org:users/resetPassword",
     "self:newsletter/_subscribe",
     "self:notifications/acknowledge",
 }

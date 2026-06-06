@@ -5,13 +5,16 @@ import (
 )
 
 type UserModel struct {
-	ID              types.String `tfsdk:"id"`
-	DomainID        types.String `tfsdk:"domain_id"`
-	Username        types.String `tfsdk:"username"`
-	Email           types.String `tfsdk:"email"`
-	FirstName       types.String `tfsdk:"first_name"`
-	LastName        types.String `tfsdk:"last_name"`
-	Enabled         types.Bool   `tfsdk:"enabled"`
-	Locked          types.Bool   `tfsdk:"locked"`
-	PreRegistration types.Bool   `tfsdk:"pre_registration"`
+	ID                  types.String `tfsdk:"id"`
+	DomainID            types.String `tfsdk:"domain_id"`
+	Username            types.String `tfsdk:"username"`
+	Email               types.String `tfsdk:"email"`
+	FirstName           types.String `tfsdk:"first_name"`
+	LastName            types.String `tfsdk:"last_name"`
+	Enabled             types.Bool   `tfsdk:"enabled"`
+	Locked              types.Bool   `tfsdk:"locked"`
+	PreRegistration     types.Bool   `tfsdk:"pre_registration"`
+	ResetPassword       types.String `tfsdk:"reset_password"`
+	ResetTrigger        types.String `tfsdk:"reset_password_trigger"`
+	RegistrationTrigger types.String `tfsdk:"registration_confirmation_trigger"`
 }

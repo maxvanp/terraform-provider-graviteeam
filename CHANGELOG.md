@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `enabled` management to `graviteeam_user` through the dedicated user status endpoint
 - Use the dedicated organization user status endpoint when managing `graviteeam_org_user.enabled`
 - Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
+- Add explicit reset password triggers to `graviteeam_user` and `graviteeam_org_user`, and a registration confirmation trigger to `graviteeam_user`
 - Use the dedicated application type endpoint when updating `graviteeam_application.type`
 - Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
 - Update indirect Go dependencies

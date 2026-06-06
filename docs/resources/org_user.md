@@ -21,6 +21,9 @@ resource "graviteeam_org_user" "example" {
   last_name        = "User"
   enabled          = true
   pre_registration = true
+
+  reset_password         = "NewSecurePass123!"
+  reset_password_trigger = "rotation-2026-01"
 }
 ```
 
@@ -39,6 +42,8 @@ resource "graviteeam_org_user" "example" {
 - `last_name` (String) The last name
 - `password` (String, Sensitive) The initial password. Required when creating an organization user.
 - `pre_registration` (Boolean) Whether this is a pre-registration user
+- `reset_password` (String, Sensitive) Password value to send to the Gravitee AM reset password endpoint when reset_password_trigger changes.
+- `reset_password_trigger` (String) Arbitrary value used to explicitly reset the organization user password. Changing this value calls the Gravitee AM reset password endpoint with reset_password.
 
 ### Read-Only
 
