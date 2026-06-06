@@ -211,7 +211,7 @@ These endpoints may be better represented as explicit resources, one-shot action
 | API family | Notes |
 |------------|-------|
 | `domain:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_user` create/update/delete rather than a distinct durable object. |
-| `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged until a consent fixture can prove safe desired-state semantics. |
+| `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged until a consent fixture can prove safe desired-state semantics; local gap probe covers both collection delete by `clientId` and item revoke behavior. |
 | `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged until a credential fixture can prove safe desired-state semantics. |
 | `domain:users/devices` | User device lifecycle; read-only state is exposed by `graviteeam_user_devices`, deletion remains unmanaged until a device fixture can prove safe desired-state semantics. |
 | `domain:users/factors` | User factor lifecycle; read-only state is exposed by `graviteeam_user_factors`, revocation remains unmanaged; local gap probe returned `204` for a missing factor id. |

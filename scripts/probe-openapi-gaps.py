@@ -246,6 +246,27 @@ def run_probe(probe: AMProbe) -> list[Result]:
                 add_result(
                     results,
                     f"domain:users/{collection}",
+                    "GET",
+                    f"/domains/{domain_id}/users/{user_id}/{collection}",
+                    *probe.json_request(
+                        "GET",
+                        probe.management(f"/domains/{domain_id}/users/{user_id}/{collection}"),
+                    ),
+                )
+            add_result(
+                results,
+                "domain:users/consents",
+                "DELETE",
+                f"/domains/{domain_id}/users/{user_id}/consents?clientId=gap-probe-missing",
+                *probe.json_request(
+                    "DELETE",
+                    probe.management(f"/domains/{domain_id}/users/{user_id}/consents?clientId=gap-probe-missing"),
+                ),
+            )
+            for collection in ["consents", "credentials", "devices", "factors", "identities"]:
+                add_result(
+                    results,
+                    f"domain:users/{collection}",
                     "DELETE",
                     f"/domains/{domain_id}/users/{user_id}/{collection}/gap-probe-missing",
                     *probe.json_request(
