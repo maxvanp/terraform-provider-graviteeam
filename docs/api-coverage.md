@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `38` |
+| Terraform resources registered | `39` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `39` |
+| Uncovered writable families without Terraform resource | `38` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -83,6 +83,7 @@ Current unit coverage baseline:
 | `org:entrypoints` | `graviteeam_org_entrypoint` |
 | `org:forms` | `graviteeam_org_form` |
 | `org:groups` | `graviteeam_org_group` |
+| `org:groups/members` | `graviteeam_org_group_members` |
 | `org:identities` | `graviteeam_org_identity_provider` |
 | `org:reporters` | `graviteeam_org_reporter` |
 | `org:roles` | `graviteeam_org_role` |
@@ -115,7 +116,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `domain:applications/secrets` | Application secret lifecycle. |
 | `domain:alerts/triggers` | Alert trigger configuration. |
 | `domain:certificate-settings` | Domain certificate settings. |
-| `org:groups/members` | Organization group membership management. |
 | `org:members` | Organization membership management. |
 | `org:users/tokens` | Organization user token lifecycle. |
 

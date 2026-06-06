@@ -1483,6 +1483,42 @@ func (c *Client) DeleteOrgUser(ctx context.Context, id string) error {
 	return err
 }
 
+// Organization Group Members operations
+
+func (c *Client) GetOrgGroupMembers(ctx context.Context, groupID string) ([]string, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodGet, "/groups/"+groupID+"/members?page=0&size=100", nil)
+	if err != nil {
+		return nil, err
+	}
+	var page map[string]interface{}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return nil, err
+	}
+	dataArr, ok := page["data"].([]interface{})
+	if !ok {
+		return []string{}, nil
+	}
+	var memberIDs []string
+	for _, item := range dataArr {
+		if userObj, ok := item.(map[string]interface{}); ok {
+			if id, ok := userObj["id"].(string); ok {
+				memberIDs = append(memberIDs, id)
+			}
+		}
+	}
+	return memberIDs, nil
+}
+
+func (c *Client) AddOrgGroupMember(ctx context.Context, groupID, memberID string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodPost, "/groups/"+groupID+"/members/"+memberID, nil)
+	return err
+}
+
+func (c *Client) RemoveOrgGroupMember(ctx context.Context, groupID, memberID string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/groups/"+groupID+"/members/"+memberID, nil)
+	return err
+}
+
 // Organization Tag operations
 
 func (c *Client) CreateOrgTag(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {
