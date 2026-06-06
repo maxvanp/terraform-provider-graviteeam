@@ -207,6 +207,40 @@ func (c *Client) DeleteApplication(ctx context.Context, domainID, id string) err
 	return err
 }
 
+// Application Secret operations
+
+func (c *Client) ListApplicationSecrets(ctx context.Context, domainID, applicationID string) ([]map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/applications/%s/secrets", domainID, applicationID)
+	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) CreateApplicationSecret(ctx context.Context, domainID, applicationID string, body map[string]interface{}) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/applications/%s/secrets", domainID, applicationID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteApplicationSecret(ctx context.Context, domainID, applicationID, secretID string) error {
+	path := fmt.Sprintf("/domains/%s/applications/%s/secrets/%s", domainID, applicationID, secretID)
+	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
+	return err
+}
+
 // Application Member operations
 
 func (c *Client) ListApplicationMembers(ctx context.Context, domainID, applicationID string) ([]map[string]interface{}, error) {
@@ -1060,6 +1094,40 @@ func (c *Client) UpdateProtectedResource(ctx context.Context, domainID, id strin
 
 func (c *Client) DeleteProtectedResource(ctx context.Context, domainID, id, resourceType string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/protected-resources/"+id+protectedResourceTypeQuery(resourceType), nil)
+	return err
+}
+
+// Protected Resource Secret operations
+
+func (c *Client) ListProtectedResourceSecrets(ctx context.Context, domainID, protectedResourceID string) ([]map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/secrets", domainID, protectedResourceID)
+	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) CreateProtectedResourceSecret(ctx context.Context, domainID, protectedResourceID string, body map[string]interface{}) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/secrets", domainID, protectedResourceID)
+	data, err := c.DoRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteProtectedResourceSecret(ctx context.Context, domainID, protectedResourceID, secretID string) error {
+	path := fmt.Sprintf("/domains/%s/protected-resources/%s/secrets/%s", domainID, protectedResourceID, secretID)
+	_, err := c.DoRequest(ctx, http.MethodDelete, path, nil)
 	return err
 }
 

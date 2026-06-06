@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `43` |
+| Terraform resources registered | `45` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `34` |
+| Uncovered writable families without Terraform resource | `32` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -57,6 +57,7 @@ Current unit coverage baseline:
 | `domain:applications/flows` | `graviteeam_application_flow` |
 | `domain:applications/forms` | `graviteeam_application_form` |
 | `domain:applications/members` | `graviteeam_application_member` |
+| `domain:applications/secrets` | `graviteeam_application_secret` |
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
 | `domain:bot-detections` | `graviteeam_bot_detection` |
 | `domain:certificates` | `graviteeam_certificate` |
@@ -75,6 +76,7 @@ Current unit coverage baseline:
 | `domain:password-policies` | `graviteeam_password_policy` |
 | `domain:protected-resources` | `graviteeam_protected_resource` |
 | `domain:protected-resources/members` | `graviteeam_protected_resource_member` |
+| `domain:protected-resources/secrets` | `graviteeam_protected_resource_secret` |
 | `domain:reporters` | `graviteeam_reporter` |
 | `domain:resources` | `graviteeam_service_resource` |
 | `domain:roles` | `graviteeam_role` |
@@ -112,9 +114,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 | API family | Notes |
 |------------|-------|
-| `domain:protected-resources/secrets` | Secret lifecycle for protected resources. |
 | `domain:authorization-engines` | Full CRUD family for authorization engines. |
-| `domain:applications/secrets` | Application secret lifecycle. |
 | `domain:alerts/triggers` | Alert trigger configuration. |
 | `domain:certificate-settings` | Domain certificate settings. |
 | `org:users/tokens` | Organization user token lifecycle. |

@@ -20,6 +20,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationflow"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationform"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationmember"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationsecret"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/authdevicenotifier"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/botdetection"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/certificate"
@@ -50,6 +51,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/passwordpolicy"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresource"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresourcemember"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresourcesecret"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reporter"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/role"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/scope"
@@ -151,6 +153,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		applicationflow.NewApplicationFlowResource,
 		applicationform.NewApplicationFormResource,
 		applicationmember.NewApplicationMemberResource,
+		applicationsecret.NewApplicationSecretResource,
 		authdevicenotifier.NewAuthDeviceNotifierResource,
 		botdetection.NewBotDetectionResource,
 		certificate.NewCertificateResource,
@@ -181,6 +184,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		passwordpolicy.NewPasswordPolicyResource,
 		protectedresource.NewProtectedResourceResource,
 		protectedresourcemember.NewProtectedResourceMemberResource,
+		protectedresourcesecret.NewProtectedResourceSecretResource,
 		reporter.NewReporterResource,
 		role.NewRoleResource,
 		scope.NewScopeResource,

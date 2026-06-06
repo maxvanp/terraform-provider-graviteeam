@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (43)
+### Resources (45)
 
 | Resource | Description |
 |----------|-------------|
@@ -95,12 +95,14 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_application_flow` | Application-specific flows |
 | `graviteeam_application_form` | Application-specific forms |
 | `graviteeam_application_member` | Application membership role assignment |
+| `graviteeam_application_secret` | Application client secret |
 | `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
 | `graviteeam_password_policy` | Password complexity rules |
 | `graviteeam_protected_resource` | Protected MCP server resource with generated OAuth credentials |
 | `graviteeam_protected_resource_member` | Protected resource membership role assignment |
+| `graviteeam_protected_resource_secret` | Protected resource client secret |
 | `graviteeam_scope` | OAuth2 scope |
 | `graviteeam_role` | Domain-level role with OAuth scopes |
 | `graviteeam_group` | User group with roles and members |
