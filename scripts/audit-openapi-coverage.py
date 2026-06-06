@@ -25,7 +25,6 @@ READ_LIKE_POST_GAPS = {
 }
 
 ACTION_OR_LIFECYCLE_GAPS = {
-    "domain:certificates/rotate",
     "domain:users/bulk",
     "domain:users/consents",
     "domain:users/credentials",

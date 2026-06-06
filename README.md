@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (50)
+### Resources (52)
 
 | Resource | Description |
 |----------|-------------|
@@ -117,6 +117,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_email_template` | Custom email template |
 | `graviteeam_extension_grant` | Custom grant type (JWT Bearer) |
 | `graviteeam_certificate` | Certificate for JWT signing (PKCS12) |
+| `graviteeam_generated_certificate` | Generated system certificate |
 | `graviteeam_reporter` | Audit reporter plugin |
 | `graviteeam_service_resource` | Shared resource plugin (SMTP, etc.) |
 | `graviteeam_authorization_engine` | Authorization engine plugin |

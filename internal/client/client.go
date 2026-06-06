@@ -977,6 +977,18 @@ func (c *Client) DeleteCertificate(ctx context.Context, domainID, id string) err
 	return err
 }
 
+func (c *Client) RotateCertificate(ctx context.Context, domainID string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/certificates/rotate", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) UpdateDomainCertificateSettings(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/certificate-settings", body)
 	if err != nil {

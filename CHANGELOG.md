@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_protected_resource_secret` for protected resource client secret lifecycle management
 - Add `graviteeam_identity_provider_password_policy` for identity provider password policy assignments
 - Add `graviteeam_domain_certificate_settings` for domain fallback certificate settings
+- Add `graviteeam_generated_certificate` for generated system certificate lifecycle management
 - Add `graviteeam_alert_trigger` for domain alert trigger configuration
 - Add `graviteeam_org_user_token` for organization user account token lifecycle management
 - Add `graviteeam_user_certificate_credential` for domain user certificate credential lifecycle management
@@ -60,9 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 50 resources:
+- 52 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_certificate_settings` — Domain fallback certificate settings
+  - `graviteeam_generated_certificate` — Generated system certificate
   - `graviteeam_domain_flow` — Domain authentication flow list
   - `graviteeam_domain_member` — Domain membership role assignment
   - `graviteeam_application` — OAuth2/OIDC application with IdP rules, MFA, OAuth settings

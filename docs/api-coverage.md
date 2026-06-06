@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `51` |
+| Terraform resources registered | `52` |
 | Terraform data sources registered | `17` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `15` |
+| Uncovered writable families without Terraform resource | `14` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `5` |
 | Uncovered read-only families | `0` |
@@ -66,6 +66,7 @@ Current unit coverage baseline:
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
 | `domain:bot-detections` | `graviteeam_bot_detection` |
 | `domain:certificates` | `graviteeam_certificate` |
+| `domain:certificates/rotate` | `graviteeam_generated_certificate` |
 | `domain:certificate-settings` | `graviteeam_domain_certificate_settings` |
 | `domain:device-identifiers` | `graviteeam_device_identifier` |
 | `domain:emails` | `graviteeam_email_template` |
@@ -204,7 +205,6 @@ These endpoints may be better represented as explicit resources, one-shot action
 
 | API family | Notes |
 |------------|-------|
-| `domain:certificates/rotate` | Certificate rotation action. |
 | `domain:users/bulk` | Bulk user action. |
 | `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged. |
 | `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged. |

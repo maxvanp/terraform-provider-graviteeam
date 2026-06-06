@@ -43,6 +43,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/extensiongrant"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/factor"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/form"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/generatedcertificate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/group"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/groupmembers"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/grouproles"
@@ -182,6 +183,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		extensiongrant.NewExtensionGrantResource,
 		factor.NewFactorResource,
 		form.NewFormResource,
+		generatedcertificate.NewGeneratedCertificateResource,
 		group.NewGroupResource,
 		groupmembers.NewGroupMembersResource,
 		grouproles.NewGroupRolesResource,
