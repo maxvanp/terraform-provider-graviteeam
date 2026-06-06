@@ -1181,6 +1181,49 @@ func (c *Client) DoOrgRequest(ctx context.Context, method, path string, body int
 	return respBody, nil
 }
 
+// Organization Entrypoint operations
+
+func (c *Client) CreateOrgEntrypoint(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPost, "/entrypoints", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetOrgEntrypoint(ctx context.Context, id string) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodGet, "/entrypoints/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateOrgEntrypoint(ctx context.Context, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPut, "/entrypoints/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteOrgEntrypoint(ctx context.Context, id string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/entrypoints/"+id, nil)
+	return err
+}
+
 // Organization Identity Provider operations
 
 func (c *Client) CreateOrgIdentityProvider(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {

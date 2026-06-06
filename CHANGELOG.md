@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_domain_flow` for domain-level authentication flow management
 - Add `graviteeam_org_reporter` for organization-level reporter management
 - Add `graviteeam_org_form` for organization-level form templates
+- Add `graviteeam_org_entrypoint` for organization-level entrypoint management
 
 ### Changed
 
@@ -29,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 36 resources:
+- 37 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_flow` — Domain authentication flow list
   - `graviteeam_application` — OAuth2/OIDC application with IdP rules, MFA, OAuth settings
@@ -57,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_device_identifier` — Device fingerprinting plugin
   - `graviteeam_auth_device_notifier` — CIBA auth device notifier
   - `graviteeam_i18n_dictionary` — Internationalization dictionary
+  - `graviteeam_org_entrypoint` — Organization-level entrypoint
   - `graviteeam_org_form` — Organization-level form template
   - `graviteeam_org_group` — Organization-level group
   - `graviteeam_org_identity_provider` — Organization-level identity provider

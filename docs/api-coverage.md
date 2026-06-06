@@ -11,7 +11,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | Bundled OpenAPI version | `4.11.4` |
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
-| Terraform resources registered | `36` |
+| Terraform resources registered | `37` |
 | Terraform data sources registered | `4` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `41` |
+| Uncovered writable families without Terraform resource | `40` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -80,6 +80,7 @@ Current unit coverage baseline:
 | `domain:users` | `graviteeam_user` |
 | `domain:users/roles` | `graviteeam_user_role` |
 | `environment:domains` | `graviteeam_domain` |
+| `org:entrypoints` | `graviteeam_org_entrypoint` |
 | `org:forms` | `graviteeam_org_form` |
 | `org:groups` | `graviteeam_org_group` |
 | `org:identities` | `graviteeam_org_identity_provider` |
@@ -116,7 +117,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 | `org:users` | Organization-level user management. |
 | `org:groups/members` | Organization group membership management. |
 | `org:members` | Organization membership management. |
-| `org:entrypoints` | Organization-level entrypoint management. |
 | `org:users/tokens` | Organization user token lifecycle. |
 
 ### Action or Lifecycle Endpoints
