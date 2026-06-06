@@ -113,6 +113,45 @@ resource "graviteeam_identity_provider" "test" {
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "mappers.username", "username"),
 				),
 			},
+			// Update: remove mappers and group mapper to ensure PUT clears API state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-idp"
+  description = "Domain for identity provider acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_group" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Group"
+  description = "Group mapped by identity provider test"
+}
+
+resource "graviteeam_identity_provider" "test" {
+  domain_id     = graviteeam_domain.test.id
+  name          = "Updated Inline IdP"
+  type          = "inline-am-idp"
+  configuration = jsonencode({
+    users = [
+      {
+        firstname = "Test"
+        lastname  = "User"
+        username  = "testuser"
+        password  = "Password1!"
+        email     = "testuser@example.com"
+      }
+    ]
+  })
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "mappers.email"),
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "group_mapper.%"),
+				),
+			},
 		},
 	})
 }

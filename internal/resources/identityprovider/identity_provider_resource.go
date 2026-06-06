@@ -146,7 +146,7 @@ func (r *IdentityProviderResource) Create(ctx context.Context, req resource.Crea
 		(!plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown())
 
 	if needsUpdate {
-		updateBody := r.buildUpdateBody(plan)
+		updateBody := r.buildUpdateBody(plan, nil)
 		result, err = r.client.UpdateIdentityProvider(ctx, plan.DomainID.ValueString(), id, updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating identity provider after creation", err.Error())
@@ -200,7 +200,7 @@ func (r *IdentityProviderResource) Update(ctx context.Context, req resource.Upda
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody := r.buildUpdateBody(plan, &state)
 	result, err := r.client.UpdateIdentityProvider(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating identity provider", err.Error())
@@ -240,7 +240,7 @@ func (r *IdentityProviderResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) map[string]interface{} {
+func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel, state *IdentityProviderModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
 		"type":          plan.Type.ValueString(),
@@ -253,6 +253,8 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 			mappers[k] = v.ValueString()
 		}
 		body["mappers"] = mappers
+	} else if state != nil && len(state.Mappers) > 0 {
+		body["mappers"] = map[string]string{}
 	}
 
 	if plan.DomainWhitelist != nil {
@@ -261,6 +263,8 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 			wl[i] = d.ValueString()
 		}
 		body["domainWhitelist"] = wl
+	} else if state != nil && state.DomainWhitelist != nil {
+		body["domainWhitelist"] = []string{}
 	}
 
 	if !plan.PasswordPolicyID.IsNull() && !plan.PasswordPolicyID.IsUnknown() {
@@ -269,10 +273,14 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 
 	if !plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown() {
 		body["groupMapper"] = invertConditionMapperToAPI(plan.GroupMapper)
+	} else if state != nil && !state.GroupMapper.IsNull() && !state.GroupMapper.IsUnknown() {
+		body["groupMapper"] = map[string][]string{}
 	}
 
 	if !plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown() {
 		body["roleMapper"] = invertConditionMapperToAPI(plan.RoleMapper)
+	} else if state != nil && !state.RoleMapper.IsNull() && !state.RoleMapper.IsUnknown() {
+		body["roleMapper"] = map[string][]string{}
 	}
 
 	return body
@@ -310,6 +318,8 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 				model.Mappers[k] = types.StringValue(s)
 			}
 		}
+	} else {
+		model.Mappers = nil
 	}
 
 	// Domain whitelist
@@ -320,6 +330,8 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 				model.DomainWhitelist[i] = types.StringValue(s)
 			}
 		}
+	} else {
+		model.DomainWhitelist = nil
 	}
 
 	// Password policy
