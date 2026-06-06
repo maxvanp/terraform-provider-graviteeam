@@ -1353,6 +1353,50 @@ func (c *Client) DeleteOrgReporter(ctx context.Context, id string) error {
 	return err
 }
 
+// Organization Form operations
+
+func (c *Client) GetOrgForm(ctx context.Context, template string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/forms?template=%s", template)
+	data, err := c.DoOrgRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) CreateOrgForm(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPost, "/forms", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateOrgForm(ctx context.Context, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPut, "/forms/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteOrgForm(ctx context.Context, id string) error {
+	_, err := c.DoOrgRequest(ctx, http.MethodDelete, "/forms/"+id, nil)
+	return err
+}
+
 // Organization Tag operations
 
 func (c *Client) CreateOrgTag(ctx context.Context, body map[string]interface{}) (map[string]interface{}, error) {

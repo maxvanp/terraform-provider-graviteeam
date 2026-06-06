@@ -85,7 +85,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (35)
+### Resources (36)
 
 | Resource | Description |
 |----------|-------------|
@@ -116,6 +116,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_domain_flow` | Domain authentication flow list |
 | `graviteeam_auth_device_notifier` | CIBA auth device notifier |
 | `graviteeam_i18n_dictionary` | Internationalization dictionary |
+| `graviteeam_org_form` | Organization-level form template |
 | `graviteeam_org_group` | Organization-level group |
 | `graviteeam_org_identity_provider` | Organization-level identity provider |
 | `graviteeam_org_reporter` | Organization-level reporter |
