@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `29` |
+| Uncovered writable families without Terraform resource | `28` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -61,6 +61,7 @@ Current unit coverage baseline:
 | `domain:auth-device-notifiers` | `graviteeam_auth_device_notifier` |
 | `domain:bot-detections` | `graviteeam_bot_detection` |
 | `domain:certificates` | `graviteeam_certificate` |
+| `domain:certificate-settings` | `graviteeam_domain_certificate_settings` |
 | `domain:device-identifiers` | `graviteeam_device_identifier` |
 | `domain:emails` | `graviteeam_email_template` |
 | `domain:extensionGrants` | `graviteeam_extension_grant` |
@@ -119,7 +120,6 @@ These API families expose write operations in the OpenAPI reference but are not 
 |------------|-------|
 | `domain:authorization-engines` | Full CRUD family for authorization engines. |
 | `domain:alerts/triggers` | Alert trigger configuration. |
-| `domain:certificate-settings` | Domain certificate settings. |
 | `org:users/tokens` | Organization user token lifecycle. |
 
 ### Action or Lifecycle Endpoints

@@ -26,6 +26,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/certificate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/deviceidentifier"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domain"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domaincertificatesettings"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainflow"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainmember"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/emailtemplate"
@@ -159,6 +160,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		botdetection.NewBotDetectionResource,
 		certificate.NewCertificateResource,
 		deviceidentifier.NewDeviceIdentifierResource,
+		domaincertificatesettings.NewDomainCertificateSettingsResource,
 		domain.NewDomainResource,
 		domainflow.NewDomainFlowResource,
 		domainmember.NewDomainMemberResource,
