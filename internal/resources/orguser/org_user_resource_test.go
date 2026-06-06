@@ -45,7 +45,7 @@ resource "graviteeam_org_user" "test" {
 			{
 				Config: acctest.ProviderConfig + `
 resource "graviteeam_org_user" "test" {
-  username         = "test-acc-org-user"
+  username         = "test-acc-org-user-updated"
   password         = "SecurePass123!"
   email            = "test-acc-org-user-updated@example.com"
   first_name       = "Updated"
@@ -55,6 +55,7 @@ resource "graviteeam_org_user" "test" {
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_org_user.test", "username", "test-acc-org-user-updated"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "email", "test-acc-org-user-updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "first_name", "Updated"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "true"),

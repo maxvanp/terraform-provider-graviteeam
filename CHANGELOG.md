@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use the dedicated password policy default endpoint when setting a domain default policy
 - Add `enabled` management to `graviteeam_user` through the dedicated user status endpoint
 - Use the dedicated organization user status endpoint when managing `graviteeam_org_user.enabled`
+- Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
 
 ## [0.1.0] - TBD
 

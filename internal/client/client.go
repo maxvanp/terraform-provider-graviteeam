@@ -340,6 +340,20 @@ func (c *Client) UpdateUserStatus(ctx context.Context, domainID, id string, enab
 	return result, nil
 }
 
+func (c *Client) UpdateUsername(ctx context.Context, domainID, id, username string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPatch, "/domains/"+domainID+"/users/"+id+"/username", map[string]interface{}{
+		"username": username,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteUser(ctx context.Context, domainID, id string) error {
 	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/users/"+id, nil)
 	return err
@@ -1806,6 +1820,20 @@ func (c *Client) UpdateOrgUser(ctx context.Context, id string, body map[string]i
 func (c *Client) UpdateOrgUserStatus(ctx context.Context, id string, enabled bool) (map[string]interface{}, error) {
 	data, err := c.DoOrgRequest(ctx, http.MethodPut, "/users/"+id+"/status", map[string]interface{}{
 		"enabled": enabled,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateOrgUsername(ctx context.Context, id, username string) (map[string]interface{}, error) {
+	data, err := c.DoOrgRequest(ctx, http.MethodPatch, "/users/"+id+"/username", map[string]interface{}{
+		"username": username,
 	})
 	if err != nil {
 		return nil, err

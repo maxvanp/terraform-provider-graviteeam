@@ -54,9 +54,6 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"username": schema.StringAttribute{
 				Required:    true,
 				Description: "The username",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"email": schema.StringAttribute{
 				Optional:    true,
@@ -161,6 +158,14 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	plan.ID = state.ID
+
+	if plan.Username.ValueString() != state.Username.ValueString() {
+		_, err := r.client.UpdateUsername(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.Username.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating username", err.Error())
+			return
+		}
+	}
 
 	body := map[string]interface{}{}
 	if !plan.Email.IsNull() {

@@ -33,7 +33,7 @@ Current automated audit summary:
 | OpenAPI families | `132` |
 | Writable families | `77` |
 | Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `23` |
+| Uncovered writable families without Terraform resource | `21` |
 | Writable families covered only by data source | `0` |
 | Uncovered read-only families | `52` |
 | Registered resources missing test/doc/example artifact | `0` |
@@ -91,6 +91,7 @@ Current unit coverage baseline:
 | `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/roles` | `graviteeam_user_role` |
 | `domain:users/status` | `graviteeam_user` |
+| `domain:users/username` | `graviteeam_user` |
 | `environment:domains` | `graviteeam_domain` |
 | `org:entrypoints` | `graviteeam_org_entrypoint` |
 | `org:forms` | `graviteeam_org_form` |
@@ -105,6 +106,7 @@ Current unit coverage baseline:
 | `org:users` | `graviteeam_org_user` |
 | `org:users/status` | `graviteeam_org_user` |
 | `org:users/tokens` | `graviteeam_org_user_token` |
+| `org:users/username` | `graviteeam_org_user` |
 
 ## Covered Data Sources
 
@@ -144,10 +146,8 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:users/resetPassword` | Password reset action. |
 | `domain:users/sendRegistrationConfirmation` | Registration confirmation action. |
 | `domain:users/unlock` | User unlock action. |
-| `domain:users/username` | Username update action. |
 | `org:users/bulk` | Organization bulk user action. |
 | `org:users/resetPassword` | Organization password reset action. |
-| `org:users/username` | Organization username update action. |
 | `self:newsletter` | Current-user newsletter operation. |
 | `self:notifications` | Current-user notification operation. |
 

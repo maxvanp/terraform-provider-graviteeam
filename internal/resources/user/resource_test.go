@@ -71,7 +71,7 @@ resource "graviteeam_domain" "test" {
 
 resource "graviteeam_user" "test" {
   domain_id        = graviteeam_domain.test.id
-  username         = "acctest-user"
+  username         = "acctest-user-updated"
   email            = "updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
@@ -80,6 +80,7 @@ resource "graviteeam_user" "test" {
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_user.test", "username", "acctest-user-updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "User"),

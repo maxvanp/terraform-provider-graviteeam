@@ -45,9 +45,6 @@ func (r *OrgUserResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"username": schema.StringAttribute{
 				Required:    true,
 				Description: "The username",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"password": schema.StringAttribute{
 				Optional:    true,
@@ -162,6 +159,14 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	plan.ID = state.ID
+
+	if plan.Username.ValueString() != state.Username.ValueString() {
+		_, err := r.client.UpdateOrgUsername(ctx, plan.ID.ValueString(), plan.Username.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating organization username", err.Error())
+			return
+		}
+	}
 
 	if updateBody := buildUpdateBody(plan); len(updateBody) > 0 {
 		_, err := r.client.UpdateOrgUser(ctx, plan.ID.ValueString(), updateBody)
