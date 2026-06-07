@@ -95,9 +95,7 @@ func (r *OrgUserTokenResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	result, err := r.client.CreateOrgUserToken(ctx, plan.UserID.ValueString(), map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	})
+	result, err := r.client.CreateOrgUserToken(ctx, plan.UserID.ValueString(), buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization user token", err.Error())
 		return
@@ -181,5 +179,11 @@ func readIntoModel(model *OrgUserTokenModel, data map[string]interface{}) {
 	}
 	if token, ok := data["token"].(string); ok && token != "" {
 		model.Token = types.StringValue(token)
+	}
+}
+
+func buildCreateBody(plan OrgUserTokenModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name": plan.Name.ValueString(),
 	}
 }
