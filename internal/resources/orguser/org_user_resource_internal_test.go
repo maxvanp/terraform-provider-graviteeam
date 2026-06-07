@@ -2,11 +2,18 @@ package orguser
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -280,4 +287,240 @@ func TestReadIntoModelMapsAPIFieldsAndClearsMissingOptionalStrings(t *testing.T)
 	if !model.ForceResetPassword.ValueBool() || model.Enabled.ValueBool() || !model.PreRegistration.ValueBool() {
 		t.Fatalf("boolean fields not mapped: %#v", model)
 	}
+}
+
+func TestOrgUserCRUDUsesMergedProfileUpdateAndSeparateActions(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+			"username":           body["username"],
+			"email":              body["email"],
+			"firstName":          body["firstName"],
+			"lastName":           body["lastName"],
+			"forceResetPassword": body["forceResetPassword"],
+			"preRegistration":    body["preRegistration"],
+			"enabled":            true,
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+				"username":              "alice",
+				"email":                 "alice@example.com",
+				"firstName":             "Alice",
+				"lastName":              "Liddell",
+				"forceResetPassword":    false,
+				"preRegistration":       true,
+				"enabled":               false,
+				"accountNonExpired":     true,
+				"accountNonLocked":      true,
+				"additionalInformation": map[string]interface{}{"department": "platform"},
+				"credentialsNonExpired": true,
+				"displayName":           "Alice Liddell",
+				"externalId":            "external-1",
+				"preferredLanguage":     "fr",
+				"registrationCompleted": false,
+				"source":                "gravitee",
+			}))
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", body))
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("status method = %s, want PUT", r.Method)
+		}
+		methods = append(methods, "status")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode status body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+			"username":           "alice",
+			"email":              "alice@example.com",
+			"firstName":          "Alice",
+			"lastName":           "Liddell",
+			"forceResetPassword": false,
+			"preRegistration":    true,
+			"enabled":            body["enabled"],
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/username", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("username method = %s, want PATCH", r.Method)
+		}
+		methods = append(methods, "username")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode username body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+			"username": body["username"],
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/resetPassword", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("reset method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "reset")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode reset body: %v", err)
+		}
+		bodies = append(bodies, body)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgUserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := orgUserPlan(t, schemaResp.Schema, OrgUserModel{
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		Email:              types.StringValue("alice@example.com"),
+		FirstName:          types.StringValue("Alice"),
+		LastName:           types.StringValue("Liddell"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(false),
+		PreRegistration:    types.BoolValue(true),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var createState OrgUserModel
+	if diags := createResp.State.Get(context.Background(), &createState); diags.HasError() {
+		t.Fatalf("get create state: %#v", diags)
+	}
+	if createState.Password.ValueString() != "initial-secret" {
+		t.Fatalf("password after create = %q", createState.Password.ValueString())
+	}
+	if createState.Enabled.ValueBool() {
+		t.Fatalf("enabled should be false after post-create status update")
+	}
+
+	updatePlan := orgUserPlan(t, schemaResp.Schema, OrgUserModel{
+		Username:           types.StringValue("alice-updated"),
+		Password:           types.StringValue("initial-secret"),
+		Email:              types.StringValue("alice-updated@example.com"),
+		FirstName:          types.StringValue("Alice"),
+		LastName:           types.StringValue("Updated"),
+		ForceResetPassword: types.BoolValue(true),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(false),
+		ResetPassword:      types.StringValue("rotated-secret"),
+		ResetTrigger:       types.StringValue("rotation-1"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: createResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updateState OrgUserModel
+	if diags := updateResp.State.Get(context.Background(), &updateState); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if updateState.Password.ValueString() != "initial-secret" {
+		t.Fatalf("password after update = %q", updateState.Password.ValueString())
+	}
+	if updateState.ResetPassword.ValueString() != "rotated-secret" {
+		t.Fatalf("reset_password after update = %q", updateState.ResetPassword.ValueString())
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "status", "username", "read", "update", "status", "reset", "read", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["password"]; got != "initial-secret" {
+		t.Fatalf("create password = %#v", got)
+	}
+	if got := bodies[1]["enabled"]; got != false {
+		t.Fatalf("create status body = %#v", bodies[1])
+	}
+	if got := bodies[2]["username"]; got != "alice-updated" {
+		t.Fatalf("username body = %#v", bodies[2])
+	}
+	updateBody := bodies[3]
+	for _, field := range []string{"accountNonExpired", "accountNonLocked", "additionalInformation", "credentialsNonExpired", "displayName", "externalId", "preferredLanguage", "registrationCompleted", "source"} {
+		if _, ok := updateBody[field]; !ok {
+			t.Fatalf("merged update body missing preserved field %q: %#v", field, updateBody)
+		}
+	}
+	if updateBody["email"] != "alice-updated@example.com" || updateBody["lastName"] != "Updated" {
+		t.Fatalf("merged update body did not apply plan fields: %#v", updateBody)
+	}
+	if updateBody["forceResetPassword"] != true || updateBody["preRegistration"] != false {
+		t.Fatalf("merged update body did not apply plan booleans: %#v", updateBody)
+	}
+	if got := bodies[4]["enabled"]; got != true {
+		t.Fatalf("update status body = %#v", bodies[4])
+	}
+	if got := bodies[5]["password"]; got != "rotated-secret" {
+		t.Fatalf("reset password body = %#v", bodies[5])
+	}
+}
+
+func orgUserResponse(id string, body map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{
+		"id": id,
+	}
+	for key, value := range body {
+		result[key] = value
+	}
+	return result
+}
+
+func orgUserPlan(t *testing.T, schema resourceschema.Schema, model OrgUserModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
