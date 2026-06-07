@@ -1,10 +1,20 @@
 package analytics
 
 import (
+	"context"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestBuildAnalyticsParamsUsesExplicitValues(t *testing.T) {
@@ -81,4 +91,179 @@ func TestFormatAnalyticsResultReturnsMarshalError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected marshal error")
 	}
+}
+
+func TestAnalyticsReadFormatsRemoteResult(t *testing.T) {
+	var queryValues map[string]string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/analytics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		queryValues = map[string]string{}
+		for key, values := range r.URL.Query() {
+			if len(values) > 0 {
+				queryValues[key] = values[0]
+			}
+		}
+		_, _ = w.Write([]byte(`{"count":2,"type":"COUNT"}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &AnalyticsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := analyticsConfig(schemaResp.Schema, AnalyticsModel{
+		DomainID: types.StringValue("domain-123"),
+		Type:     types.StringValue("COUNT"),
+		Field:    types.StringValue("type"),
+		From:     types.Int64Value(1000),
+		To:       types.Int64Value(2000),
+		Interval: types.Int64Value(300),
+		Size:     types.Int64Value(5),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var state AnalyticsModel
+	if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	wantQuery := map[string]string{
+		"type":     "COUNT",
+		"field":    "type",
+		"from":     "1000",
+		"to":       "2000",
+		"interval": "300",
+		"size":     "5",
+	}
+	if !reflect.DeepEqual(queryValues, wantQuery) {
+		t.Fatalf("query = %#v, want %#v", queryValues, wantQuery)
+	}
+	want := "{\n  \"count\": 2,\n  \"type\": \"COUNT\"\n}"
+	if state.Result.ValueString() != want {
+		t.Fatalf("result = %q, want %q", state.Result.ValueString(), want)
+	}
+}
+
+func TestAnalyticsReadTreatsRemote500AsEmptyResult(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/analytics", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "no analytics yet", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &AnalyticsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := analyticsConfig(schemaResp.Schema, AnalyticsModel{
+		DomainID: types.StringValue("domain-123"),
+		Type:     types.StringValue("COUNT"),
+		From:     types.Int64Value(1000),
+		To:       types.Int64Value(2000),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var state AnalyticsModel
+	if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	if state.Result.ValueString() != "{}" {
+		t.Fatalf("result = %q, want {}", state.Result.ValueString())
+	}
+}
+
+func TestAnalyticsReadReportsNon500RemoteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/analytics", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "analytics failed", http.StatusBadRequest)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &AnalyticsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := analyticsConfig(schemaResp.Schema, AnalyticsModel{
+		DomainID: types.StringValue("domain-123"),
+		Type:     types.StringValue("COUNT"),
+		From:     types.Int64Value(1000),
+		To:       types.Int64Value(2000),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func analyticsConfig(schema datasourceschema.Schema, model AnalyticsModel) tfsdk.Config {
+	return tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id": tftypes.String,
+				"type":      tftypes.String,
+				"field":     tftypes.String,
+				"from":      tftypes.Number,
+				"to":        tftypes.Number,
+				"interval":  tftypes.Number,
+				"size":      tftypes.Number,
+				"result":    tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id": tftypes.NewValue(tftypes.String, model.DomainID.ValueString()),
+				"type":      tftypes.NewValue(tftypes.String, model.Type.ValueString()),
+				"field":     analyticsStringConfigValue(model.Field),
+				"from":      analyticsInt64ConfigValue(model.From),
+				"to":        analyticsInt64ConfigValue(model.To),
+				"interval":  analyticsInt64ConfigValue(model.Interval),
+				"size":      analyticsInt64ConfigValue(model.Size),
+				"result":    tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
+	}
+}
+
+func analyticsStringConfigValue(value types.String) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.String, nil)
+	}
+	return tftypes.NewValue(tftypes.String, value.ValueString())
+}
+
+func analyticsInt64ConfigValue(value types.Int64) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.Number, nil)
+	}
+	return tftypes.NewValue(tftypes.Number, big.NewFloat(float64(value.ValueInt64())))
 }
