@@ -1,9 +1,64 @@
 package domainflow
 
 import (
+	"context"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
+
+func TestDomainFlowMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewDomainFlowResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_domain_flow" {
+		t.Fatalf("type name = %q, want graviteeam_domain_flow", resp.TypeName)
+	}
+}
+
+func TestDomainFlowSchemaDeclaresRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewDomainFlowResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "flows"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if _, ok := resp.Schema.Attributes["application_id"]; ok {
+		t.Fatal("domain flow schema should not expose application_id")
+	}
+	if !strings.Contains(resp.Schema.Description, "GET/PUT") {
+		t.Fatalf("schema description = %q, want GET/PUT ownership hint", resp.Schema.Description)
+	}
+}
+
+func TestDomainFlowConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainFlowResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestDecodeFlowsParsesCompleteFlowList(t *testing.T) {
 	t.Parallel()
