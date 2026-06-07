@@ -23,11 +23,12 @@ resource "graviteeam_domain" "test" {
 }
 
 resource "graviteeam_user" "test" {
-  domain_id  = graviteeam_domain.test.id
-  username   = "test-group-member"
-  email      = "group-member@test.local"
-  first_name = "Test"
-  last_name  = "Member"
+  domain_id     = graviteeam_domain.test.id
+  username      = "test-group-member"
+  email         = "group-member@test.local"
+  first_name    = "Test"
+  last_name     = "Member"
+  display_name  = "Test Member"
 }
 
 resource "graviteeam_group" "test" {
@@ -46,9 +47,11 @@ resource "graviteeam_group_members" "test" {
 				),
 			},
 			{
-				ResourceName:      "graviteeam_group_members.test",
-				ImportState:       true,
-				ImportStateVerify: false, // set resource has no id attribute
+				ResourceName:                         "graviteeam_group_members.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "group_id",
+				ImportStateVerifyIgnore:              []string{"members"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs, ok := s.RootModule().Resources["graviteeam_group_members.test"]
 					if !ok {

@@ -33,9 +33,11 @@ resource "graviteeam_domain_flow" "test" {
 				),
 			},
 			{
-				ResourceName:      "graviteeam_domain_flow.test",
-				ImportState:       true,
-				ImportStateVerify: false,
+				ResourceName:                         "graviteeam_domain_flow.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "domain_id",
+				ImportStateVerifyIgnore:              []string{"flows"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs, ok := s.RootModule().Resources["graviteeam_domain_flow.test"]
 					if !ok {

@@ -23,6 +23,7 @@ TYPE_NAME_RE = re.compile(r'resp\.TypeName\s*=\s*req\.ProviderTypeName\s*\+\s*"_
 FACTORY_RE = re.compile(r"func\s+(New\w+)\s*\(")
 TEST_ACC_RE = re.compile(r"\bfunc\s+TestAcc\w+|resource\.Test\s*\(")
 IMPORT_RE = re.compile(r"\bImportState\s*:\s*true\b")
+DISABLED_IMPORT_VERIFY_RE = re.compile(r"\bImportStateVerify\s*:\s*false\b")
 IMPORT_CAPABILITY_RE = re.compile(r"ResourceWithImportState|func\s+\(r\s+\*\w+\)\s+ImportState\s*\(")
 
 # These resources are represented and have acceptance tests, but the stock
@@ -41,6 +42,7 @@ class TerraformType:
     import_capable: bool
     has_acceptance: bool
     has_import_test: bool
+    has_disabled_import_verify: bool
     local_compose_gap: str | None
 
 
@@ -78,6 +80,7 @@ def discover(root: Path, kind: str) -> list[TerraformType]:
                     import_capable=kind == "resource" and bool(IMPORT_CAPABILITY_RE.search(source)),
                     has_acceptance=bool(TEST_ACC_RE.search(tests)),
                     has_import_test=bool(IMPORT_RE.search(tests)),
+                    has_disabled_import_verify=bool(DISABLED_IMPORT_VERIFY_RE.search(tests)),
                     local_compose_gap=LOCAL_COMPOSE_PLUGIN_GAPS.get(tf_name) if LOCAL_COMPOSE_PLUGIN_GAPS.get(tf_name, "") in tests else None,
                 )
             )
@@ -104,6 +107,7 @@ def main() -> int:
 
     missing_acceptance = [item for item in all_types if not item.has_acceptance]
     missing_import = [item for item in resources if item.import_capable and not item.has_import_test]
+    disabled_import_verify = [item for item in resources if item.has_disabled_import_verify]
     no_import_capability = [item for item in resources if not item.import_capable]
     local_compose_gaps = [item for item in all_types if item.local_compose_gap]
 
@@ -114,6 +118,7 @@ def main() -> int:
     print(f"Types executable in stock local compose acceptance: {sum(1 for item in all_types if item.has_acceptance and not item.local_compose_gap)}")
     print(f"Import-capable resources: {sum(1 for item in resources if item.import_capable)}")
     print(f"Import-capable resources with import tests: {sum(1 for item in resources if item.import_capable and item.has_import_test)}")
+    print(f"Resources with disabled import verification: {len(disabled_import_verify)}")
 
     print_table(
         "Missing Acceptance Coverage",
@@ -124,6 +129,10 @@ def main() -> int:
         [f"- {item.name} ({item.package_dir.relative_to(ROOT)})" for item in missing_import],
     )
     print_table(
+        "Resources With Disabled Import Verification",
+        [f"- {item.name} ({item.package_dir.relative_to(ROOT)})" for item in disabled_import_verify],
+    )
+    print_table(
         "Resources Without Import Capability",
         [f"- {item.name} ({item.package_dir.relative_to(ROOT)})" for item in no_import_capability],
     )
@@ -132,7 +141,7 @@ def main() -> int:
         [f"- {item.name} ({item.package_dir.relative_to(ROOT)}): {item.local_compose_gap}" for item in local_compose_gaps],
     )
 
-    if args.check and (missing_acceptance or missing_import or no_import_capability):
+    if args.check and (missing_acceptance or missing_import or disabled_import_verify or no_import_capability):
         return 1
     return 0
 

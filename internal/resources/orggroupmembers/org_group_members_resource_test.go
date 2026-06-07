@@ -40,9 +40,11 @@ resource "graviteeam_org_group_members" "test" {
 				),
 			},
 			{
-				ResourceName:      "graviteeam_org_group_members.test",
-				ImportState:       true,
-				ImportStateVerify: false, // set resource has no id attribute
+				ResourceName:                         "graviteeam_org_group_members.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "group_id",
+				ImportStateVerifyIgnore:              []string{"members"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs, ok := s.RootModule().Resources["graviteeam_org_group_members.test"]
 					if !ok {

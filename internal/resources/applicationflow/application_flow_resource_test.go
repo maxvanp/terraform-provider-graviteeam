@@ -48,9 +48,11 @@ resource "graviteeam_application_flow" "test" {
 				),
 			},
 			{
-				ResourceName:      "graviteeam_application_flow.test",
-				ImportState:       true,
-				ImportStateVerify: false, // flows JSON may differ in formatting
+				ResourceName:                         "graviteeam_application_flow.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "application_id",
+				ImportStateVerifyIgnore:              []string{"flows"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs, ok := s.RootModule().Resources["graviteeam_application_flow.test"]
 					if !ok {
