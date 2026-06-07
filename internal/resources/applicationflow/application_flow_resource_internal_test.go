@@ -2,11 +2,19 @@ package applicationflow
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestApplicationFlowMetadata(t *testing.T) {
@@ -159,6 +167,98 @@ func TestFakeDiagnosticsRecordsApplicationSummaryAndDetail(t *testing.T) {
 	if !reflect.DeepEqual(diag.errors, want) {
 		t.Fatalf("errors = %#v, want %#v", diag.errors, want)
 	}
+}
+
+func TestApplicationFlowCRUDUsesCompleteFlowListPayloads(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+	var putBodies [][]interface{}
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/flows", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "login", "enabled": true}})
+		case http.MethodPut:
+			var body []interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode application flow PUT body: %v", err)
+			}
+			putBodies = append(putBodies, body)
+			_ = json.NewEncoder(w).Encode(body)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationFlowResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := applicationFlowPlan(t, schemaResp.Schema, ApplicationFlowModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Flows:         types.StringValue(`[{"id":"login","enabled":true}]`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var created ApplicationFlowModel
+	if diags := createResp.State.Get(context.Background(), &created); diags.HasError() {
+		t.Fatalf("get created state: %#v", diags)
+	}
+	if created.Flows.ValueString() != `[{"enabled":true,"id":"login"}]` {
+		t.Fatalf("created flows = %q", created.Flows.ValueString())
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := applicationFlowPlan(t, schemaResp.Schema, ApplicationFlowModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Flows:         types.StringValue(`[{"id":"mfa","enabled":false}]`),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan, State: readResp.State}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+	if len(putBodies) != 3 {
+		t.Fatalf("PUT bodies = %#v, want create, update, delete", putBodies)
+	}
+	if len(putBodies[0]) != 1 || len(putBodies[1]) != 1 || len(putBodies[2]) != 0 {
+		t.Fatalf("unexpected PUT bodies: %#v", putBodies)
+	}
+}
+
+func applicationFlowPlan(t *testing.T, schema resourceschema.Schema, model ApplicationFlowModel) tfsdk.Plan {
+	t.Helper()
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 type fakeDiagnostics struct {
