@@ -1,10 +1,21 @@
 package audits
 
 import (
+	"context"
+	"encoding/json"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestAuditSizeUsesDefaultAndExplicitValues(t *testing.T) {
@@ -75,4 +86,115 @@ func TestFormatAuditEntriesUsesNullWhenDataIsMissing(t *testing.T) {
 	if got != "null" {
 		t.Fatalf("json = %q, want null", got)
 	}
+}
+
+func TestAuditsReadUsesDefaultSizeAndFormatsEntries(t *testing.T) {
+	var rawQuery string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/audits", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		rawQuery = r.URL.RawQuery
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "audit-1", "type": "USER_CREATED"},
+			},
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &AuditsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := auditsConfig(t, schemaResp.Schema, AuditsModel{
+		DomainID: types.StringValue("domain-123"),
+		Size:     types.Int64Null(),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var state AuditsModel
+	if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	if rawQuery != "page=0&size=10" {
+		t.Fatalf("query = %q, want page=0&size=10", rawQuery)
+	}
+	if state.Size.ValueInt64() != 10 {
+		t.Fatalf("size = %d, want 10", state.Size.ValueInt64())
+	}
+	want := "[\n  {\n    \"id\": \"audit-1\",\n    \"type\": \"USER_CREATED\"\n  }\n]"
+	if state.Audits.ValueString() != want {
+		t.Fatalf("audits = %q, want %q", state.Audits.ValueString(), want)
+	}
+}
+
+func TestAuditsReadReportsRemoteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/audits", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "audits failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &AuditsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := auditsConfig(t, schemaResp.Schema, AuditsModel{
+		DomainID: types.StringValue("domain-123"),
+		Size:     types.Int64Value(5),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func auditsConfig(t *testing.T, schema datasourceschema.Schema, model AuditsModel) tfsdk.Config {
+	t.Helper()
+
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"domain_id": tftypes.String,
+			"size":      tftypes.Number,
+			"audits":    tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"domain_id": tftypes.NewValue(tftypes.String, model.DomainID.ValueString()),
+			"size":      int64ConfigValue(model.Size),
+			"audits":    tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	return tfsdk.Config{
+		Raw:    raw,
+		Schema: schema,
+	}
+}
+
+func int64ConfigValue(value types.Int64) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.Number, nil)
+	}
+	return tftypes.NewValue(tftypes.Number, big.NewFloat(float64(value.ValueInt64())))
 }

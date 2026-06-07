@@ -3,11 +3,19 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -113,6 +121,168 @@ func TestFormatJSONResultEscapesInvalidJSONText(t *testing.T) {
 	if decoded != "line\nbreak" {
 		t.Fatalf("decoded = %q, want original text", decoded)
 	}
+}
+
+func TestPluginsReadCatalogSchemaAndDocumentation(t *testing.T) {
+	var paths []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`[{"id":"otp"}]`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors/otp/schema", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`{"id":"schema"}`))
+	})
+	mux.HandleFunc("/management/platform/plugins/policies/groovy/documentation", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`# docs`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &PluginsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	cases := []struct {
+		name  string
+		model PluginsModel
+		want  string
+	}{
+		{
+			name: "catalog",
+			model: PluginsModel{
+				Category: types.StringValue("factors"),
+			},
+			want: "[\n  {\n    \"id\": \"otp\"\n  }\n]",
+		},
+		{
+			name: "schema",
+			model: PluginsModel{
+				Category: types.StringValue("factors"),
+				PluginID: types.StringValue("otp"),
+				Schema:   types.BoolValue(true),
+			},
+			want: "{\n  \"id\": \"schema\"\n}",
+		},
+		{
+			name: "documentation",
+			model: PluginsModel{
+				Category:      types.StringValue("policies"),
+				PluginID:      types.StringValue("groovy"),
+				Documentation: types.BoolValue(true),
+			},
+			want: "\"# docs\"",
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			config := pluginsConfig(t, schemaResp.Schema, tt.model)
+			readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+
+			dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+			}
+			var state PluginsModel
+			if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+				t.Fatalf("get state: %#v", diags)
+			}
+			if state.ResultJSON.ValueString() != tt.want {
+				t.Fatalf("result_json = %q, want %q", state.ResultJSON.ValueString(), tt.want)
+			}
+		})
+	}
+
+	wantPaths := []string{
+		"/management/platform/plugins/factors",
+		"/management/platform/plugins/factors/otp/schema",
+		"/management/platform/plugins/policies/groovy/documentation",
+	}
+	if strings.Join(paths, "\n") != strings.Join(wantPaths, "\n") {
+		t.Fatalf("paths = %#v, want %#v", paths, wantPaths)
+	}
+}
+
+func TestPluginsReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
+	dataSource := &PluginsDataSource{}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	cases := []PluginsModel{
+		{Category: types.StringValue("unknown")},
+		{Category: types.StringValue("factors"), Schema: types.BoolValue(true)},
+		{Category: types.StringValue("factors"), PluginID: types.StringValue("otp"), Schema: types.BoolValue(true), Documentation: types.BoolValue(true)},
+		{Category: types.StringValue("factors"), PluginID: types.StringValue("otp"), Documentation: types.BoolValue(true)},
+	}
+
+	for _, model := range cases {
+		config := pluginsConfig(t, schemaResp.Schema, model)
+		readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+		if !readResp.Diagnostics.HasError() {
+			t.Fatalf("expected diagnostics for model %#v", model)
+		}
+	}
+}
+
+func pluginsConfig(t *testing.T, schema datasourceschema.Schema, model PluginsModel) tfsdk.Config {
+	t.Helper()
+
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"category":      tftypes.String,
+			"plugin_id":     tftypes.String,
+			"schema":        tftypes.Bool,
+			"documentation": tftypes.Bool,
+			"result_json":   tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"category":      tftypes.NewValue(tftypes.String, model.Category.ValueString()),
+			"plugin_id":     pluginStringConfigValue(model.PluginID),
+			"schema":        pluginBoolConfigValue(model.Schema),
+			"documentation": pluginBoolConfigValue(model.Documentation),
+			"result_json":   tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	return tfsdk.Config{
+		Raw:    raw,
+		Schema: schema,
+	}
+}
+
+func pluginStringConfigValue(value types.String) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.String, nil)
+	}
+	return tftypes.NewValue(tftypes.String, value.ValueString())
+}
+
+func pluginBoolConfigValue(value types.Bool) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.Bool, nil)
+	}
+	return tftypes.NewValue(tftypes.Bool, value.ValueBool())
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
