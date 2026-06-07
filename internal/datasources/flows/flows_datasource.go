@@ -71,12 +71,20 @@ func (d *FlowsDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	flowsJSON, err := json.MarshalIndent(result, "", "  ")
+	flowsJSON, err := formatFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows", err.Error())
 		return
 	}
 
-	config.Flows = types.StringValue(string(flowsJSON))
+	config.Flows = types.StringValue(flowsJSON)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func formatFlows(value interface{}) (string, error) {
+	flowsJSON, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(flowsJSON), nil
 }
