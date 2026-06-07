@@ -113,11 +113,7 @@ func (r *OrgFormResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	result, err := r.client.CreateOrgForm(ctx, map[string]interface{}{
-		"template": plan.Template.ValueString(),
-		"enabled":  plan.Enabled.ValueBool(),
-		"content":  plan.Content.ValueString(),
-	})
+	result, err := r.client.CreateOrgForm(ctx, buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization form", err.Error())
 		return
@@ -169,13 +165,7 @@ func (r *OrgFormResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	body := map[string]interface{}{
-		"enabled": plan.Enabled.ValueBool(),
-		"content": plan.Content.ValueString(),
-	}
-	if assets, ok := current["assets"]; ok {
-		body["assets"] = assets
-	}
+	body := buildUpdateBody(plan, current)
 
 	result, err := r.client.UpdateOrgForm(ctx, plan.ID.ValueString(), body)
 	if err != nil {
@@ -217,6 +207,25 @@ func readIntoModel(model *OrgFormModel, data map[string]interface{}) {
 	if content, ok := data["content"].(string); ok {
 		model.Content = types.StringValue(content)
 	}
+}
+
+func buildCreateBody(plan OrgFormModel) map[string]interface{} {
+	return map[string]interface{}{
+		"template": plan.Template.ValueString(),
+		"enabled":  plan.Enabled.ValueBool(),
+		"content":  plan.Content.ValueString(),
+	}
+}
+
+func buildUpdateBody(plan OrgFormModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
+		"enabled": plan.Enabled.ValueBool(),
+		"content": plan.Content.ValueString(),
+	}
+	if assets, ok := current["assets"]; ok {
+		body["assets"] = assets
+	}
+	return body
 }
 
 type templateValidator struct{}
