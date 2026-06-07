@@ -136,9 +136,7 @@ func (r *DomainCertificateSettingsResource) Delete(ctx context.Context, req reso
 		return
 	}
 
-	_, err := r.client.UpdateDomainCertificateSettings(ctx, state.DomainID.ValueString(), map[string]interface{}{
-		"fallbackCertificate": nil,
-	})
+	_, err := r.client.UpdateDomainCertificateSettings(ctx, state.DomainID.ValueString(), buildDeleteBody())
 	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting domain certificate settings", err.Error())
 	}
@@ -150,14 +148,24 @@ func (r *DomainCertificateSettingsResource) ImportState(ctx context.Context, req
 }
 
 func (r *DomainCertificateSettingsResource) update(ctx context.Context, model *DomainCertificateSettingsModel, fallbackCertificateID string) error {
-	_, err := r.client.UpdateDomainCertificateSettings(ctx, model.DomainID.ValueString(), map[string]interface{}{
-		"fallbackCertificate": fallbackCertificateID,
-	})
+	_, err := r.client.UpdateDomainCertificateSettings(ctx, model.DomainID.ValueString(), buildBody(fallbackCertificateID))
 	if err != nil {
 		return err
 	}
 	model.ID = model.DomainID
 	return nil
+}
+
+func buildBody(fallbackCertificateID string) map[string]interface{} {
+	return map[string]interface{}{
+		"fallbackCertificate": fallbackCertificateID,
+	}
+}
+
+func buildDeleteBody() map[string]interface{} {
+	return map[string]interface{}{
+		"fallbackCertificate": nil,
+	}
 }
 
 func readFallbackCertificateID(domain map[string]interface{}) string {
