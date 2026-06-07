@@ -132,19 +132,7 @@ func (r *ReporterResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	// configuration may contain masked secrets for some reporter types — preserve from state
-	if enabled, ok := result["enabled"].(bool); ok {
-		state.Enabled = types.BoolValue(enabled)
-	}
-	if inherited, ok := result["inherited"].(bool); ok {
-		state.Inherited = types.BoolValue(inherited)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -195,6 +183,21 @@ func buildBody(plan ReporterModel, current map[string]interface{}) map[string]in
 		}
 	}
 	return body
+}
+
+func readIntoModel(model *ReporterModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if reporterType, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(reporterType)
+	}
+	if enabled, ok := data["enabled"].(bool); ok {
+		model.Enabled = types.BoolValue(enabled)
+	}
+	if inherited, ok := data["inherited"].(bool); ok {
+		model.Inherited = types.BoolValue(inherited)
+	}
 }
 
 func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

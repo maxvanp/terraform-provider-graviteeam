@@ -115,18 +115,7 @@ func (r *OrgReporterResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if reporterType, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(reporterType)
-	}
-	if enabled, ok := result["enabled"].(bool); ok {
-		state.Enabled = types.BoolValue(enabled)
-	}
-	if inherited, ok := result["inherited"].(bool); ok {
-		state.Inherited = types.BoolValue(inherited)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -192,4 +181,19 @@ func buildBody(model OrgReporterModel, current map[string]interface{}) map[strin
 		}
 	}
 	return body
+}
+
+func readIntoModel(model *OrgReporterModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if reporterType, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(reporterType)
+	}
+	if enabled, ok := data["enabled"].(bool); ok {
+		model.Enabled = types.BoolValue(enabled)
+	}
+	if inherited, ok := data["inherited"].(bool); ok {
+		model.Inherited = types.BoolValue(inherited)
+	}
 }
