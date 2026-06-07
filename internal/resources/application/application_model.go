@@ -12,6 +12,7 @@ type ApplicationModel struct {
 	Description           types.String                `tfsdk:"description"`
 	ClientID              types.String                `tfsdk:"client_id"`
 	ClientSecret          types.String                `tfsdk:"client_secret"`
+	MetadataJSON          types.String                `tfsdk:"metadata_json"`
 	SettingsJSON          types.String                `tfsdk:"settings_json"`
 	IdentityProviders     []types.String              `tfsdk:"identity_providers"`
 	IdentityProviderRules []IdentityProviderRuleModel `tfsdk:"identity_provider_rule"`

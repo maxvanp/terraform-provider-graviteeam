@@ -78,6 +78,10 @@ func (r *ApplicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"metadata_json": schema.StringAttribute{
+				Optional:    true,
+				Description: "JSON object for application metadata. Object values are sent to the Gravitee AM metadata payload.",
+			},
 			"settings_json": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
@@ -329,6 +333,14 @@ func (r *ApplicationResource) buildCreateBody(plan ApplicationModel) (map[string
 		body["description"] = plan.Description.ValueString()
 	}
 
+	metadata, metadataProvided, err := metadataJSONToAPI(plan.MetadataJSON)
+	if err != nil {
+		return nil, err
+	}
+	if metadataProvided {
+		body["metadata"] = metadata
+	}
+
 	redirectURIs, err := redirectURIsForCreate(plan)
 	if err != nil {
 		return nil, err
@@ -348,6 +360,14 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) (map[string
 
 	if !plan.Description.IsNull() {
 		body["description"] = plan.Description.ValueString()
+	}
+
+	metadata, metadataProvided, err := metadataJSONToAPI(plan.MetadataJSON)
+	if err != nil {
+		return nil, err
+	}
+	if metadataProvided {
+		body["metadata"] = metadata
 	}
 
 	// Identity providers - prefer identity_provider_rule blocks over simple list
@@ -625,6 +645,29 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 			}
 		}
 	}
+
+	if metadata, ok := data["metadata"].(map[string]interface{}); ok &&
+		(!model.MetadataJSON.IsNull() && !model.MetadataJSON.IsUnknown()) {
+		metadataJSON, err := json.Marshal(metadata)
+		if err == nil {
+			model.MetadataJSON = types.StringValue(string(metadataJSON))
+		}
+	}
+}
+
+func metadataJSONToAPI(value types.String) (map[string]interface{}, bool, error) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, false, nil
+	}
+
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(value.ValueString()), &metadata); err != nil {
+		return nil, false, fmt.Errorf("metadata_json must be a valid JSON object: %w", err)
+	}
+	if metadata == nil {
+		return nil, false, fmt.Errorf("metadata_json must be a valid JSON object")
+	}
+	return metadata, true, nil
 }
 
 func settingsJSONToAPI(value types.String) (map[string]interface{}, bool, error) {

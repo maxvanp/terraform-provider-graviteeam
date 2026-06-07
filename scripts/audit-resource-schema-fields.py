@@ -46,6 +46,25 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_application",
+        package_dir=ROOT / "internal" / "resources" / "application",
+        schema_name="PatchApplication",
+        api_to_tf={
+            "description": "description",
+            "factors": "factors",
+            "identityProviders": "identity_providers",
+            "metadata": "metadata_json",
+            "name": "name",
+            "settings": "settings_json",
+        },
+        intentionally_unmanaged={
+            "certificate": "application certificate assignment needs a dedicated ownership model before Terraform can safely update it",
+            "enabled": "application lifecycle activation is not currently modeled as Terraform-owned state",
+            "requiredPermissions": "API permission filtering metadata is not Terraform-owned application configuration",
+            "template": "application template inheritance is API-managed for existing applications",
+        },
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_auth_device_notifier",
         package_dir=ROOT / "internal" / "resources" / "authdevicenotifier",
         schema_name="UpdateAuthenticationDeviceNotifier",
@@ -439,6 +458,7 @@ AUDITS = [
 
 AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_alert_notifier", ROOT / "internal" / "resources" / "alertnotifier", "NewAlertNotifier"),
+    ResourceSchemaCandidate("graviteeam_application", ROOT / "internal" / "resources" / "application", "PatchApplication"),
     ResourceSchemaCandidate("graviteeam_auth_device_notifier", ROOT / "internal" / "resources" / "authdevicenotifier", "UpdateAuthenticationDeviceNotifier"),
     ResourceSchemaCandidate("graviteeam_authorization_engine", ROOT / "internal" / "resources" / "authorizationengine", "UpdateAuthorizationEngine"),
     ResourceSchemaCandidate("graviteeam_bot_detection", ROOT / "internal" / "resources" / "botdetection", "UpdateBotDetection"),

@@ -33,6 +33,12 @@ resource "graviteeam_application" "test" {
   name        = "Test Application"
   type        = "WEB"
   description = "Acceptance test application"
+  metadata_json = jsonencode({
+    tenant = {
+      id   = "tenant-a"
+      name = "Tenant A"
+    }
+  })
 
   oauth_settings {
     redirect_uris  = ["http://localhost:5000/auth"]
@@ -50,6 +56,7 @@ resource "graviteeam_application" "test" {
 					resource.TestCheckResourceAttr("graviteeam_application.test", "name", "Test Application"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "type", "WEB"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "description", "Acceptance test application"),
+					resource.TestCheckResourceAttr("graviteeam_application.test", "metadata_json", `{"tenant":{"id":"tenant-a","name":"Tenant A"}}`),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.#", "1"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.0", "http://localhost:5000/auth"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.grant_types.#", "2"),
@@ -69,7 +76,7 @@ resource "graviteeam_application" "test" {
 					}
 					return rs.Primary.Attributes["domain_id"] + "/" + rs.Primary.Attributes["id"], nil
 				},
-				ImportStateVerifyIgnore: []string{"client_secret"},
+				ImportStateVerifyIgnore: []string{"client_secret", "metadata_json"},
 			},
 			// Update: add mfa_settings and more redirect_uris
 			{
@@ -96,6 +103,15 @@ resource "graviteeam_application" "test" {
   name        = "Updated Test Application"
   type        = "BROWSER"
   description = "Updated acceptance test application"
+  metadata_json = jsonencode({
+    tenant = {
+      id   = "tenant-b"
+      name = "Tenant B"
+    }
+    owner = {
+      team = "iam"
+    }
+  })
 
   factors = [graviteeam_factor.totp.id]
 
@@ -133,6 +149,7 @@ resource "graviteeam_application" "test" {
 					resource.TestCheckResourceAttr("graviteeam_application.test", "name", "Updated Test Application"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "type", "BROWSER"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "description", "Updated acceptance test application"),
+					resource.TestCheckResourceAttr("graviteeam_application.test", "metadata_json", `{"owner":{"team":"iam"},"tenant":{"id":"tenant-b","name":"Tenant B"}}`),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.#", "2"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.redirect_uris.1", "http://localhost:5000/callback"),
 					resource.TestCheckResourceAttr("graviteeam_application.test", "oauth_settings.grant_types.#", "1"),

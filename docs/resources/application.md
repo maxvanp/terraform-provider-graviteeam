@@ -19,6 +19,16 @@ resource "graviteeam_application" "example" {
   type        = "WEB"
   description = "My Web Application"
 
+  metadata_json = jsonencode({
+    owner = {
+      team = "iam"
+    }
+    tenant = {
+      id   = "tenant-a"
+      name = "Tenant A"
+    }
+  })
+
   oauth_settings {
     redirect_uris                  = ["http://localhost:8080/callback"]
     post_logout_redirect_uris      = ["http://localhost:8080/"]
@@ -73,6 +83,7 @@ resource "graviteeam_application" "example" {
 - `factors` (List of String) List of MFA factor IDs to associate with the application
 - `identity_provider_rule` (Block List) Identity provider with selection rule for identifier-first login routing (see [below for nested schema](#nestedblock--identity_provider_rule))
 - `identity_providers` (List of String) List of identity provider IDs to associate with the application
+- `metadata_json` (String) JSON object for application metadata. Object values are sent to the Gravitee AM metadata payload.
 - `mfa_settings` (Block, Optional) MFA settings (see [below for nested schema](#nestedblock--mfa_settings))
 - `oauth_settings` (Block, Optional) OAuth2/OIDC settings (see [below for nested schema](#nestedblock--oauth_settings))
 - `settings_json` (String, Sensitive) JSON object for advanced application settings. The value is merged into the Gravitee AM settings payload; typed blocks such as oauth_settings and mfa_settings override matching keys.

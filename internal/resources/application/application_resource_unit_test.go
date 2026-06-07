@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -104,5 +105,102 @@ func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
 
 	if !reflect.DeepEqual(body["redirectUris"], []string{"https://example.com/callback"}) {
 		t.Fatalf("expected redirect URIs from settings_json, got %#v", body["redirectUris"])
+	}
+}
+
+func TestApplicationBuildBodiesIncludeMetadataJSON(t *testing.T) {
+	resource := &ApplicationResource{}
+	plan := ApplicationModel{
+		Name: types.StringValue("test-app"),
+		Type: types.StringValue("WEB"),
+		MetadataJSON: types.StringValue(`{
+			"tenant": {
+				"id": "tenant-a",
+				"name": "Tenant A"
+			}
+		}`),
+	}
+
+	createBody, err := resource.buildCreateBody(plan)
+	if err != nil {
+		t.Fatalf("expected no create error, got %v", err)
+	}
+	updateBody, err := resource.buildUpdateBody(plan)
+	if err != nil {
+		t.Fatalf("expected no update error, got %v", err)
+	}
+
+	for name, body := range map[string]map[string]interface{}{
+		"create": createBody,
+		"update": updateBody,
+	} {
+		metadata, ok := body["metadata"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected %s metadata map, got %#v", name, body["metadata"])
+		}
+		tenant, ok := metadata["tenant"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected %s tenant metadata object, got %#v", name, metadata["tenant"])
+		}
+		if tenant["id"] != "tenant-a" || tenant["name"] != "Tenant A" {
+			t.Fatalf("unexpected %s tenant metadata: %#v", name, tenant)
+		}
+	}
+}
+
+func TestApplicationBuildBodiesRejectInvalidMetadataJSON(t *testing.T) {
+	resource := &ApplicationResource{}
+	for _, metadataJSON := range []string{`[]`, `null`} {
+		plan := ApplicationModel{
+			Name:         types.StringValue("test-app"),
+			Type:         types.StringValue("WEB"),
+			MetadataJSON: types.StringValue(metadataJSON),
+		}
+
+		if _, err := resource.buildCreateBody(plan); err == nil {
+			t.Fatalf("expected create metadata_json %s to return an error", metadataJSON)
+		}
+		if _, err := resource.buildUpdateBody(plan); err == nil {
+			t.Fatalf("expected update metadata_json %s to return an error", metadataJSON)
+		}
+	}
+}
+
+func TestApplicationReadIntoModelPreservesUnownedMetadata(t *testing.T) {
+	resource := &ApplicationResource{}
+	model := &ApplicationModel{}
+
+	resource.readIntoModel(model, map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"tenant": map[string]interface{}{"id": "tenant-a"},
+		},
+	})
+
+	if !model.MetadataJSON.IsNull() {
+		t.Fatalf("expected metadata_json to remain null when not configured, got %s", model.MetadataJSON.ValueString())
+	}
+}
+
+func TestApplicationReadIntoModelReadsOwnedMetadata(t *testing.T) {
+	resource := &ApplicationResource{}
+	model := &ApplicationModel{
+		MetadataJSON: types.StringValue(`{"tenant":{"id":"old"}}`),
+	}
+
+	resource.readIntoModel(model, map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"tenant": map[string]interface{}{
+				"id":   "tenant-a",
+				"name": "Tenant A",
+			},
+		},
+	})
+
+	var metadata map[string]map[string]string
+	if err := json.Unmarshal([]byte(model.MetadataJSON.ValueString()), &metadata); err != nil {
+		t.Fatalf("expected metadata_json to be valid JSON, got %v", err)
+	}
+	if metadata["tenant"]["id"] != "tenant-a" || metadata["tenant"]["name"] != "Tenant A" {
+		t.Fatalf("unexpected metadata_json value: %#v", metadata)
 	}
 }
