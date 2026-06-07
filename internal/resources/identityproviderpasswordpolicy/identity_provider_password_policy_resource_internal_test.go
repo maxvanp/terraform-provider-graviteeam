@@ -104,6 +104,16 @@ func TestParseAssignmentImportID(t *testing.T) {
 	}
 }
 
+func TestAssignmentIDUsesDomainAndIdentityProvider(t *testing.T) {
+	t.Parallel()
+
+	got := assignmentID("domain-1", "idp-1")
+
+	if got.ValueString() != "domain-1/idp-1" {
+		t.Fatalf("assignment ID = %q, want domain-1/idp-1", got.ValueString())
+	}
+}
+
 func TestReadIntoModel(t *testing.T) {
 	t.Parallel()
 
