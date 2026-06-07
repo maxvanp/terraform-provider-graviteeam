@@ -2,11 +2,19 @@ package applicationsecret
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -134,6 +142,150 @@ func TestShouldRenew(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplicationSecretCRUDPreservesAndRenewsSecret(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var bodies []map[string]interface{}
+	var renewPaths []string
+	var deletePaths []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":         "secret-123",
+				"name":       body["name"],
+				"secret":     "clear-secret",
+				"settingsId": "settings-123",
+				"expiresAt":  "2026-06-07T12:00:00Z",
+			})
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"id":         "secret-123",
+					"name":       "client secret",
+					"settingsId": "settings-123",
+					"expiresAt":  "2026-06-07T12:00:00Z",
+				},
+			})
+		default:
+			t.Fatalf("unexpected application secret collection method %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123/_renew", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected renew method %s", r.Method)
+		}
+		renewPaths = append(renewPaths, r.URL.Path)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":         "secret-123",
+			"name":       "client secret",
+			"secret":     "renewed-secret",
+			"settingsId": "settings-123",
+			"expiresAt":  "2026-06-08T12:00:00Z",
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("unexpected application secret item method %s", r.Method)
+		}
+		deletePaths = append(deletePaths, r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationSecretResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := applicationSecretPlan(t, schemaResp.Schema, ApplicationSecretModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Name:          types.StringValue("client secret"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState ApplicationSecretModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := readState.Secret.ValueString(), "clear-secret"; got != want {
+		t.Fatalf("read secret = %q, want preserved %q", got, want)
+	}
+
+	updatePlan := applicationSecretPlan(t, schemaResp.Schema, ApplicationSecretModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Name:          types.StringValue("client secret"),
+		RenewTrigger:  types.StringValue("rotate-1"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updateState ApplicationSecretModel
+	if diags := updateResp.State.Get(context.Background(), &updateState); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if got, want := updateState.Secret.ValueString(), "renewed-secret"; got != want {
+		t.Fatalf("renewed secret = %q, want %q", got, want)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if want := []map[string]interface{}{{"name": "client secret"}}; !reflect.DeepEqual(bodies, want) {
+		t.Fatalf("bodies = %#v, want %#v", bodies, want)
+	}
+	if want := []string{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123/_renew"}; !reflect.DeepEqual(renewPaths, want) {
+		t.Fatalf("renew paths = %#v, want %#v", renewPaths, want)
+	}
+	if want := []string{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123"}; !reflect.DeepEqual(deletePaths, want) {
+		t.Fatalf("delete paths = %#v, want %#v", deletePaths, want)
+	}
+}
+
+func applicationSecretPlan(t *testing.T, schema resourceschema.Schema, model ApplicationSecretModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed, sensitive bool) {
