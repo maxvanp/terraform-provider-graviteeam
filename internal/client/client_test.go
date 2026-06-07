@@ -633,6 +633,216 @@ func TestPasswordPolicyOperations(t *testing.T) {
 	}
 }
 
+func TestOrgUserLifecycleOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create organization user body: %v", err)
+		}
+		if body["username"] != "org-user-name" {
+			t.Fatalf("unexpected create organization user body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-user-123", "username": "org-user-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-user-123", "username": "org-user-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update organization user body: %v", err)
+			}
+			if body["firstName"] != "Updated" {
+				t.Fatalf("unexpected update organization user body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-user-123", "firstName": "Updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update organization user status body: %v", err)
+		}
+		if body["enabled"] != false {
+			t.Fatalf("unexpected update organization user status body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-user-123", "enabled": false})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/username", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("expected PATCH, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update organization username body: %v", err)
+		}
+		if body["username"] != "org-user-renamed" {
+			t.Fatalf("unexpected update organization username body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-user-123", "username": "org-user-renamed"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateOrgUser(context.Background(), map[string]interface{}{"username": "org-user-name"})
+	if err != nil {
+		t.Fatalf("create organization user: %v", err)
+	}
+	if created["id"] != "org-user-123" {
+		t.Fatalf("unexpected created organization user: %#v", created)
+	}
+	got, err := c.GetOrgUser(context.Background(), "org-user-123")
+	if err != nil {
+		t.Fatalf("get organization user: %v", err)
+	}
+	if got["username"] != "org-user-name" {
+		t.Fatalf("unexpected organization user: %#v", got)
+	}
+	updated, err := c.UpdateOrgUser(context.Background(), "org-user-123", map[string]interface{}{"firstName": "Updated"})
+	if err != nil {
+		t.Fatalf("update organization user: %v", err)
+	}
+	if updated["firstName"] != "Updated" {
+		t.Fatalf("unexpected updated organization user: %#v", updated)
+	}
+	status, err := c.UpdateOrgUserStatus(context.Background(), "org-user-123", false)
+	if err != nil {
+		t.Fatalf("update organization user status: %v", err)
+	}
+	if status["enabled"] != false {
+		t.Fatalf("unexpected organization user status: %#v", status)
+	}
+	renamed, err := c.UpdateOrgUsername(context.Background(), "org-user-123", "org-user-renamed")
+	if err != nil {
+		t.Fatalf("update organization username: %v", err)
+	}
+	if renamed["username"] != "org-user-renamed" {
+		t.Fatalf("unexpected organization username: %#v", renamed)
+	}
+	if err := c.DeleteOrgUser(context.Background(), "org-user-123"); err != nil {
+		t.Fatalf("delete organization user: %v", err)
+	}
+}
+
+func TestOrgUserTokenOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/tokens", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"id": "token-1"},
+				{"id": "token-2"},
+			})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create organization user token body: %v", err)
+			}
+			if body["name"] != "token-name" {
+				t.Fatalf("unexpected create organization user token body: %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "token-3", "name": "token-name"})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/tokens/token-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	tokens, err := c.ListOrgUserTokens(context.Background(), "org-user-123")
+	if err != nil {
+		t.Fatalf("list organization user tokens: %v", err)
+	}
+	if len(tokens) != 2 || tokens[0]["id"] != "token-1" || tokens[1]["id"] != "token-2" {
+		t.Fatalf("unexpected organization user tokens: %#v", tokens)
+	}
+	created, err := c.CreateOrgUserToken(context.Background(), "org-user-123", map[string]interface{}{"name": "token-name"})
+	if err != nil {
+		t.Fatalf("create organization user token: %v", err)
+	}
+	if created["id"] != "token-3" {
+		t.Fatalf("unexpected created organization user token: %#v", created)
+	}
+	if err := c.DeleteOrgUserToken(context.Background(), "org-user-123", "token-3"); err != nil {
+		t.Fatalf("delete organization user token: %v", err)
+	}
+}
+
+func TestOrgMemberOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/members", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"memberships": []map[string]interface{}{
+					{"id": "member-1"},
+					{"id": "member-2"},
+				},
+			})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode add organization member body: %v", err)
+			}
+			if body["member"] != "user@example.com" {
+				t.Fatalf("unexpected add organization member body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "member-3"})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/members/member-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	members, err := c.ListOrgMembers(context.Background())
+	if err != nil {
+		t.Fatalf("list organization members: %v", err)
+	}
+	if len(members) != 2 || members[0]["id"] != "member-1" || members[1]["id"] != "member-2" {
+		t.Fatalf("unexpected organization members: %#v", members)
+	}
+	created, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"member": "user@example.com"})
+	if err != nil {
+		t.Fatalf("add organization member: %v", err)
+	}
+	if created["id"] != "member-3" {
+		t.Fatalf("unexpected organization member: %#v", created)
+	}
+	if err := c.DeleteOrgMember(context.Background(), "member-3"); err != nil {
+		t.Fatalf("delete organization member: %v", err)
+	}
+}
+
 func TestAccRotateCertificateLifecycle(t *testing.T) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("set TF_ACC=1 to run acceptance tests")
