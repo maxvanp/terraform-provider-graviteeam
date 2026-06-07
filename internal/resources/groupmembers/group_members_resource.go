@@ -110,11 +110,7 @@ func (r *GroupMembersResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	var members []types.String
-	for _, id := range memberIDs {
-		members = append(members, types.StringValue(id))
-	}
-	state.Members = members
+	readIntoModel(&state, memberIDs)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -135,7 +131,7 @@ func (r *GroupMembersResource) Update(ctx context.Context, req resource.UpdateRe
 	domainID := plan.DomainID.ValueString()
 	groupID := plan.GroupID.ValueString()
 
-	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Members), stringValues(state.Members))
+	toAdd, toRemove := diffMembers(plan.Members, state.Members)
 
 	for _, memberID := range toRemove {
 		err := r.client.RemoveGroupMember(ctx, domainID, groupID, memberID)
@@ -177,14 +173,34 @@ func (r *GroupMembersResource) Delete(ctx context.Context, req resource.DeleteRe
 
 func (r *GroupMembersResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/group_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	domainID, groupID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/group_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), groupID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func readIntoModel(model *GroupMembersModel, memberIDs []string) {
+	members := make([]types.String, 0, len(memberIDs))
+	for _, id := range memberIDs {
+		members = append(members, types.StringValue(id))
+	}
+	model.Members = members
+}
+
+func diffMembers(desired, current []types.String) (toAdd []string, toRemove []string) {
+	return reconcile.DiffStrings(stringValues(desired), stringValues(current))
 }
 
 func stringValues(values []types.String) []string {
