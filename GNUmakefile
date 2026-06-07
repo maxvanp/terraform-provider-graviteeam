@@ -34,6 +34,9 @@ coverage-audit:
 	./scripts/audit-special-resource-coverage.py --check
 	./scripts/probe-local-compose-plugins.py --check
 
+local-gap-probe:
+	./scripts/probe-openapi-gaps.py --check
+
 lint:
 	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
 	$(GOLANGCI_LINT) fmt --diff
@@ -50,4 +53,4 @@ docs:
 docs-check: docs
 	@git diff --exit-code docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit lint test testacc docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc docs docs-check

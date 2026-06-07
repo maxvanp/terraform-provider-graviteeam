@@ -32,6 +32,12 @@ When the local docker-compose stack is running, verify plugin availability with:
 ./scripts/probe-local-compose-plugins.py --check
 ```
 
+When the local docker-compose stack is running, verify documented writable non-resource gap behavior with:
+
+```bash
+make local-gap-probe
+```
+
 Current automated audit summary:
 
 | Item | Value |
@@ -253,7 +259,7 @@ After changing API coverage, run:
 ./scripts/audit-openapi-coverage.py
 ./scripts/audit-openapi-coverage.py --check-doc
 ./scripts/audit-test-coverage.py --check
-./scripts/probe-openapi-gaps.py
+./scripts/probe-openapi-gaps.py --check
 go test ./...
 go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
 go tool cover -func=/tmp/graviteeam-coverage.out

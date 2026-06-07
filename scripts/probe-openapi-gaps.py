@@ -31,6 +31,37 @@ class Result:
     detail: str
 
 
+@dataclass(frozen=True)
+class Expectation:
+    label: str
+    family: str
+    method: str
+    path_contains: str
+    statuses: set[int | None]
+    outcomes: set[str]
+
+
+EXPECTED_RESULTS = [
+    Expectation("form preview", "domain:forms/preview", "POST", "/forms/preview", {200}, {"reachable"}),
+    Expectation("password policy evaluation", "domain:password-policies/evaluate", "POST", "/evaluate", {200}, {"reachable"}),
+    Expectation("domain user bulk create", "domain:users/bulk", "POST", "/users/bulk", {200}, {"reachable"}),
+    Expectation("user consents read", "domain:users/consents", "GET", "/consents", {200}, {"reachable"}),
+    Expectation("user credentials read", "domain:users/credentials", "GET", "/credentials", {200}, {"reachable"}),
+    Expectation("user devices read", "domain:users/devices", "GET", "/devices", {200}, {"reachable"}),
+    Expectation("user factors read", "domain:users/factors", "GET", "/factors", {200}, {"reachable"}),
+    Expectation("user identities read", "domain:users/identities", "GET", "/identities", {200}, {"reachable"}),
+    Expectation("user consents delete by client", "domain:users/consents", "DELETE", "clientId=gap-probe-missing", {204}, {"reachable"}),
+    Expectation("user consents revoke by id", "domain:users/consents", "DELETE", "/consents/gap-probe-missing", {404}, {"not-fixtureable"}),
+    Expectation("user credentials delete", "domain:users/credentials", "DELETE", "/credentials/gap-probe-missing", {404}, {"not-fixtureable"}),
+    Expectation("user devices delete", "domain:users/devices", "DELETE", "/devices/gap-probe-missing", {404}, {"not-fixtureable"}),
+    Expectation("user factors delete", "domain:users/factors", "DELETE", "/factors/gap-probe-missing", {204}, {"reachable"}),
+    Expectation("user identities delete", "domain:users/identities", "DELETE", "/identities/gap-probe-missing", {204}, {"reachable"}),
+    Expectation("org user bulk create", "org:users/bulk", "POST", "/users/bulk", {200}, {"reachable"}),
+    Expectation("current user newsletter subscribe", "self:newsletter/_subscribe", "POST", "/newsletter/_subscribe", {200}, {"reachable"}),
+    Expectation("current user notification acknowledge", "self:notifications/acknowledge", "POST", "/notifications/gap-probe-missing/acknowledge", {204}, {"reachable"}),
+]
+
+
 class AMProbe:
     def __init__(self, base_url: str, client_id: str, client_secret: str, org_id: str, env_id: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -189,6 +220,40 @@ def add_result(results: list[Result], family: str, method: str, path: str, statu
     results.append(Result(family, method, path, status, outcome, detail))
 
 
+def check_results(results: list[Result]) -> list[str]:
+    failures: list[str] = []
+    matched_results: set[int] = set()
+
+    for expectation in EXPECTED_RESULTS:
+        matches = [
+            (index, result)
+            for index, result in enumerate(results)
+            if result.family == expectation.family
+            and result.method == expectation.method
+            and expectation.path_contains in result.path
+        ]
+        if not matches:
+            failures.append(f"{expectation.label}: missing result for {expectation.family} {expectation.method}")
+            continue
+        if len(matches) > 1:
+            failures.append(f"{expectation.label}: matched {len(matches)} probe results")
+            continue
+
+        index, result = matches[0]
+        matched_results.add(index)
+        if result.status not in expectation.statuses:
+            statuses = ", ".join("timeout" if status is None else str(status) for status in sorted(expectation.statuses, key=lambda item: -1 if item is None else item))
+            failures.append(f"{expectation.label}: expected status {statuses}, got {result.status}")
+        if result.outcome not in expectation.outcomes:
+            failures.append(f"{expectation.label}: expected outcome {', '.join(sorted(expectation.outcomes))}, got {result.outcome}")
+
+    for index, result in enumerate(results):
+        if index not in matched_results:
+            failures.append(f"unexpected result: {result.family} {result.method} {result.path} status={result.status} outcome={result.outcome}")
+
+    return failures
+
+
 def run_probe(probe: AMProbe) -> list[Result]:
     results: list[Result] = []
     suffix = str(int(time.time()))
@@ -330,6 +395,7 @@ def main() -> int:
     parser.add_argument("--org-id", default="DEFAULT")
     parser.add_argument("--env-id", default="DEFAULT")
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    parser.add_argument("--check", action="store_true", help="fail if local gap behavior differs from documented expectations")
     args = parser.parse_args()
 
     probe = AMProbe(args.api_url, args.client_id, args.client_secret, args.org_id, args.env_id)
@@ -344,6 +410,13 @@ def main() -> int:
         print("# Gravitee AM OpenAPI Gap Probe")
         for result in results:
             print(f"- {result.family} {result.method} {result.path}: {result.outcome} status={result.status} {result.detail}")
+
+    failures = check_results(results) if args.check else []
+    if failures:
+        print("\n## Failures")
+        for failure in failures:
+            print(f"- {failure}")
+        return 1
 
     return 0 if all(result.outcome in {"reachable", "not-fixtureable", "timeout"} for result in results) else 1
 
