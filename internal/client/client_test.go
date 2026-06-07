@@ -633,6 +633,187 @@ func TestPasswordPolicyOperations(t *testing.T) {
 	}
 }
 
+func TestScopeRoleGroupCRUDOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/scopes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create scope body: %v", err)
+		}
+		if body["key"] != "scope-key" {
+			t.Fatalf("unexpected create scope body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "scope-123", "key": "scope-key"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/scopes/scope-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "scope-123", "key": "scope-key"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update scope body: %v", err)
+			}
+			if body["name"] != "scope-updated" {
+				t.Fatalf("unexpected update scope body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "scope-123", "name": "scope-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/roles", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create role body: %v", err)
+		}
+		if body["name"] != "role-name" {
+			t.Fatalf("unexpected create role body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "role-123", "name": "role-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/roles/role-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "role-123", "name": "role-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update role body: %v", err)
+			}
+			if body["name"] != "role-updated" {
+				t.Fatalf("unexpected update role body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "role-123", "name": "role-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create group body: %v", err)
+		}
+		if body["name"] != "group-name" {
+			t.Fatalf("unexpected create group body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "group-123", "name": "group-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "group-123", "name": "group-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update group body: %v", err)
+			}
+			if body["name"] != "group-updated" {
+				t.Fatalf("unexpected update group body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "group-123", "name": "group-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	scope, err := c.CreateScope(context.Background(), "domain-123", map[string]interface{}{"key": "scope-key"})
+	if err != nil {
+		t.Fatalf("create scope: %v", err)
+	}
+	if scope["id"] != "scope-123" {
+		t.Fatalf("unexpected created scope: %#v", scope)
+	}
+	scope, err = c.GetScope(context.Background(), "domain-123", "scope-123")
+	if err != nil {
+		t.Fatalf("get scope: %v", err)
+	}
+	if scope["key"] != "scope-key" {
+		t.Fatalf("unexpected scope: %#v", scope)
+	}
+	scope, err = c.UpdateScope(context.Background(), "domain-123", "scope-123", map[string]interface{}{"name": "scope-updated"})
+	if err != nil {
+		t.Fatalf("update scope: %v", err)
+	}
+	if scope["name"] != "scope-updated" {
+		t.Fatalf("unexpected updated scope: %#v", scope)
+	}
+	if err := c.DeleteScope(context.Background(), "domain-123", "scope-123"); err != nil {
+		t.Fatalf("delete scope: %v", err)
+	}
+
+	role, err := c.CreateRole(context.Background(), "domain-123", map[string]interface{}{"name": "role-name"})
+	if err != nil {
+		t.Fatalf("create role: %v", err)
+	}
+	if role["id"] != "role-123" {
+		t.Fatalf("unexpected created role: %#v", role)
+	}
+	role, err = c.GetRole(context.Background(), "domain-123", "role-123")
+	if err != nil {
+		t.Fatalf("get role: %v", err)
+	}
+	if role["name"] != "role-name" {
+		t.Fatalf("unexpected role: %#v", role)
+	}
+	role, err = c.UpdateRole(context.Background(), "domain-123", "role-123", map[string]interface{}{"name": "role-updated"})
+	if err != nil {
+		t.Fatalf("update role: %v", err)
+	}
+	if role["name"] != "role-updated" {
+		t.Fatalf("unexpected updated role: %#v", role)
+	}
+	if err := c.DeleteRole(context.Background(), "domain-123", "role-123"); err != nil {
+		t.Fatalf("delete role: %v", err)
+	}
+
+	group, err := c.CreateGroup(context.Background(), "domain-123", map[string]interface{}{"name": "group-name"})
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	if group["id"] != "group-123" {
+		t.Fatalf("unexpected created group: %#v", group)
+	}
+	group, err = c.GetGroup(context.Background(), "domain-123", "group-123")
+	if err != nil {
+		t.Fatalf("get group: %v", err)
+	}
+	if group["name"] != "group-name" {
+		t.Fatalf("unexpected group: %#v", group)
+	}
+	group, err = c.UpdateGroup(context.Background(), "domain-123", "group-123", map[string]interface{}{"name": "group-updated"})
+	if err != nil {
+		t.Fatalf("update group: %v", err)
+	}
+	if group["name"] != "group-updated" {
+		t.Fatalf("unexpected updated group: %#v", group)
+	}
+	if err := c.DeleteGroup(context.Background(), "domain-123", "group-123"); err != nil {
+		t.Fatalf("delete group: %v", err)
+	}
+}
+
 func TestOrgUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/users", func(w http.ResponseWriter, r *http.Request) {
