@@ -120,6 +120,39 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_domain",
+        package_dir=ROOT / "internal" / "resources" / "domain",
+        schema_name="PatchDomain",
+        api_to_tf={
+            "dataPlaneId": "data_plane_id",
+            "description": "description",
+            "enabled": "enabled",
+            "loginSettings": "login_settings",
+            "name": "name",
+            "oidc": "oidc",
+            "tags": "settings_json",
+        },
+        intentionally_unmanaged={
+            "accountSettings": "advanced domain patch section managed through settings_json",
+            "alertEnabled": "advanced domain patch field managed through settings_json",
+            "certificateSettings": "domain certificate fallback has a dedicated resource",
+            "corsSettings": "advanced domain patch section managed through settings_json",
+            "master": "API-managed domain role flag",
+            "passwordSettings": "advanced domain patch section managed through settings_json",
+            "path": "API-managed domain path",
+            "requiredPermissions": "API permission filtering metadata is not Terraform-owned domain configuration",
+            "saml": "advanced domain patch section managed through settings_json",
+            "scim": "advanced domain patch section managed through settings_json",
+            "secretSettings": "advanced domain patch section managed through settings_json",
+            "selfServiceAccountManagementSettings": "advanced domain patch section managed through settings_json",
+            "tokenExchangeSettings": "advanced domain patch section managed through settings_json",
+            "uma": "advanced domain patch section managed through settings_json",
+            "vhostMode": "advanced domain patch field managed through settings_json",
+            "vhosts": "advanced domain patch section managed through settings_json",
+            "webAuthnSettings": "advanced domain patch section managed through settings_json",
+        },
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_factor",
         package_dir=ROOT / "internal" / "resources" / "factor",
         schema_name="UpdateFactor",
@@ -454,6 +487,22 @@ AUDITS = [
             "updatedAt": "server-managed timestamp",
         },
     ),
+    ResourceSchemaAudit(
+        name="graviteeam_theme",
+        package_dir=ROOT / "internal" / "resources" / "theme",
+        schema_name="NewTheme",
+        api_to_tf={
+            "css": "css",
+            "faviconUrl": "favicon_url",
+            "logoUrl": "logo_url",
+            "logoWidth": "logo_width",
+            "primaryButtonColorHex": "primary_button_color_hex",
+            "primaryTextColorHex": "primary_text_color_hex",
+            "secondaryButtonColorHex": "secondary_button_color_hex",
+            "secondaryTextColorHex": "secondary_text_color_hex",
+        },
+        intentionally_unmanaged={},
+    ),
 ]
 
 AUDIT_CANDIDATES = [
@@ -464,6 +513,7 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_bot_detection", ROOT / "internal" / "resources" / "botdetection", "UpdateBotDetection"),
     ResourceSchemaCandidate("graviteeam_certificate", ROOT / "internal" / "resources" / "certificate", "UpdateCertificate"),
     ResourceSchemaCandidate("graviteeam_device_identifier", ROOT / "internal" / "resources" / "deviceidentifier", "UpdateDeviceIdentifier"),
+    ResourceSchemaCandidate("graviteeam_domain", ROOT / "internal" / "resources" / "domain", "PatchDomain"),
     ResourceSchemaCandidate("graviteeam_email_template", ROOT / "internal" / "resources" / "emailtemplate", "UpdateEmail"),
     ResourceSchemaCandidate("graviteeam_extension_grant", ROOT / "internal" / "resources" / "extensiongrant", "UpdateExtensionGrant"),
     ResourceSchemaCandidate("graviteeam_factor", ROOT / "internal" / "resources" / "factor", "UpdateFactor"),
@@ -486,6 +536,7 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_role", ROOT / "internal" / "resources" / "role", "UpdateRole"),
     ResourceSchemaCandidate("graviteeam_scope", ROOT / "internal" / "resources" / "scope", "UpdateScope"),
     ResourceSchemaCandidate("graviteeam_service_resource", ROOT / "internal" / "resources" / "serviceresource", "UpdateServiceResource"),
+    ResourceSchemaCandidate("graviteeam_theme", ROOT / "internal" / "resources" / "theme", "NewTheme"),
     ResourceSchemaCandidate("graviteeam_user", ROOT / "internal" / "resources" / "user", "UpdateUser"),
 ]
 

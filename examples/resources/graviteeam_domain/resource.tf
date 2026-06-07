@@ -3,6 +3,15 @@ resource "graviteeam_domain" "example" {
   description = "My Security Domain"
   enabled     = true
 
+  settings_json = jsonencode({
+    tags = ["iam", "production"]
+    oidc = {
+      securityProfileSettings = {
+        enablePlainFapi = true
+      }
+    }
+  })
+
   oidc {
     allow_localhost_redirect_uri   = true
     allow_http_scheme_redirect_uri = true

@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_form_preview` and `graviteeam_password_policy_evaluation` read-like POST data sources
 - Add policy plugin documentation support to `graviteeam_plugins`
 - Add `metadata_json` support to `graviteeam_application`
+- Add `settings_json` support to `graviteeam_domain` for advanced domain patch settings
 
 ### Changed
 

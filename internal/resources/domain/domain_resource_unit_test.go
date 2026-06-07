@@ -13,6 +13,17 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 		Description: types.StringValue("managed description"),
 		Enabled:     types.BoolValue(true),
 		DataPlaneID: types.StringValue("default"),
+		SettingsJSON: types.StringValue(`{
+			"tags": ["team-b"],
+			"saml": {
+				"enabled": false
+			},
+			"oidc": {
+				"securityProfileSettings": {
+					"enablePlainFapi": true
+				}
+			}
+		}`),
 		OIDC: &OIDCModel{
 			AllowLocalhostRedirectURI:        types.BoolValue(true),
 			AllowHTTPSchemeRedirectURI:       types.BoolValue(false),
@@ -51,7 +62,10 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 		},
 	}
 
-	body := resource.buildUpdateBody(plan, current)
+	body, err := resource.buildUpdateBody(plan, current)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	if body["id"] != nil {
 		t.Fatalf("id should not be sent in PatchDomain body: %#v", body["id"])
@@ -65,11 +79,11 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 	if body["enabled"] != true {
 		t.Fatalf("expected managed enabled to override current value, got %#v", body["enabled"])
 	}
-	if _, ok := body["tags"]; !ok {
-		t.Fatal("expected tags to be preserved")
+	if tags, ok := body["tags"].([]interface{}); !ok || tags[0] != "team-b" {
+		t.Fatalf("expected settings_json tags to override current tags, got %#v", body["tags"])
 	}
-	if _, ok := body["saml"]; !ok {
-		t.Fatal("expected saml settings to be preserved")
+	if saml, ok := body["saml"].(map[string]interface{}); !ok || saml["enabled"] != false {
+		t.Fatalf("expected settings_json saml settings to override current saml, got %#v", body["saml"])
 	}
 	if _, ok := body["uma"]; !ok {
 		t.Fatal("expected uma settings to be preserved")
@@ -78,6 +92,10 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 	oidc := body["oidc"].(map[string]interface{})
 	if oidc["preservedOIDCSetting"] != true {
 		t.Fatalf("expected unrelated oidc settings to be preserved, got %#v", oidc)
+	}
+	securityProfile := oidc["securityProfileSettings"].(map[string]interface{})
+	if securityProfile["enablePlainFapi"] != true {
+		t.Fatalf("expected settings_json oidc settings to be merged, got %#v", securityProfile)
 	}
 	crs := oidc["clientRegistrationSettings"].(map[string]interface{})
 	if crs["allowLocalhostRedirectUri"] != true || crs["allowWildCardRedirectUri"] != true {
@@ -93,5 +111,21 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 	}
 	if loginSettings["preservedLoginSetting"] != true {
 		t.Fatalf("expected unrelated login setting to be preserved, got %#v", loginSettings)
+	}
+}
+
+func TestDomainBuildUpdateBodyRejectsInvalidSettingsJSON(t *testing.T) {
+	resource := &DomainResource{}
+	for _, settingsJSON := range []string{`[]`, `null`} {
+		plan := DomainModel{
+			Name:         types.StringValue("test-domain"),
+			Enabled:      types.BoolValue(false),
+			DataPlaneID:  types.StringValue("default"),
+			SettingsJSON: types.StringValue(settingsJSON),
+		}
+
+		if _, err := resource.buildUpdateBody(plan, nil); err == nil {
+			t.Fatalf("expected settings_json %s to return an error", settingsJSON)
+		}
 	}
 }

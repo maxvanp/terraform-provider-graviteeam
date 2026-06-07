@@ -11,6 +11,7 @@ type DomainModel struct {
 	Enabled       types.Bool          `tfsdk:"enabled"`
 	DataPlaneID   types.String        `tfsdk:"data_plane_id"`
 	DefaultIdpID  types.String        `tfsdk:"default_idp_id"`
+	SettingsJSON  types.String        `tfsdk:"settings_json"`
 	OIDC          *OIDCModel          `tfsdk:"oidc"`
 	LoginSettings *LoginSettingsModel `tfsdk:"login_settings"`
 }
