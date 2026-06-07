@@ -2,11 +2,19 @@ package alerttrigger
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -181,4 +189,146 @@ func TestReadIntoModelSetsEmptyNotifierSetWhenAPIOmitsValues(t *testing.T) {
 	if !model.AlertNotifierIDs.IsNull() && len(model.AlertNotifierIDs.Elements()) != 0 {
 		t.Fatalf("alert notifier ids = %#v, want empty set", model.AlertNotifierIDs)
 	}
+}
+
+func TestAlertTriggerCRUDPatchesOnlyManagedTrigger(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var patchBodies [][]map[string]interface{}
+	var methods []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/triggers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPatch:
+			var body []map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch body: %v", err)
+			}
+			methods = append(methods, "patch")
+			patchBodies = append(patchBodies, body)
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"type":           body[0]["type"],
+					"enabled":        body[0]["enabled"],
+					"alertNotifiers": body[0]["alertNotifiers"],
+				},
+				{
+					"type":           "RISK_ASSESSMENT",
+					"enabled":        true,
+					"alertNotifiers": []string{"other-notifier"},
+				},
+			})
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"type":           "TOO_MANY_LOGIN_FAILURES",
+					"enabled":        true,
+					"alertNotifiers": []string{"notifier-1", "notifier-2"},
+				},
+				{
+					"type":           "RISK_ASSESSMENT",
+					"enabled":        true,
+					"alertNotifiers": []string{"other-notifier"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected alert trigger method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &AlertTriggerResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := alertTriggerPlan(t, schemaResp.Schema, AlertTriggerModel{
+		DomainID:         types.StringValue("domain-123"),
+		Type:             types.StringValue("too_many_login_failures"),
+		Enabled:          types.BoolValue(true),
+		AlertNotifierIDs: stringSet(t, []string{"notifier-1", "notifier-2"}),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := alertTriggerPlan(t, schemaResp.Schema, AlertTriggerModel{
+		DomainID:         types.StringValue("domain-123"),
+		Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+		Enabled:          types.BoolValue(false),
+		AlertNotifierIDs: stringSet(t, []string{"notifier-3"}),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if got, want := len(patchBodies), 3; got != want {
+		t.Fatalf("patch count = %d, want %d", got, want)
+	}
+	if got, want := patchBodies[0][0]["alertNotifiers"], []interface{}{"notifier-1", "notifier-2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("create notifiers = %#v, want %#v", got, want)
+	}
+	if got, want := patchBodies[1][0]["alertNotifiers"], []interface{}{"notifier-3"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("update notifiers = %#v, want %#v", got, want)
+	}
+	if got, want := patchBodies[2][0]["enabled"], false; got != want {
+		t.Fatalf("delete enabled = %#v, want %#v", got, want)
+	}
+	if got, want := patchBodies[2][0]["alertNotifiers"], []interface{}{}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("delete notifiers = %#v, want empty %#v", got, want)
+	}
+	if want := []string{"patch", "read", "patch", "patch"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("methods = %#v, want %#v", methods, want)
+	}
+}
+
+func alertTriggerPlan(t *testing.T, schema resourceschema.Schema, model AlertTriggerModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
+}
+
+func stringSet(t *testing.T, values []string) types.Set {
+	t.Helper()
+
+	elements := make([]attr.Value, 0, len(values))
+	for _, value := range values {
+		elements = append(elements, types.StringValue(value))
+	}
+	setValue, diags := types.SetValue(types.StringType, elements)
+	if diags.HasError() {
+		t.Fatalf("set value diagnostics: %#v", diags)
+	}
+	return setValue
 }
