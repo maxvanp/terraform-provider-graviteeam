@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -59,6 +60,11 @@ func (r *OrgIdentityProviderResource) Schema(_ context.Context, _ resource.Schem
 				Sensitive:   true,
 				Description: "JSON configuration for the identity provider (use jsonencode())",
 			},
+			"mappers": schema.MapAttribute{
+				Optional:    true,
+				Description: "Attribute mapping (e.g. username = \"uid\", email = \"mail\")",
+				ElementType: types.StringType,
+			},
 			"domain_whitelist": schema.ListAttribute{
 				Optional:    true,
 				Description: "List of whitelisted email domains",
@@ -69,6 +75,16 @@ func (r *OrgIdentityProviderResource) Schema(_ context.Context, _ resource.Schem
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 				Description: "Whether this is an external/social identity provider",
+			},
+			"group_mapper": schema.MapAttribute{
+				Optional:    true,
+				Description: "Group mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of organization group IDs",
+				ElementType: types.ListType{ElemType: types.StringType},
+			},
+			"role_mapper": schema.MapAttribute{
+				Optional:    true,
+				Description: "Role mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of organization role IDs",
+				ElementType: types.ListType{ElemType: types.StringType},
 			},
 		},
 	}
@@ -116,6 +132,19 @@ func (r *OrgIdentityProviderResource) Create(ctx context.Context, req resource.C
 
 	plan.ID = types.StringValue(result["id"].(string))
 
+	needsUpdate := len(plan.Mappers) > 0 ||
+		(!plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown()) ||
+		(!plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown())
+
+	if needsUpdate {
+		updateBody := buildUpdateBody(plan, nil)
+		result, err = r.client.UpdateOrgIdentityProvider(ctx, plan.ID.ValueString(), updateBody)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating organization identity provider after creation", err.Error())
+			return
+		}
+	}
+
 	// Preserve configuration from plan (API may mask sensitive values)
 	savedConfig := plan.Configuration
 	readIntoModel(&plan, result)
@@ -158,21 +187,7 @@ func (r *OrgIdentityProviderResource) Update(ctx context.Context, req resource.U
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
-
-	if plan.DomainWhitelist != nil {
-		wl := make([]string, len(plan.DomainWhitelist))
-		for i, d := range plan.DomainWhitelist {
-			wl[i] = d.ValueString()
-		}
-		body["domainWhitelist"] = wl
-	} else if state.DomainWhitelist != nil {
-		body["domainWhitelist"] = []string{}
-	}
+	body := buildUpdateBody(plan, &state)
 
 	result, err := r.client.UpdateOrgIdentityProvider(ctx, plan.ID.ValueString(), body)
 	if err != nil {
@@ -228,6 +243,18 @@ func readIntoModel(model *OrgIdentityProviderModel, data map[string]interface{})
 		}
 	}
 
+	// Mappers
+	if mappers, ok := data["mappers"].(map[string]interface{}); ok && len(mappers) > 0 {
+		model.Mappers = make(map[string]types.String, len(mappers))
+		for k, v := range mappers {
+			if s, ok := v.(string); ok {
+				model.Mappers[k] = types.StringValue(s)
+			}
+		}
+	} else {
+		model.Mappers = nil
+	}
+
 	// Domain whitelist
 	if wl, ok := data["domainWhitelist"].([]interface{}); ok && len(wl) > 0 {
 		model.DomainWhitelist = make([]types.String, len(wl))
@@ -239,4 +266,98 @@ func readIntoModel(model *OrgIdentityProviderModel, data map[string]interface{})
 	} else {
 		model.DomainWhitelist = nil
 	}
+
+	listType := types.ListType{ElemType: types.StringType}
+	model.GroupMapper = readAPIConditionMapper(data, "groupMapper", listType)
+	model.RoleMapper = readAPIConditionMapper(data, "roleMapper", listType)
+}
+
+func buildUpdateBody(plan OrgIdentityProviderModel, state *OrgIdentityProviderModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+	}
+
+	if len(plan.Mappers) > 0 {
+		mappers := make(map[string]string, len(plan.Mappers))
+		for k, v := range plan.Mappers {
+			mappers[k] = v.ValueString()
+		}
+		body["mappers"] = mappers
+	} else if state != nil && len(state.Mappers) > 0 {
+		body["mappers"] = map[string]string{}
+	}
+
+	if plan.DomainWhitelist != nil {
+		wl := make([]string, len(plan.DomainWhitelist))
+		for i, d := range plan.DomainWhitelist {
+			wl[i] = d.ValueString()
+		}
+		body["domainWhitelist"] = wl
+	} else if state != nil && state.DomainWhitelist != nil {
+		body["domainWhitelist"] = []string{}
+	}
+
+	if !plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown() {
+		body["groupMapper"] = invertConditionMapperToAPI(plan.GroupMapper)
+	} else if state != nil && !state.GroupMapper.IsNull() && !state.GroupMapper.IsUnknown() {
+		body["groupMapper"] = map[string][]string{}
+	}
+
+	if !plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown() {
+		body["roleMapper"] = invertConditionMapperToAPI(plan.RoleMapper)
+	} else if state != nil && !state.RoleMapper.IsNull() && !state.RoleMapper.IsUnknown() {
+		body["roleMapper"] = map[string][]string{}
+	}
+
+	return body
+}
+
+func invertConditionMapperToAPI(tfMap types.Map) map[string][]string {
+	apiMapper := make(map[string][]string)
+	for condition, v := range tfMap.Elements() {
+		listVal, ok := v.(types.List)
+		if !ok {
+			continue
+		}
+		for _, elem := range listVal.Elements() {
+			if s, ok := elem.(types.String); ok {
+				id := s.ValueString()
+				apiMapper[id] = append(apiMapper[id], condition)
+			}
+		}
+	}
+	return apiMapper
+}
+
+func readAPIConditionMapper(data map[string]interface{}, key string, listType types.ListType) types.Map {
+	mapper, ok := data[key].(map[string]interface{})
+	if !ok || len(mapper) == 0 {
+		return types.MapNull(listType)
+	}
+
+	inverted := make(map[string][]string)
+	for id, v := range mapper {
+		if conditions, ok := v.([]interface{}); ok {
+			for _, c := range conditions {
+				if cond, ok := c.(string); ok {
+					inverted[cond] = append(inverted[cond], id)
+				}
+			}
+		}
+	}
+
+	elems := make(map[string]attr.Value, len(inverted))
+	for condition, ids := range inverted {
+		values := make([]attr.Value, len(ids))
+		for i, id := range ids {
+			values[i] = types.StringValue(id)
+		}
+		listVal, _ := types.ListValue(types.StringType, values)
+		elems[condition] = listVal
+	}
+
+	result, _ := types.MapValue(listType, elems)
+	return result
 }

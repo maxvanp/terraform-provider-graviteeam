@@ -13,12 +13,40 @@ Manages a Gravitee AM organization-level identity provider
 ## Example Usage
 
 ```terraform
+resource "graviteeam_org_group" "example" {
+  name        = "Org Admins"
+  description = "Organization administrators from the external identity provider"
+}
+
+resource "graviteeam_org_role" "example" {
+  name            = "Org Admin Role"
+  description     = "Role mapped from the external identity provider"
+  assignable_type = "ORGANIZATION"
+}
+
 resource "graviteeam_org_identity_provider" "example" {
   name = "Org Inline IDP"
   type = "inline-am-idp"
   configuration = jsonencode({
     users = []
   })
+
+  mappers = {
+    "email"    = "email"
+    "username" = "username"
+  }
+
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('org-admins')}" = [
+      graviteeam_org_group.example.id
+    ]
+  }
+
+  role_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('org-admin-role')}" = [
+      graviteeam_org_role.example.id
+    ]
+  }
 }
 ```
 
@@ -35,6 +63,9 @@ resource "graviteeam_org_identity_provider" "example" {
 
 - `domain_whitelist` (List of String) List of whitelisted email domains
 - `external` (Boolean) Whether this is an external/social identity provider
+- `group_mapper` (Map of List of String) Group mapping rules: key is an EL condition (e.g. "{true}"), value is a list of organization group IDs
+- `mappers` (Map of String) Attribute mapping (e.g. username = "uid", email = "mail")
+- `role_mapper` (Map of List of String) Role mapping rules: key is an EL condition (e.g. "{true}"), value is a list of organization role IDs
 
 ### Read-Only
 
