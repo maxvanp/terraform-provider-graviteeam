@@ -226,6 +226,82 @@ func TestDomainCertificateSettingsCRUDPreservesSingleFieldOwnership(t *testing.T
 	}
 }
 
+func TestDomainCertificateSettingsReadRemovesMissingDomainOrFallbackAndDeleteIgnores404(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       map[string]interface{}
+	}{
+		{
+			name:       "missing domain",
+			statusCode: http.StatusNotFound,
+		},
+		{
+			name:       "missing fallback",
+			statusCode: http.StatusOK,
+			body:       map[string]interface{}{"id": "domain-123", "certificateSettings": map[string]interface{}{}},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("domain method = %s, want GET", r.Method)
+				}
+				if tt.statusCode != http.StatusOK {
+					http.Error(w, "not found", tt.statusCode)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(tt.body)
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificate-settings", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("certificate settings method = %s, want PUT", r.Method)
+				}
+				http.Error(w, "not found", http.StatusNotFound)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &DomainCertificateSettingsResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := tfsdk.State{Schema: schemaResp.Schema}
+			if diags := state.Set(context.Background(), &DomainCertificateSettingsModel{
+				ID:                    types.StringValue("domain-123"),
+				DomainID:              types.StringValue("domain-123"),
+				FallbackCertificateID: types.StringValue("cert-123"),
+			}); diags.HasError() {
+				t.Fatalf("set state: %#v", diags)
+			}
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+			}
+			if !readResp.State.Raw.IsNull() {
+				t.Fatalf("expected missing certificate settings to remove state, got %#v", readResp.State.Raw)
+			}
+
+			deleteResp := &resource.DeleteResponse{}
+			resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+			if deleteResp.Diagnostics.HasError() {
+				t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+			}
+		})
+	}
+}
+
 func domainCertificateSettingsPlan(t *testing.T, schema resourceschema.Schema, model DomainCertificateSettingsModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}

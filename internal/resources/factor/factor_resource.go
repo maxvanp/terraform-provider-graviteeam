@@ -137,6 +137,10 @@ func (r *FactorResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	result, err := r.client.GetFactor(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading factor", err.Error())
 		return
 	}
@@ -188,6 +192,9 @@ func (r *FactorResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	err := r.client.DeleteFactor(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting factor", err.Error())
 	}
 }

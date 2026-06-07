@@ -119,6 +119,10 @@ func (r *GeneratedCertificateResource) Read(ctx context.Context, req resource.Re
 
 	result, err := r.client.GetCertificate(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading generated certificate", err.Error())
 		return
 	}
@@ -138,6 +142,9 @@ func (r *GeneratedCertificateResource) Delete(ctx context.Context, req resource.
 	}
 
 	if err := r.client.DeleteCertificate(ctx, state.DomainID.ValueString(), state.ID.ValueString()); err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting generated certificate", err.Error())
 	}
 }
