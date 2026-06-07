@@ -1,11 +1,73 @@
 package usercertificatecredential
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewUserCertificateCredentialResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_user_certificate_credential"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewUserCertificateCredentialResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "user_id", "certificate_pem"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{
+		"id",
+		"certificate_thumbprint",
+		"certificate_subject_dn",
+		"certificate_serial_number",
+		"certificate_issuer_dn",
+		"certificate_expires_at",
+		"username",
+	} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&UserCertificateCredentialResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()

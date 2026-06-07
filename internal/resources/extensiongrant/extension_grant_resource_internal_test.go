@@ -1,11 +1,74 @@
 package extensiongrant
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewExtensionGrantResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_extension_grant"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewExtensionGrantResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name", "type", "grant_type", "configuration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{"identity_provider", "create_user", "user_exists"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() {
+			t.Fatalf("attribute %q should be optional", name)
+		}
+	}
+	for _, name := range []string{"id", "create_user", "user_exists"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ExtensionGrantResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildUpdateBodyIncludesIdentityProviderWhenPlanned(t *testing.T) {
 	t.Parallel()

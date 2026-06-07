@@ -1,12 +1,54 @@
 package orgsettings
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgSettingsResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_org_settings"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgSettingsResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["id"]; attr == nil || !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+	if attr := resp.Schema.Attributes["identities"]; attr == nil || !attr.IsOptional() || !attr.IsComputed() {
+		t.Fatalf("identities should be optional+computed")
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgSettingsResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildPatchBodyIncludesIdentities(t *testing.T) {
 	t.Parallel()
