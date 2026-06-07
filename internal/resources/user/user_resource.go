@@ -154,6 +154,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	plan.ID = types.StringValue(result["id"].(string))
+	desiredLocked := plan.Locked.ValueBool()
 	if !plan.DisplayName.IsNull() && !plan.DisplayName.IsUnknown() {
 		current, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
 		if err != nil {
@@ -167,6 +168,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 			return
 		}
 		r.readIntoModel(&plan, result)
+		plan.Locked = types.BoolValue(desiredLocked)
 	}
 	if plan.Locked.ValueBool() {
 		if err := r.client.LockUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString()); err != nil {
