@@ -1,11 +1,61 @@
 package deviceidentifier
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestDeviceIdentifierMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewDeviceIdentifierResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_device_identifier" {
+		t.Fatalf("type name = %q, want graviteeam_device_identifier", resp.TypeName)
+	}
+}
+
+func TestDeviceIdentifierSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewDeviceIdentifierResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name", "type", "configuration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["id"]; !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+}
+
+func TestDeviceIdentifierConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DeviceIdentifierResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestParseImportID(t *testing.T) {
 	t.Parallel()

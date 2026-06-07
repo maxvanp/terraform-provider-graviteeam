@@ -1,11 +1,61 @@
 package authdevicenotifier
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestAuthDeviceNotifierMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewAuthDeviceNotifierResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_auth_device_notifier" {
+		t.Fatalf("type name = %q, want graviteeam_auth_device_notifier", resp.TypeName)
+	}
+}
+
+func TestAuthDeviceNotifierSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewAuthDeviceNotifierResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name", "type", "configuration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["id"]; !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+}
+
+func TestAuthDeviceNotifierConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AuthDeviceNotifierResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestParseImportID(t *testing.T) {
 	t.Parallel()

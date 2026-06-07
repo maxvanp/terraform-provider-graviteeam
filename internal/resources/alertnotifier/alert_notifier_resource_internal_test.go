@@ -1,12 +1,67 @@
 package alertnotifier
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+func TestAlertNotifierMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewAlertNotifierResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_alert_notifier" {
+		t.Fatalf("type name = %q, want graviteeam_alert_notifier", resp.TypeName)
+	}
+}
+
+func TestAlertNotifierSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewAlertNotifierResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name", "type", "configuration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["enabled"]; !attr.IsOptional() || !attr.IsComputed() {
+		t.Fatalf("enabled should be optional+computed, got optional=%t computed=%t", attr.IsOptional(), attr.IsComputed())
+	}
+	if attr := resp.Schema.Attributes["id"]; !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+}
+
+func TestAlertNotifierConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AlertNotifierResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
 func TestBuildCreateBodyIncludesImmutableAndMutableFields(t *testing.T) {
+	t.Parallel()
+
 	model := AlertNotifierModel{
 		Name:          types.StringValue("webhook"),
 		Type:          types.StringValue("webhook-notifier"),
@@ -31,6 +86,8 @@ func TestBuildCreateBodyIncludesImmutableAndMutableFields(t *testing.T) {
 }
 
 func TestBuildPatchBodyOmitsImmutableType(t *testing.T) {
+	t.Parallel()
+
 	model := AlertNotifierModel{
 		Name:          types.StringValue("webhook"),
 		Type:          types.StringValue("webhook-notifier"),
@@ -55,6 +112,8 @@ func TestBuildPatchBodyOmitsImmutableType(t *testing.T) {
 }
 
 func TestReadIntoModelPreservesConfiguration(t *testing.T) {
+	t.Parallel()
+
 	model := AlertNotifierModel{
 		Name:          types.StringValue("old"),
 		Type:          types.StringValue("webhook-notifier"),
