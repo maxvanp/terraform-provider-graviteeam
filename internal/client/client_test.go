@@ -109,6 +109,37 @@ func TestGetDomain_NotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateDomain_Success(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode body: %v", err)
+		}
+		if body["name"] != "updated-domain" {
+			t.Errorf("expected updated-domain body, got %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":   "domain-123",
+			"name": "updated-domain",
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	result, err := c.UpdateDomain(context.Background(), "domain-123", map[string]interface{}{"name": "updated-domain"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["name"] != "updated-domain" {
+		t.Errorf("expected updated-domain, got %v", result["name"])
+	}
+}
+
 func TestDeleteDomain_Success(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +246,156 @@ func TestResetOrgUserPassword_Success(t *testing.T) {
 	c := newTestClient(server)
 	if err := c.ResetOrgUserPassword(context.Background(), "user-123", "SecurePass123!"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFactorCRUDOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create factor body: %v", err)
+		}
+		if body["name"] != "factor-name" {
+			t.Fatalf("unexpected create factor body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "factor-123", "name": "factor-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors/factor-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "factor-123", "name": "factor-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update factor body: %v", err)
+			}
+			if body["name"] != "factor-updated" {
+				t.Fatalf("unexpected update factor body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "factor-123", "name": "factor-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateFactor(context.Background(), "domain-123", map[string]interface{}{"name": "factor-name"})
+	if err != nil {
+		t.Fatalf("create factor: %v", err)
+	}
+	if created["id"] != "factor-123" {
+		t.Fatalf("unexpected created factor: %#v", created)
+	}
+	got, err := c.GetFactor(context.Background(), "domain-123", "factor-123")
+	if err != nil {
+		t.Fatalf("get factor: %v", err)
+	}
+	if got["name"] != "factor-name" {
+		t.Fatalf("unexpected factor: %#v", got)
+	}
+	updated, err := c.UpdateFactor(context.Background(), "domain-123", "factor-123", map[string]interface{}{"name": "factor-updated"})
+	if err != nil {
+		t.Fatalf("update factor: %v", err)
+	}
+	if updated["name"] != "factor-updated" {
+		t.Fatalf("unexpected updated factor: %#v", updated)
+	}
+	if err := c.DeleteFactor(context.Background(), "domain-123", "factor-123"); err != nil {
+		t.Fatalf("delete factor: %v", err)
+	}
+}
+
+func TestApplicationCRUDAndTypeOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create application body: %v", err)
+		}
+		if body["name"] != "app-name" {
+			t.Fatalf("unexpected create application body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-123", "name": "app-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-123", "name": "app-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update application body: %v", err)
+			}
+			if body["name"] != "app-updated" {
+				t.Fatalf("unexpected update application body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-123", "name": "app-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/type", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update application type body: %v", err)
+		}
+		if body["type"] != "SERVICE" {
+			t.Fatalf("unexpected update application type body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-123", "type": "SERVICE"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateApplication(context.Background(), "domain-123", map[string]interface{}{"name": "app-name"})
+	if err != nil {
+		t.Fatalf("create application: %v", err)
+	}
+	if created["id"] != "app-123" {
+		t.Fatalf("unexpected created application: %#v", created)
+	}
+	got, err := c.GetApplication(context.Background(), "domain-123", "app-123")
+	if err != nil {
+		t.Fatalf("get application: %v", err)
+	}
+	if got["name"] != "app-name" {
+		t.Fatalf("unexpected application: %#v", got)
+	}
+	updated, err := c.UpdateApplication(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "app-updated"})
+	if err != nil {
+		t.Fatalf("update application: %v", err)
+	}
+	if updated["name"] != "app-updated" {
+		t.Fatalf("unexpected updated application: %#v", updated)
+	}
+	typed, err := c.UpdateApplicationType(context.Background(), "domain-123", "app-123", "SERVICE")
+	if err != nil {
+		t.Fatalf("update application type: %v", err)
+	}
+	if typed["type"] != "SERVICE" {
+		t.Fatalf("unexpected updated application type: %#v", typed)
+	}
+	if err := c.DeleteApplication(context.Background(), "domain-123", "app-123"); err != nil {
+		t.Fatalf("delete application: %v", err)
 	}
 }
 
