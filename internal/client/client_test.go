@@ -1349,6 +1349,161 @@ func TestOrganizationScopedCRUDOperations(t *testing.T) {
 	}
 }
 
+func TestReadOnlyMetadataAndManagementOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/audits", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Query().Get("page") != "2" || r.URL.Query().Get("size") != "50" {
+			t.Fatalf("unexpected audits request: %s %s", r.Method, r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []map[string]interface{}{{"id": "audit-1"}}, "totalCount": 1})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/entrypoints", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET entrypoints, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`[{"id":"entrypoint-1"}]`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET platform plugin category, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`[{"id":"otp"}]`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors/otp%20factor/schema", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET platform plugin schema, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"id":"schema"}`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors/otp%20factor/documentation", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET platform plugin documentation, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`# docs`))
+	})
+	mux.HandleFunc("/management/platform", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET platform metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"platform"}`))
+	})
+	mux.HandleFunc("/management/user/profile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET self metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"self"}`))
+	})
+	mux.HandleFunc("/management/raw", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST raw management request, got %s", r.Method)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Fatalf("expected JSON content type, got %s", r.Header.Get("Content-Type"))
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode raw management body: %v", err)
+		}
+		if body["name"] != "raw" {
+			t.Fatalf("unexpected raw management body: %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/environment-metadata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET environment metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"environment"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/domain-metadata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET domain metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"domain"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/permissions", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET permissions metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"permissions"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/admin", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET admin metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"admin"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/org-metadata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET organization metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"organization"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain%201/applications/app%201/application-metadata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET application metadata, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"scope":"application"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/analytics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Query().Get("from") != "2026-01-01" || r.URL.Query().Get("to") != "2026-01-31" {
+			t.Fatalf("unexpected analytics request: %s %s", r.Method, r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"total": float64(42)})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	audits, err := c.ListAudits(context.Background(), "domain-123", 2, 50)
+	if err != nil || audits["totalCount"] != float64(1) {
+		t.Fatalf("list audits: audits=%#v err=%v", audits, err)
+	}
+	if data, err := c.ListEntrypoints(context.Background(), "domain-123"); err != nil || string(data) != `[{"id":"entrypoint-1"}]` {
+		t.Fatalf("list entrypoints: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetPlatformPlugin(context.Background(), "factors", "", false); err != nil || string(data) != `[{"id":"otp"}]` {
+		t.Fatalf("get platform plugin category: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetPlatformPlugin(context.Background(), "factors", "otp factor", true); err != nil || string(data) != `{"id":"schema"}` {
+		t.Fatalf("get platform plugin schema: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetPlatformPluginDocumentation(context.Background(), "factors", "otp factor"); err != nil || string(data) != `# docs` {
+		t.Fatalf("get platform plugin documentation: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetPlatformMetadata(context.Background(), "platform"); err != nil || string(data) != `{"scope":"platform"}` {
+		t.Fatalf("get platform metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetSelfMetadata(context.Background(), "/profile"); err != nil || string(data) != `{"scope":"self"}` {
+		t.Fatalf("get self metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.DoManagementRequest(context.Background(), http.MethodPost, "/management/raw", map[string]interface{}{"name": "raw"}); err != nil || string(data) != `{"ok":true}` {
+		t.Fatalf("raw management request: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetEnvironmentMetadata(context.Background(), "environment-metadata"); err != nil || string(data) != `{"scope":"environment"}` {
+		t.Fatalf("get environment metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetDomainMetadata(context.Background(), "domain-123", "domain-metadata"); err != nil || string(data) != `{"scope":"domain"}` {
+		t.Fatalf("get domain metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetPermissionsMetadata(context.Background(), "/permissions"); err != nil || string(data) != `{"scope":"permissions"}` {
+		t.Fatalf("get permissions metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetAdminMetadata(context.Background(), "/admin"); err != nil || string(data) != `{"scope":"admin"}` {
+		t.Fatalf("get admin metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetOrganizationMetadata(context.Background(), "/org-metadata"); err != nil || string(data) != `{"scope":"organization"}` {
+		t.Fatalf("get organization metadata: data=%q err=%v", string(data), err)
+	}
+	if data, err := c.GetApplicationMetadata(context.Background(), "domain 1", "app 1", "/application-metadata"); err != nil || string(data) != `{"scope":"application"}` {
+		t.Fatalf("get application metadata: data=%q err=%v", string(data), err)
+	}
+	analytics, err := c.GetAnalytics(context.Background(), "domain-123", map[string]string{"from": "2026-01-01", "to": "2026-01-31"})
+	if err != nil || analytics["total"] != float64(42) {
+		t.Fatalf("get analytics: analytics=%#v err=%v", analytics, err)
+	}
+}
+
 func TestUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
