@@ -102,7 +102,8 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 	plan.ID = types.StringValue(result["id"].(string))
 
 	// Create-then-update: if permissions are set, do an update
-	if len(plan.Permissions) > 0 {
+	hasPermissions := len(plan.Permissions) > 0
+	if hasPermissions {
 		updateBody := map[string]interface{}{
 			"name": plan.Name.ValueString(),
 		}
@@ -124,7 +125,7 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 
 	readIntoModel(&plan, result)
 	// Re-read to get the full state after potential update
-	if len(plan.Permissions) > 0 {
+	if hasPermissions {
 		readResult, err := r.client.GetOrgRole(ctx, plan.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error reading organization role after creation", err.Error())

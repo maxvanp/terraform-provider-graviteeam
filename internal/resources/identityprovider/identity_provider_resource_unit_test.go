@@ -2,13 +2,20 @@ package identityprovider
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -124,6 +131,216 @@ func TestBuildUpdateBodyClearsRemovedIdentityProviderCollections(t *testing.T) {
 	if !reflect.DeepEqual(got["roleMapper"], map[string][]string{}) {
 		t.Fatalf("roleMapper = %#v, want empty map", got["roleMapper"])
 	}
+}
+
+func TestIdentityProviderCRUDPreservesMaskedConfigAndConditionMappers(t *testing.T) {
+	listType := types.ListType{ElemType: types.StringType}
+	groupMapper, diags := types.MapValue(listType, map[string]attr.Value{
+		"{#profile['groups'].contains('external-admins')}": mustStringList(t, "group-admin"),
+	})
+	if diags.HasError() {
+		t.Fatalf("build group mapper: %#v", diags)
+	}
+	roleMapper, diags := types.MapValue(listType, map[string]attr.Value{
+		"{#profile['groups'].contains('external-admins')}": mustStringList(t, "role-admin"),
+	})
+	if diags.HasError() {
+		t.Fatalf("build role mapper: %#v", diags)
+	}
+
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":            "idp-123",
+			"name":          body["name"],
+			"type":          body["type"],
+			"external":      body["external"],
+			"configuration": map[string]interface{}{"password": "*****"},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":              "idp-123",
+				"name":            "inline",
+				"type":            "inline-am-idp",
+				"external":        false,
+				"configuration":   map[string]interface{}{"password": "*****"},
+				"mappers":         map[string]interface{}{"email": "mail"},
+				"domainWhitelist": []interface{}{"example.com"},
+				"groupMapper": map[string]interface{}{
+					"group-admin": []interface{}{"{#profile['groups'].contains('external-admins')}"},
+				},
+				"roleMapper": map[string]interface{}{
+					"role-admin": []interface{}{"{#profile['groups'].contains('external-admins')}"},
+				},
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":              "idp-123",
+				"name":            body["name"],
+				"type":            body["type"],
+				"external":        false,
+				"configuration":   map[string]interface{}{"password": "*****"},
+				"mappers":         body["mappers"],
+				"domainWhitelist": body["domainWhitelist"],
+				"passwordPolicy":  body["passwordPolicy"],
+				"groupMapper":     body["groupMapper"],
+				"roleMapper":      body["roleMapper"],
+			})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &IdentityProviderResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := identityProviderPlan(t, schemaResp.Schema, IdentityProviderModel{
+		DomainID:         types.StringValue("domain-123"),
+		Name:             types.StringValue("inline"),
+		Type:             types.StringValue("inline-am-idp"),
+		External:         types.BoolValue(false),
+		Configuration:    types.StringValue(`{"password":"plain"}`),
+		Mappers:          map[string]types.String{"email": types.StringValue("mail")},
+		DomainWhitelist:  []types.String{types.StringValue("example.com")},
+		PasswordPolicyID: types.StringValue("password-policy-1"),
+		GroupMapper:      groupMapper,
+		RoleMapper:       roleMapper,
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var createState IdentityProviderModel
+	if diags := createResp.State.Get(context.Background(), &createState); diags.HasError() {
+		t.Fatalf("get create state: %#v", diags)
+	}
+	if got := createState.Configuration.ValueString(); got != `{"password":"plain"}` {
+		t.Fatalf("configuration after masked create = %q", got)
+	}
+	if got := createState.PasswordPolicyID.ValueString(); got != "password-policy-1" {
+		t.Fatalf("password policy after create = %q", got)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState IdentityProviderModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got := readState.Configuration.ValueString(); got != `{"password":"plain"}` {
+		t.Fatalf("configuration after masked read = %q", got)
+	}
+
+	updatePlan := identityProviderPlan(t, schemaResp.Schema, IdentityProviderModel{
+		DomainID:         types.StringValue("domain-123"),
+		Name:             types.StringValue("inline-updated"),
+		Type:             types.StringValue("inline-am-idp"),
+		External:         types.BoolValue(false),
+		Configuration:    types.StringValue(`{"password":"updated"}`),
+		PasswordPolicyID: types.StringNull(),
+		GroupMapper:      types.MapNull(listType),
+		RoleMapper:       types.MapNull(listType),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "update", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if len(bodies) != 3 {
+		t.Fatalf("bodies = %#v, want create, post-create update, update", bodies)
+	}
+	if _, ok := bodies[0]["mappers"]; ok {
+		t.Fatalf("create body should not include mappers: %#v", bodies[0])
+	}
+	if got := bodies[1]["groupMapper"]; !reflect.DeepEqual(got, map[string]interface{}{
+		"group-admin": []interface{}{"{#profile['groups'].contains('external-admins')}"},
+	}) {
+		t.Fatalf("post-create groupMapper = %#v", got)
+	}
+	if got := bodies[1]["roleMapper"]; !reflect.DeepEqual(got, map[string]interface{}{
+		"role-admin": []interface{}{"{#profile['groups'].contains('external-admins')}"},
+	}) {
+		t.Fatalf("post-create roleMapper = %#v", got)
+	}
+	if got := bodies[2]["configuration"]; got != `{"password":"updated"}` {
+		t.Fatalf("update configuration = %#v", got)
+	}
+	if got := bodies[2]["mappers"]; !reflect.DeepEqual(got, map[string]interface{}{}) {
+		t.Fatalf("update mappers = %#v, want clear map", got)
+	}
+	if got := bodies[2]["domainWhitelist"]; !reflect.DeepEqual(got, []interface{}{}) {
+		t.Fatalf("update domainWhitelist = %#v, want clear list", got)
+	}
+	if got := bodies[2]["groupMapper"]; !reflect.DeepEqual(got, map[string]interface{}{}) {
+		t.Fatalf("update groupMapper = %#v, want clear map", got)
+	}
+	if got := bodies[2]["roleMapper"]; !reflect.DeepEqual(got, map[string]interface{}{}) {
+		t.Fatalf("update roleMapper = %#v, want clear map", got)
+	}
+	if _, ok := bodies[2]["passwordPolicy"]; ok {
+		t.Fatalf("update body should not clear passwordPolicy implicitly: %#v", bodies[2])
+	}
+}
+
+func identityProviderPlan(t *testing.T, schema resourceschema.Schema, model IdentityProviderModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func mustStringList(t *testing.T, values ...string) types.List {
