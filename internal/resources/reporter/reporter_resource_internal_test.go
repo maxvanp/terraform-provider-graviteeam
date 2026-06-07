@@ -1,11 +1,55 @@
 package reporter
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewReporterResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_reporter"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewReporterResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	assertStringAttribute(t, resp.Schema.Attributes, "id", false, false, true)
+	assertStringAttribute(t, resp.Schema.Attributes, "domain_id", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "name", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "type", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "configuration", true, false, false)
+	assertBoolAttribute(t, resp.Schema.Attributes, "enabled", false, true, true)
+	assertBoolAttribute(t, resp.Schema.Attributes, "inherited", false, true, true)
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ReporterResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
 
 func TestBuildBodyUsesPlannedReporterFields(t *testing.T) {
 	t.Parallel()
@@ -73,5 +117,31 @@ func TestReadIntoModelMapsReporterFieldsAndPreservesConfiguration(t *testing.T) 
 	}
 	if model.Configuration.ValueString() != `{"secret":"planned"}` {
 		t.Fatalf("configuration = %q, want preserved", model.Configuration.ValueString())
+	}
+}
+
+func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
+	}
+}
+
+func assertBoolAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.BoolAttribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.BoolAttribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
 	}
 }
