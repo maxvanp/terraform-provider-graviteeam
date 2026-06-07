@@ -2,12 +2,19 @@ package groupmembers
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestGroupMembersMetadata(t *testing.T) {
@@ -149,4 +156,107 @@ func TestDiffMembers(t *testing.T) {
 	if want := []string{"user-a"}; !reflect.DeepEqual(toRemove, want) {
 		t.Fatalf("toRemove = %#v, want %#v", toRemove, want)
 	}
+}
+
+func TestGroupMembersCRUDReconcilesOnlyMembershipDiff(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+	var operations []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Query().Get("page") != "0" || r.URL.Query().Get("size") != "100" {
+			t.Fatalf("unexpected group members collection request: %s %s", r.Method, r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{{"id": "user-b"}, {"id": "user-c"}},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members/", func(w http.ResponseWriter, r *http.Request) {
+		memberID := strings.TrimPrefix(r.URL.Path, "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members/")
+		switch r.Method {
+		case http.MethodPost:
+			operations = append(operations, "add:"+memberID)
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodDelete:
+			operations = append(operations, "remove:"+memberID)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected member method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GroupMembersResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := groupMembersPlan(t, schemaResp.Schema, GroupMembersModel{
+		DomainID: types.StringValue("domain-123"),
+		GroupID:  types.StringValue("group-123"),
+		Members:  []types.String{types.StringValue("user-a"), types.StringValue("user-b")},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState GroupMembersModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := stringValues(readState.Members), []string{"user-b", "user-c"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("read members = %#v, want %#v", got, want)
+	}
+
+	updatePlan := groupMembersPlan(t, schemaResp.Schema, GroupMembersModel{
+		DomainID: types.StringValue("domain-123"),
+		GroupID:  types.StringValue("group-123"),
+		Members:  []types.String{types.StringValue("user-c"), types.StringValue("user-d")},
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan, State: readResp.State}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+	wantOperations := []string{
+		"add:user-a",
+		"add:user-b",
+		"remove:user-b",
+		"add:user-d",
+		"remove:user-c",
+		"remove:user-d",
+	}
+	if !reflect.DeepEqual(operations, wantOperations) {
+		t.Fatalf("operations = %#v, want %#v", operations, wantOperations)
+	}
+}
+
+func groupMembersPlan(t *testing.T, schema resourceschema.Schema, model GroupMembersModel) tfsdk.Plan {
+	t.Helper()
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
