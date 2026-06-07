@@ -239,6 +239,89 @@ func TestIdentityProviderPasswordPolicyCRUDAssignsAndClearsRelationship(t *testi
 	}
 }
 
+func TestIdentityProviderPasswordPolicyReadRemovesMissingRelationshipAndDeleteIgnores404(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       map[string]interface{}
+	}{
+		{
+			name:       "missing identity provider",
+			statusCode: http.StatusNotFound,
+			body:       nil,
+		},
+		{
+			name:       "missing password policy",
+			statusCode: http.StatusOK,
+			body:       map[string]interface{}{"id": "idp-123"},
+		},
+		{
+			name:       "empty password policy",
+			statusCode: http.StatusOK,
+			body:       map[string]interface{}{"id": "idp-123", "passwordPolicy": ""},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("identity provider method = %s, want GET", r.Method)
+				}
+				if tt.statusCode != http.StatusOK {
+					http.Error(w, "not found", tt.statusCode)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(tt.body)
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123/password-policy", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("password policy method = %s, want PUT", r.Method)
+				}
+				http.Error(w, "not found", http.StatusNotFound)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &IdentityProviderPasswordPolicyResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := tfsdk.State{Schema: schemaResp.Schema}
+			if diags := state.Set(context.Background(), &IdentityProviderPasswordPolicyModel{
+				ID:                 types.StringValue("domain-123/idp-123"),
+				DomainID:           types.StringValue("domain-123"),
+				IdentityProviderID: types.StringValue("idp-123"),
+				PasswordPolicyID:   types.StringValue("policy-123"),
+			}); diags.HasError() {
+				t.Fatalf("set state: %#v", diags)
+			}
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+			}
+			if !readResp.State.Raw.IsNull() {
+				t.Fatalf("expected missing relationship to remove state, got %#v", readResp.State.Raw)
+			}
+
+			deleteResp := &resource.DeleteResponse{}
+			resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+			if deleteResp.Diagnostics.HasError() {
+				t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+			}
+		})
+	}
+}
+
 func identityProviderPasswordPolicyPlan(t *testing.T, schema resourceschema.Schema, model IdentityProviderPasswordPolicyModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
