@@ -399,6 +399,210 @@ func TestApplicationCRUDAndTypeOperations(t *testing.T) {
 	}
 }
 
+func TestApplicationSecretOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "secret-1"}, {"id": "secret-2"}})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create application secret body: %v", err)
+			}
+			if body["name"] != "created-secret" {
+				t.Fatalf("unexpected create application secret body: %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "secret-3", "name": "created-secret"})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-2/_renew", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "secret-2", "secret": "new-value"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	secrets, err := c.ListApplicationSecrets(context.Background(), "domain-123", "app-123")
+	if err != nil {
+		t.Fatalf("list application secrets: %v", err)
+	}
+	if len(secrets) != 2 {
+		t.Fatalf("unexpected application secrets: %#v", secrets)
+	}
+	created, err := c.CreateApplicationSecret(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "created-secret"})
+	if err != nil {
+		t.Fatalf("create application secret: %v", err)
+	}
+	if created["id"] != "secret-3" {
+		t.Fatalf("unexpected created application secret: %#v", created)
+	}
+	renewed, err := c.RenewApplicationSecret(context.Background(), "domain-123", "app-123", "secret-2")
+	if err != nil {
+		t.Fatalf("renew application secret: %v", err)
+	}
+	if renewed["secret"] != "new-value" {
+		t.Fatalf("unexpected renewed application secret: %#v", renewed)
+	}
+	if err := c.DeleteApplicationSecret(context.Background(), "domain-123", "app-123", "secret-3"); err != nil {
+		t.Fatalf("delete application secret: %v", err)
+	}
+}
+
+func TestApplicationAndDomainMemberOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"memberships": []map[string]interface{}{{"id": "membership-1"}, {"id": "membership-2"}},
+			})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode add application member body: %v", err)
+			}
+			if body["memberId"] != "user-3" {
+				t.Fatalf("unexpected add application member body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "membership-3", "memberId": "user-3"})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members/membership-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"memberships": []map[string]interface{}{{"id": "domain-membership-1"}},
+			})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode add domain member body: %v", err)
+			}
+			if body["memberId"] != "user-2" {
+				t.Fatalf("unexpected add domain member body: %#v", body)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members/domain-membership-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	appMembers, err := c.ListApplicationMembers(context.Background(), "domain-123", "app-123")
+	if err != nil {
+		t.Fatalf("list application members: %v", err)
+	}
+	if len(appMembers) != 2 {
+		t.Fatalf("unexpected application members: %#v", appMembers)
+	}
+	appMember, err := c.AddOrUpdateApplicationMember(context.Background(), "domain-123", "app-123", map[string]interface{}{"memberId": "user-3"})
+	if err != nil {
+		t.Fatalf("add application member: %v", err)
+	}
+	if appMember["id"] != "membership-3" {
+		t.Fatalf("unexpected application member: %#v", appMember)
+	}
+	if err := c.DeleteApplicationMember(context.Background(), "domain-123", "app-123", "membership-3"); err != nil {
+		t.Fatalf("delete application member: %v", err)
+	}
+
+	domainMembers, err := c.ListDomainMembers(context.Background(), "domain-123")
+	if err != nil {
+		t.Fatalf("list domain members: %v", err)
+	}
+	if len(domainMembers) != 1 {
+		t.Fatalf("unexpected domain members: %#v", domainMembers)
+	}
+	domainMember, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-2"})
+	if err != nil {
+		t.Fatalf("add domain member: %v", err)
+	}
+	if len(domainMember) != 0 {
+		t.Fatalf("expected empty domain member result for 204 response, got %#v", domainMember)
+	}
+	if err := c.DeleteDomainMember(context.Background(), "domain-123", "domain-membership-1"); err != nil {
+		t.Fatalf("delete domain member: %v", err)
+	}
+}
+
+func TestUserCertificateCredentialOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/cert-credentials", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode certificate credential body: %v", err)
+		}
+		if body["certificatePem"] != "pem" {
+			t.Fatalf("unexpected certificate credential body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "credential-1", "certificatePem": "pem"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/cert-credentials/credential-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "credential-1", "certificatePem": "pem"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateUserCertificateCredential(context.Background(), "domain-123", "user-123", map[string]interface{}{"certificatePem": "pem"})
+	if err != nil {
+		t.Fatalf("create user certificate credential: %v", err)
+	}
+	if created["id"] != "credential-1" {
+		t.Fatalf("unexpected certificate credential: %#v", created)
+	}
+	got, err := c.GetUserCertificateCredential(context.Background(), "domain-123", "user-123", "credential-1")
+	if err != nil {
+		t.Fatalf("get user certificate credential: %v", err)
+	}
+	if got["certificatePem"] != "pem" {
+		t.Fatalf("unexpected certificate credential: %#v", got)
+	}
+	if err := c.DeleteUserCertificateCredential(context.Background(), "domain-123", "user-123", "credential-1"); err != nil {
+		t.Fatalf("delete user certificate credential: %v", err)
+	}
+}
+
 func TestUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
