@@ -1,10 +1,74 @@
 package generatedcertificate
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestGeneratedCertificateMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewGeneratedCertificateResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_generated_certificate" {
+		t.Fatalf("type name = %q, want graviteeam_generated_certificate", resp.TypeName)
+	}
+}
+
+func TestGeneratedCertificateSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewGeneratedCertificateResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["domain_id"]; !attr.IsRequired() {
+		t.Fatal("domain_id should be required")
+	}
+	if attr := resp.Schema.Attributes["rotation_trigger"]; !attr.IsOptional() {
+		t.Fatal("rotation_trigger should be optional")
+	}
+	for _, name := range []string{"id", "name", "type"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+}
+
+func TestGeneratedCertificateConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &GeneratedCertificateResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
+func TestGeneratedCertificateUpdateIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.UpdateResponse
+	NewGeneratedCertificateResource().Update(context.Background(), resource.UpdateRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected update diagnostics: %#v", resp.Diagnostics)
+	}
+}
 
 func TestReadGeneratedCertificateMapsReturnedFields(t *testing.T) {
 	t.Parallel()

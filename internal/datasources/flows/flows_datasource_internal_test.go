@@ -1,6 +1,53 @@
 package flows
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+)
+
+func TestFlowsMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.MetadataResponse
+	NewFlowsDataSource().Metadata(context.Background(), datasource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_flows" {
+		t.Fatalf("type name = %q, want graviteeam_flows", resp.TypeName)
+	}
+}
+
+func TestFlowsSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.SchemaResponse
+	NewFlowsDataSource().Schema(context.Background(), datasource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["domain_id"]; !attr.IsRequired() {
+		t.Fatal("domain_id should be required")
+	}
+	if attr := resp.Schema.Attributes["flows"]; !attr.IsComputed() {
+		t.Fatal("flows should be computed")
+	}
+}
+
+func TestFlowsConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	ds := &FlowsDataSource{}
+	var resp datasource.ConfigureResponse
+
+	ds.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestFormatFlowsProducesStableIndentedJSON(t *testing.T) {
 	t.Parallel()

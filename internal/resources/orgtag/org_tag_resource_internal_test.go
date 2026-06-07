@@ -1,11 +1,58 @@
 package orgtag
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestOrgTagMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgTagResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_org_tag" {
+		t.Fatalf("type name = %q, want graviteeam_org_tag", resp.TypeName)
+	}
+}
+
+func TestOrgTagSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgTagResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["name"]; !attr.IsRequired() {
+		t.Fatal("name should be required")
+	}
+	if attr := resp.Schema.Attributes["description"]; !attr.IsOptional() {
+		t.Fatal("description should be optional")
+	}
+	if attr := resp.Schema.Attributes["id"]; !attr.IsComputed() {
+		t.Fatal("id should be computed")
+	}
+}
+
+func TestOrgTagConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgTagResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildBodyForCreate(t *testing.T) {
 	t.Parallel()
