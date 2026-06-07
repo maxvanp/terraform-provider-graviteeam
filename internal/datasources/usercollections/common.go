@@ -74,17 +74,24 @@ func (d *collectionDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 
-	var parsed interface{}
-	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
-		resp.Diagnostics.AddError("Error parsing user "+d.resultName, err.Error())
-		return
-	}
-	formatted, err := json.MarshalIndent(parsed, "", "  ")
+	formatted, err := formatCollectionItems(rawJSON)
 	if err != nil {
 		resp.Diagnostics.AddError("Error formatting user "+d.resultName, err.Error())
 		return
 	}
 
-	config.Items = types.StringValue(string(formatted))
+	config.Items = types.StringValue(formatted)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func formatCollectionItems(rawJSON []byte) (string, error) {
+	var parsed interface{}
+	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
+		return "", err
+	}
+	formatted, err := json.MarshalIndent(parsed, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(formatted), nil
 }
