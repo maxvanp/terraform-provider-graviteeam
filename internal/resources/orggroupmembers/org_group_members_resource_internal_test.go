@@ -1,11 +1,65 @@
 package orggroupmembers
 
 import (
+	"context"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestOrgGroupMembersMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgGroupMembersResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_org_group_members" {
+		t.Fatalf("type name = %q, want graviteeam_org_group_members", resp.TypeName)
+	}
+}
+
+func TestOrgGroupMembersSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"group_id", "members"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if _, ok := resp.Schema.Attributes["domain_id"]; ok {
+		t.Fatal("organization group members should not expose domain_id")
+	}
+	if !strings.Contains(resp.Schema.Description, "complete set") {
+		t.Fatalf("schema description = %q, want complete-set ownership hint", resp.Schema.Description)
+	}
+}
+
+func TestOrgGroupMembersConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgGroupMembersResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestValidImportID(t *testing.T) {
 	t.Parallel()

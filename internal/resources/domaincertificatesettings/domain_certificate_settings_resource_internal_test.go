@@ -1,9 +1,60 @@
 package domaincertificatesettings
 
 import (
+	"context"
 	"reflect"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
+
+func TestDomainCertificateSettingsMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewDomainCertificateSettingsResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_domain_certificate_settings" {
+		t.Fatalf("type name = %q, want graviteeam_domain_certificate_settings", resp.TypeName)
+	}
+}
+
+func TestDomainCertificateSettingsSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewDomainCertificateSettingsResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "fallback_certificate_id"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["id"]; !attr.IsComputed() {
+		t.Fatal("id should be computed")
+	}
+}
+
+func TestDomainCertificateSettingsConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainCertificateSettingsResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildBodySetsFallbackCertificate(t *testing.T) {
 	t.Parallel()

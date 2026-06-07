@@ -1,11 +1,62 @@
 package groupmembers
 
 import (
+	"context"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestGroupMembersMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewGroupMembersResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_group_members" {
+		t.Fatalf("type name = %q, want graviteeam_group_members", resp.TypeName)
+	}
+}
+
+func TestGroupMembersSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "group_id", "members"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	if !strings.Contains(resp.Schema.Description, "complete membership list") {
+		t.Fatalf("schema description = %q, want complete-list ownership hint", resp.Schema.Description)
+	}
+}
+
+func TestGroupMembersConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &GroupMembersResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
