@@ -399,6 +399,240 @@ func TestApplicationCRUDAndTypeOperations(t *testing.T) {
 	}
 }
 
+func TestUserLifecycleOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create user body: %v", err)
+		}
+		if body["username"] != "user-name" {
+			t.Fatalf("unexpected create user body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "user-123", "username": "user-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "user-123", "username": "user-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update user body: %v", err)
+			}
+			if body["firstName"] != "Updated" {
+				t.Fatalf("unexpected update user body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "user-123", "firstName": "Updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update user status body: %v", err)
+		}
+		if body["enabled"] != false {
+			t.Fatalf("unexpected update user status body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "user-123", "enabled": false})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/lock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/unlock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/username", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("expected PATCH, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update username body: %v", err)
+		}
+		if body["username"] != "user-renamed" {
+			t.Fatalf("unexpected update username body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "user-123", "username": "user-renamed"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/collections", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte(`[{"id":"collection-item"}]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateUser(context.Background(), "domain-123", map[string]interface{}{"username": "user-name"})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if created["id"] != "user-123" {
+		t.Fatalf("unexpected created user: %#v", created)
+	}
+	got, err := c.GetUser(context.Background(), "domain-123", "user-123")
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if got["username"] != "user-name" {
+		t.Fatalf("unexpected user: %#v", got)
+	}
+	updated, err := c.UpdateUser(context.Background(), "domain-123", "user-123", map[string]interface{}{"firstName": "Updated"})
+	if err != nil {
+		t.Fatalf("update user: %v", err)
+	}
+	if updated["firstName"] != "Updated" {
+		t.Fatalf("unexpected updated user: %#v", updated)
+	}
+	status, err := c.UpdateUserStatus(context.Background(), "domain-123", "user-123", false)
+	if err != nil {
+		t.Fatalf("update user status: %v", err)
+	}
+	if status["enabled"] != false {
+		t.Fatalf("unexpected updated user status: %#v", status)
+	}
+	if err := c.LockUser(context.Background(), "domain-123", "user-123"); err != nil {
+		t.Fatalf("lock user: %v", err)
+	}
+	if err := c.UnlockUser(context.Background(), "domain-123", "user-123"); err != nil {
+		t.Fatalf("unlock user: %v", err)
+	}
+	renamed, err := c.UpdateUsername(context.Background(), "domain-123", "user-123", "user-renamed")
+	if err != nil {
+		t.Fatalf("update username: %v", err)
+	}
+	if renamed["username"] != "user-renamed" {
+		t.Fatalf("unexpected updated username: %#v", renamed)
+	}
+	collection, err := c.ListUserCollection(context.Background(), "domain-123", "user-123", "collections")
+	if err != nil {
+		t.Fatalf("list user collection: %v", err)
+	}
+	if string(collection) != `[{"id":"collection-item"}]` {
+		t.Fatalf("unexpected user collection: %s", collection)
+	}
+	if err := c.DeleteUser(context.Background(), "domain-123", "user-123"); err != nil {
+		t.Fatalf("delete user: %v", err)
+	}
+}
+
+func TestPasswordPolicyOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create password policy body: %v", err)
+		}
+		if body["name"] != "policy-name" {
+			t.Fatalf("unexpected create password policy body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "policy-123", "name": "policy-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "policy-123", "name": "policy-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update password policy body: %v", err)
+			}
+			if body["name"] != "policy-updated" {
+				t.Fatalf("unexpected update password policy body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "policy-123", "name": "policy-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123/default", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "policy-123", "defaultPolicy": true})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123/evaluate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode evaluate password policy body: %v", err)
+		}
+		if body["password"] != "SecurePass123!" {
+			t.Fatalf("unexpected evaluate password policy body: %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"valid":true}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreatePasswordPolicy(context.Background(), "domain-123", map[string]interface{}{"name": "policy-name"})
+	if err != nil {
+		t.Fatalf("create password policy: %v", err)
+	}
+	if created["id"] != "policy-123" {
+		t.Fatalf("unexpected created password policy: %#v", created)
+	}
+	got, err := c.GetPasswordPolicy(context.Background(), "domain-123", "policy-123")
+	if err != nil {
+		t.Fatalf("get password policy: %v", err)
+	}
+	if got["name"] != "policy-name" {
+		t.Fatalf("unexpected password policy: %#v", got)
+	}
+	updated, err := c.UpdatePasswordPolicy(context.Background(), "domain-123", "policy-123", map[string]interface{}{"name": "policy-updated"})
+	if err != nil {
+		t.Fatalf("update password policy: %v", err)
+	}
+	if updated["name"] != "policy-updated" {
+		t.Fatalf("unexpected updated password policy: %#v", updated)
+	}
+	defaulted, err := c.SetDefaultPasswordPolicy(context.Background(), "domain-123", "policy-123")
+	if err != nil {
+		t.Fatalf("set default password policy: %v", err)
+	}
+	if defaulted["defaultPolicy"] != true {
+		t.Fatalf("unexpected default password policy response: %#v", defaulted)
+	}
+	evaluation, err := c.EvaluatePasswordPolicy(context.Background(), "domain-123", "policy-123", map[string]interface{}{"password": "SecurePass123!"})
+	if err != nil {
+		t.Fatalf("evaluate password policy: %v", err)
+	}
+	if string(evaluation) != `{"valid":true}` {
+		t.Fatalf("unexpected password policy evaluation: %s", evaluation)
+	}
+	if err := c.DeletePasswordPolicy(context.Background(), "domain-123", "policy-123"); err != nil {
+		t.Fatalf("delete password policy: %v", err)
+	}
+}
+
 func TestAccRotateCertificateLifecycle(t *testing.T) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("set TF_ACC=1 to run acceptance tests")
