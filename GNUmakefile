@@ -3,10 +3,10 @@ HOSTNAME=registry.terraform.io
 NAMESPACE=maxvanp
 NAME=graviteeam
 VERSION=0.1.0
-GO?=go
+GO?=$(or $(shell command -v go 2>/dev/null),$(wildcard /usr/local/go/bin/go),go)
 OS_ARCH=$(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 GOLANGCI_LINT?=golangci-lint
-TFPLUGINDOCS?=tfplugindocs
+TFPLUGINDOCS?=$(or $(shell command -v tfplugindocs 2>/dev/null),$(wildcard $(HOME)/go/bin/tfplugindocs),tfplugindocs)
 LINT_TIMEOUT?=5m
 
 default: build
@@ -44,7 +44,7 @@ testacc:
 	TF_ACC=1 $(GO) test ./... -v -p 1 $(TESTARGS) -timeout 120m
 
 docs:
-	$(TFPLUGINDOCS) generate --provider-name graviteeam
+	env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
 
 docs-check: docs
 	@git diff --exit-code docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)

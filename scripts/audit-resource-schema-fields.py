@@ -25,7 +25,140 @@ class ResourceSchemaAudit:
     intentionally_unmanaged: dict[str, str]
 
 
+@dataclass(frozen=True)
+class ResourceSchemaCandidate:
+    name: str
+    package_dir: Path
+    schema_name: str
+
+
 AUDITS = [
+    ResourceSchemaAudit(
+        name="graviteeam_alert_notifier",
+        package_dir=ROOT / "internal" / "resources" / "alertnotifier",
+        schema_name="NewAlertNotifier",
+        api_to_tf={
+            "configuration": "configuration",
+            "enabled": "enabled",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_auth_device_notifier",
+        package_dir=ROOT / "internal" / "resources" / "authdevicenotifier",
+        schema_name="UpdateAuthenticationDeviceNotifier",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_authorization_engine",
+        package_dir=ROOT / "internal" / "resources" / "authorizationengine",
+        schema_name="UpdateAuthorizationEngine",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_bot_detection",
+        package_dir=ROOT / "internal" / "resources" / "botdetection",
+        schema_name="UpdateBotDetection",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_certificate",
+        package_dir=ROOT / "internal" / "resources" / "certificate",
+        schema_name="UpdateCertificate",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_device_identifier",
+        package_dir=ROOT / "internal" / "resources" / "deviceidentifier",
+        schema_name="UpdateDeviceIdentifier",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_factor",
+        package_dir=ROOT / "internal" / "resources" / "factor",
+        schema_name="UpdateFactor",
+        api_to_tf={
+            "name": "name",
+        },
+        intentionally_unmanaged={
+            "configuration": "provider currently manages stock factors with empty plugin configuration",
+            "type": "derived from immutable factor_type and preserved through plugin mapping",
+        },
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_form",
+        package_dir=ROOT / "internal" / "resources" / "form",
+        schema_name="UpdateForm",
+        api_to_tf={
+            "content": "content",
+            "enabled": "enabled",
+        },
+        intentionally_unmanaged={
+            "assets": "file assets need a separate ownership model before Terraform can update them safely",
+        },
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_application_form",
+        package_dir=ROOT / "internal" / "resources" / "applicationform",
+        schema_name="UpdateForm",
+        api_to_tf={
+            "content": "content",
+            "enabled": "enabled",
+        },
+        intentionally_unmanaged={
+            "assets": "file assets need a separate ownership model before Terraform can update them safely",
+        },
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_form",
+        package_dir=ROOT / "internal" / "resources" / "orgform",
+        schema_name="UpdateForm",
+        api_to_tf={
+            "content": "content",
+            "enabled": "enabled",
+        },
+        intentionally_unmanaged={
+            "assets": "file assets need a separate ownership model before Terraform can update them safely",
+        },
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_i18n_dictionary",
+        package_dir=ROOT / "internal" / "resources" / "i18ndictionary",
+        schema_name="UpdateI18nDictionary",
+        api_to_tf={
+            "entries": "entries",
+            "locale": "locale",
+            "name": "name",
+        },
+        intentionally_unmanaged={},
+    ),
     ResourceSchemaAudit(
         name="graviteeam_identity_provider",
         package_dir=ROOT / "internal" / "resources" / "identityprovider",
@@ -112,6 +245,18 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_org_group",
+        package_dir=ROOT / "internal" / "resources" / "orggroup",
+        schema_name="UpdateGroup",
+        api_to_tf={
+            "description": "description",
+            "members": "members",
+            "name": "name",
+            "roles": "roles",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_role",
         package_dir=ROOT / "internal" / "resources" / "role",
         schema_name="UpdateRole",
@@ -122,6 +267,19 @@ AUDITS = [
             "permissions": "permissions",
         },
         intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_role",
+        package_dir=ROOT / "internal" / "resources" / "orgrole",
+        schema_name="UpdateRole",
+        api_to_tf={
+            "description": "description",
+            "name": "name",
+            "permissions": "permissions",
+        },
+        intentionally_unmanaged={
+            "oauthScopes": "organization roles do not attach domain OAuth scopes",
+        },
     ),
     ResourceSchemaAudit(
         name="graviteeam_password_policy",
@@ -169,6 +327,27 @@ AUDITS = [
             "name": "name",
             "resourceIdentifiers": "resource_identifiers",
             "settings": "settings_json",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_service_resource",
+        package_dir=ROOT / "internal" / "resources" / "serviceresource",
+        schema_name="UpdateServiceResource",
+        api_to_tf={
+            "configuration": "configuration",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_tag",
+        package_dir=ROOT / "internal" / "resources" / "orgtag",
+        schema_name="UpdateTag",
+        api_to_tf={
+            "description": "description",
+            "name": "name",
         },
         intentionally_unmanaged={},
     ),
@@ -258,6 +437,38 @@ AUDITS = [
     ),
 ]
 
+AUDIT_CANDIDATES = [
+    ResourceSchemaCandidate("graviteeam_alert_notifier", ROOT / "internal" / "resources" / "alertnotifier", "NewAlertNotifier"),
+    ResourceSchemaCandidate("graviteeam_auth_device_notifier", ROOT / "internal" / "resources" / "authdevicenotifier", "UpdateAuthenticationDeviceNotifier"),
+    ResourceSchemaCandidate("graviteeam_authorization_engine", ROOT / "internal" / "resources" / "authorizationengine", "UpdateAuthorizationEngine"),
+    ResourceSchemaCandidate("graviteeam_bot_detection", ROOT / "internal" / "resources" / "botdetection", "UpdateBotDetection"),
+    ResourceSchemaCandidate("graviteeam_certificate", ROOT / "internal" / "resources" / "certificate", "UpdateCertificate"),
+    ResourceSchemaCandidate("graviteeam_device_identifier", ROOT / "internal" / "resources" / "deviceidentifier", "UpdateDeviceIdentifier"),
+    ResourceSchemaCandidate("graviteeam_email_template", ROOT / "internal" / "resources" / "emailtemplate", "UpdateEmail"),
+    ResourceSchemaCandidate("graviteeam_extension_grant", ROOT / "internal" / "resources" / "extensiongrant", "UpdateExtensionGrant"),
+    ResourceSchemaCandidate("graviteeam_factor", ROOT / "internal" / "resources" / "factor", "UpdateFactor"),
+    ResourceSchemaCandidate("graviteeam_form", ROOT / "internal" / "resources" / "form", "UpdateForm"),
+    ResourceSchemaCandidate("graviteeam_application_form", ROOT / "internal" / "resources" / "applicationform", "UpdateForm"),
+    ResourceSchemaCandidate("graviteeam_group", ROOT / "internal" / "resources" / "group", "UpdateGroup"),
+    ResourceSchemaCandidate("graviteeam_i18n_dictionary", ROOT / "internal" / "resources" / "i18ndictionary", "UpdateI18nDictionary"),
+    ResourceSchemaCandidate("graviteeam_identity_provider", ROOT / "internal" / "resources" / "identityprovider", "UpdateIdentityProvider"),
+    ResourceSchemaCandidate("graviteeam_org_identity_provider", ROOT / "internal" / "resources" / "orgidentityprovider", "UpdateIdentityProvider"),
+    ResourceSchemaCandidate("graviteeam_org_entrypoint", ROOT / "internal" / "resources" / "orgentrypoint", "UpdateEntrypoint"),
+    ResourceSchemaCandidate("graviteeam_org_form", ROOT / "internal" / "resources" / "orgform", "UpdateForm"),
+    ResourceSchemaCandidate("graviteeam_org_group", ROOT / "internal" / "resources" / "orggroup", "UpdateGroup"),
+    ResourceSchemaCandidate("graviteeam_org_reporter", ROOT / "internal" / "resources" / "orgreporter", "UpdateReporter"),
+    ResourceSchemaCandidate("graviteeam_org_role", ROOT / "internal" / "resources" / "orgrole", "UpdateRole"),
+    ResourceSchemaCandidate("graviteeam_org_tag", ROOT / "internal" / "resources" / "orgtag", "UpdateTag"),
+    ResourceSchemaCandidate("graviteeam_org_user", ROOT / "internal" / "resources" / "orguser", "UpdateUser"),
+    ResourceSchemaCandidate("graviteeam_password_policy", ROOT / "internal" / "resources" / "passwordpolicy", "UpdatePasswordPolicy"),
+    ResourceSchemaCandidate("graviteeam_protected_resource", ROOT / "internal" / "resources" / "protectedresource", "UpdateProtectedResource"),
+    ResourceSchemaCandidate("graviteeam_reporter", ROOT / "internal" / "resources" / "reporter", "UpdateReporter"),
+    ResourceSchemaCandidate("graviteeam_role", ROOT / "internal" / "resources" / "role", "UpdateRole"),
+    ResourceSchemaCandidate("graviteeam_scope", ROOT / "internal" / "resources" / "scope", "UpdateScope"),
+    ResourceSchemaCandidate("graviteeam_service_resource", ROOT / "internal" / "resources" / "serviceresource", "UpdateServiceResource"),
+    ResourceSchemaCandidate("graviteeam_user", ROOT / "internal" / "resources" / "user", "UpdateUser"),
+]
+
 TFSDK_RE = re.compile(r'`tfsdk:"([^"]+)"`')
 
 
@@ -284,8 +495,12 @@ def main() -> int:
 
     spec = load_spec()
     failures: list[str] = []
+    audited_names = {audit.name for audit in AUDITS}
+    unaudited_candidates = [candidate for candidate in AUDIT_CANDIDATES if candidate.name not in audited_names]
 
     print("# Resource Schema Field Audit")
+    print(f"Audited durable resource schemas: {len(AUDITS)}")
+    print(f"Unaudited durable resource schemas: {len(unaudited_candidates)}")
     for audit in AUDITS:
         api_fields = schema_properties(spec, audit.schema_name)
         attrs = model_attrs(audit.package_dir)
@@ -330,6 +545,19 @@ def main() -> int:
         failures.extend(f"{audit.name}: missing mapping for {field}" for field in missing_mapping)
         failures.extend(f"{audit.name}: missing Terraform model attr {item}" for item in missing_attrs)
         failures.extend(f"{audit.name}: stale mapping for {field}" for field in stale_mapping)
+
+    print("\n## Durable Resource Schemas Missing Audit")
+    if unaudited_candidates:
+        for candidate in unaudited_candidates:
+            schema_status = "present" if candidate.schema_name in spec["components"]["schemas"] else "missing"
+            print(
+                f"- {candidate.name}: {candidate.schema_name} ({schema_status}, "
+                f"{candidate.package_dir.relative_to(ROOT)})"
+            )
+    else:
+        print("none")
+
+    failures.extend(f"{candidate.name}: missing resource schema audit" for candidate in unaudited_candidates)
 
     if args.check and failures:
         print("\n## Failures")
