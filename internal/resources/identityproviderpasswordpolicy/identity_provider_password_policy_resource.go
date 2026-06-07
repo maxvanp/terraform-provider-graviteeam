@@ -117,8 +117,7 @@ func (r *IdentityProviderPasswordPolicyResource) Read(ctx context.Context, req r
 		return
 	}
 
-	state.ID = assignmentID(state.DomainID.ValueString(), state.IdentityProviderID.ValueString())
-	state.PasswordPolicyID = types.StringValue(passwordPolicyID)
+	readIntoModel(&state, passwordPolicyID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -153,17 +152,30 @@ func (r *IdentityProviderPasswordPolicyResource) Delete(ctx context.Context, req
 }
 
 func (r *IdentityProviderPasswordPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	domainID, identityProviderID, ok := parseAssignmentImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/identity_provider_id, got: %s", req.ID))
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("identity_provider_id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("identity_provider_id"), identityProviderID)...)
 }
 
 func assignmentID(domainID, identityProviderID string) types.String {
 	return types.StringValue(domainID + "/" + identityProviderID)
+}
+
+func parseAssignmentImportID(id string) (string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func readIntoModel(model *IdentityProviderPasswordPolicyModel, passwordPolicyID string) {
+	model.ID = assignmentID(model.DomainID.ValueString(), model.IdentityProviderID.ValueString())
+	model.PasswordPolicyID = types.StringValue(passwordPolicyID)
 }
