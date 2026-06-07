@@ -20,6 +20,7 @@ resource "graviteeam_org_user" "test" {
   email            = "test-acc-org-user@example.com"
   first_name       = "Org"
   last_name        = "User"
+  force_reset_password = false
   enabled          = false
   pre_registration = true
 }
@@ -30,6 +31,7 @@ resource "graviteeam_org_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "email", "test-acc-org-user@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "first_name", "Org"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "last_name", "User"),
+					resource.TestCheckResourceAttr("graviteeam_org_user.test", "force_reset_password", "false"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "false"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "pre_registration", "true"),
 				),
@@ -50,6 +52,7 @@ resource "graviteeam_org_user" "test" {
   email            = "test-acc-org-user-updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
+  force_reset_password = true
   enabled          = true
   pre_registration = true
   reset_password   = "NewSecurePass123!"
@@ -60,6 +63,7 @@ resource "graviteeam_org_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "username", "test-acc-org-user-updated"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "email", "test-acc-org-user-updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "first_name", "Updated"),
+					resource.TestCheckResourceAttr("graviteeam_org_user.test", "force_reset_password", "true"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "enabled", "true"),
 					resource.TestCheckResourceAttr("graviteeam_org_user.test", "reset_password_trigger", "reset-1"),
 				),

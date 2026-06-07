@@ -31,6 +31,8 @@ resource "graviteeam_user" "test" {
   email            = "acctest@example.com"
   first_name       = "Acc"
   last_name        = "Test"
+  display_name     = "Acc Test"
+  force_reset_password = false
   pre_registration = true
 }
 `,
@@ -41,6 +43,8 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "acctest@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Acc"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "Test"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "display_name", "Acc Test"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "force_reset_password", "false"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "false"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "false"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "pre_registration", "true"),
@@ -76,6 +80,8 @@ resource "graviteeam_user" "test" {
   email            = "updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
+  display_name     = "Updated User"
+  force_reset_password = true
   enabled          = true
   locked           = true
   pre_registration = true
@@ -87,6 +93,8 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "User"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "display_name", "Updated User"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "force_reset_password", "true"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "true"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "registration_confirmation_trigger", "confirmation-1"),
@@ -109,6 +117,8 @@ resource "graviteeam_user" "test" {
   email            = "updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
+  display_name     = "Updated User"
+  force_reset_password = true
   enabled          = true
   locked           = false
   pre_registration = true

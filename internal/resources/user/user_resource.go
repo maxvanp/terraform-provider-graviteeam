@@ -67,6 +67,16 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:    true,
 				Description: "The last name",
 			},
+			"display_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "The display name",
+			},
+			"force_reset_password": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the user must reset their password at next login",
+			},
 			"enabled": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -135,6 +145,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !plan.LastName.IsNull() {
 		body["lastName"] = plan.LastName.ValueString()
 	}
+	body["forceResetPassword"] = plan.ForceResetPassword.ValueBool()
 
 	result, err := r.client.CreateUser(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -143,6 +154,20 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	plan.ID = types.StringValue(result["id"].(string))
+	if !plan.DisplayName.IsNull() && !plan.DisplayName.IsUnknown() {
+		current, err := r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading user before post-create update", err.Error())
+			return
+		}
+		body := buildMergedUpdateBody(current, plan)
+		result, err = r.client.UpdateUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating user after creation", err.Error())
+			return
+		}
+		r.readIntoModel(&plan, result)
+	}
 	if plan.Locked.ValueBool() {
 		if err := r.client.LockUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString()); err != nil {
 			resp.Diagnostics.AddError("Error locking user", err.Error())
@@ -202,6 +227,8 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	profileChanged := !plan.Email.Equal(state.Email) ||
 		!plan.FirstName.Equal(state.FirstName) ||
 		!plan.LastName.Equal(state.LastName) ||
+		!plan.DisplayName.Equal(state.DisplayName) ||
+		plan.ForceResetPassword.ValueBool() != state.ForceResetPassword.ValueBool() ||
 		plan.PreRegistration.ValueBool() != state.PreRegistration.ValueBool()
 
 	if profileChanged {
@@ -335,6 +362,14 @@ func (r *UserResource) readIntoModel(model *UserModel, data map[string]interface
 	} else {
 		model.LastName = types.StringNull()
 	}
+	if displayName, ok := data["displayName"].(string); ok {
+		model.DisplayName = types.StringValue(displayName)
+	} else {
+		model.DisplayName = types.StringNull()
+	}
+	if forceResetPassword, ok := data["forceResetPassword"].(bool); ok {
+		model.ForceResetPassword = types.BoolValue(forceResetPassword)
+	}
 	if enabled, ok := data["enabled"].(bool); ok {
 		model.Enabled = types.BoolValue(enabled)
 	}
@@ -357,6 +392,10 @@ func buildMergedUpdateBody(current map[string]interface{}, plan UserModel) map[s
 	if !plan.LastName.IsNull() && !plan.LastName.IsUnknown() {
 		body["lastName"] = plan.LastName.ValueString()
 	}
+	if !plan.DisplayName.IsNull() && !plan.DisplayName.IsUnknown() {
+		body["displayName"] = plan.DisplayName.ValueString()
+	}
+	body["forceResetPassword"] = plan.ForceResetPassword.ValueBool()
 	body["preRegistration"] = plan.PreRegistration.ValueBool()
 	return body
 }

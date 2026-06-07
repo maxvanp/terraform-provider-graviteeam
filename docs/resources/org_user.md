@@ -14,13 +14,14 @@ Manages a Gravitee AM organization user
 
 ```terraform
 resource "graviteeam_org_user" "example" {
-  username         = "platform-user"
-  password         = "SecurePass123!"
-  email            = "platform-user@example.com"
-  first_name       = "Platform"
-  last_name        = "User"
-  enabled          = true
-  pre_registration = true
+  username             = "platform-user"
+  password             = "SecurePass123!"
+  email                = "platform-user@example.com"
+  first_name           = "Platform"
+  last_name            = "User"
+  enabled              = true
+  force_reset_password = false
+  pre_registration     = true
 
   reset_password         = "NewSecurePass123!"
   reset_password_trigger = "rotation-2026-01"
@@ -39,6 +40,7 @@ resource "graviteeam_org_user" "example" {
 - `email` (String) The email address
 - `enabled` (Boolean) Whether the user is enabled
 - `first_name` (String) The first name
+- `force_reset_password` (Boolean) Whether the organization user must reset their password at next login
 - `last_name` (String) The last name
 - `password` (String, Sensitive) The initial password. Required when creating an organization user.
 - `pre_registration` (Boolean) Whether this is a pre-registration user

@@ -66,6 +66,12 @@ func (r *OrgUserResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:    true,
 				Description: "The last name",
 			},
+			"force_reset_password": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the organization user must reset their password at next login",
+			},
 			"enabled": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
@@ -182,6 +188,7 @@ func (r *OrgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 	profileChanged := !plan.Email.Equal(state.Email) ||
 		!plan.FirstName.Equal(state.FirstName) ||
 		!plan.LastName.Equal(state.LastName) ||
+		plan.ForceResetPassword.ValueBool() != state.ForceResetPassword.ValueBool() ||
 		plan.PreRegistration.ValueBool() != state.PreRegistration.ValueBool()
 
 	if profileChanged {
@@ -281,6 +288,7 @@ func buildUpdateBody(model OrgUserModel) map[string]interface{} {
 	if !model.LastName.IsNull() && !model.LastName.IsUnknown() {
 		body["lastName"] = model.LastName.ValueString()
 	}
+	body["forceResetPassword"] = model.ForceResetPassword.ValueBool()
 	return body
 }
 
@@ -295,6 +303,7 @@ func buildMergedUpdateBody(current map[string]interface{}, plan OrgUserModel) ma
 	if !plan.LastName.IsNull() && !plan.LastName.IsUnknown() {
 		body["lastName"] = plan.LastName.ValueString()
 	}
+	body["forceResetPassword"] = plan.ForceResetPassword.ValueBool()
 	body["preRegistration"] = plan.PreRegistration.ValueBool()
 	return body
 }
@@ -352,6 +361,9 @@ func readIntoModel(model *OrgUserModel, data map[string]interface{}) {
 		model.LastName = types.StringValue(lastName)
 	} else {
 		model.LastName = types.StringNull()
+	}
+	if forceResetPassword, ok := data["forceResetPassword"].(bool); ok {
+		model.ForceResetPassword = types.BoolValue(forceResetPassword)
 	}
 	if enabled, ok := data["enabled"].(bool); ok {
 		model.Enabled = types.BoolValue(enabled)
