@@ -53,7 +53,13 @@ coverage-baseline:
 	./scripts/update-test-coverage-baseline.py --go "$(GO)" --coverprofile /tmp/graviteeam-coverage.out
 
 docs:
-	$(DOCS_GENERATE)
+	@log=$$(mktemp); \
+	if ! $(DOCS_GENERATE) >"$$log" 2>&1; then \
+		cat "$$log"; \
+		rm -f "$$log"; \
+		exit 1; \
+	fi; \
+	rm -f "$$log"
 
 docs-check:
 	@log=$$(mktemp); \
@@ -63,6 +69,6 @@ docs-check:
 		exit 1; \
 	fi; \
 	rm -f "$$log"
-	@git diff --exit-code docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
+	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
 
 .PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs docs-check
