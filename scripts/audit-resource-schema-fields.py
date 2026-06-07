@@ -65,6 +65,26 @@ AUDITS = [
         },
     ),
     ResourceSchemaAudit(
+        name="graviteeam_application_member",
+        package_dir=ROOT / "internal" / "resources" / "applicationmember",
+        schema_name="NewMembership",
+        api_to_tf={
+            "memberId": "member_id",
+            "memberType": "member_type",
+            "role": "role_id",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_application_secret",
+        package_dir=ROOT / "internal" / "resources" / "applicationsecret",
+        schema_name="NewClientSecret",
+        api_to_tf={
+            "name": "name",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_auth_device_notifier",
         package_dir=ROOT / "internal" / "resources" / "authdevicenotifier",
         schema_name="UpdateAuthenticationDeviceNotifier",
@@ -151,6 +171,17 @@ AUDITS = [
             "vhosts": "advanced domain patch section managed through settings_json",
             "webAuthnSettings": "advanced domain patch section managed through settings_json",
         },
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_domain_member",
+        package_dir=ROOT / "internal" / "resources" / "domainmember",
+        schema_name="NewMembership",
+        api_to_tf={
+            "memberId": "member_id",
+            "memberType": "member_type",
+            "role": "role_id",
+        },
+        intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
         name="graviteeam_factor",
@@ -309,6 +340,17 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_org_member",
+        package_dir=ROOT / "internal" / "resources" / "orgmember",
+        schema_name="NewMembership",
+        api_to_tf={
+            "memberId": "member_id",
+            "memberType": "member_type",
+            "role": "role_id",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_role",
         package_dir=ROOT / "internal" / "resources" / "role",
         schema_name="UpdateRole",
@@ -383,6 +425,26 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_protected_resource_member",
+        package_dir=ROOT / "internal" / "resources" / "protectedresourcemember",
+        schema_name="NewMembership",
+        api_to_tf={
+            "memberId": "member_id",
+            "memberType": "member_type",
+            "role": "role_id",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_protected_resource_secret",
+        package_dir=ROOT / "internal" / "resources" / "protectedresourcesecret",
+        schema_name="NewClientSecret",
+        api_to_tf={
+            "name": "name",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_service_resource",
         package_dir=ROOT / "internal" / "resources" / "serviceresource",
         schema_name="UpdateServiceResource",
@@ -399,6 +461,15 @@ AUDITS = [
         schema_name="UpdateTag",
         api_to_tf={
             "description": "description",
+            "name": "name",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_user_token",
+        package_dir=ROOT / "internal" / "resources" / "orgusertoken",
+        schema_name="NewAccountAccessToken",
+        api_to_tf={
             "name": "name",
         },
         intentionally_unmanaged={},
@@ -503,17 +574,29 @@ AUDITS = [
         },
         intentionally_unmanaged={},
     ),
+    ResourceSchemaAudit(
+        name="graviteeam_user_certificate_credential",
+        package_dir=ROOT / "internal" / "resources" / "usercertificatecredential",
+        schema_name="NewCertificateCredential",
+        api_to_tf={
+            "certificatePem": "certificate_pem",
+        },
+        intentionally_unmanaged={},
+    ),
 ]
 
 AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_alert_notifier", ROOT / "internal" / "resources" / "alertnotifier", "NewAlertNotifier"),
     ResourceSchemaCandidate("graviteeam_application", ROOT / "internal" / "resources" / "application", "PatchApplication"),
+    ResourceSchemaCandidate("graviteeam_application_member", ROOT / "internal" / "resources" / "applicationmember", "NewMembership"),
+    ResourceSchemaCandidate("graviteeam_application_secret", ROOT / "internal" / "resources" / "applicationsecret", "NewClientSecret"),
     ResourceSchemaCandidate("graviteeam_auth_device_notifier", ROOT / "internal" / "resources" / "authdevicenotifier", "UpdateAuthenticationDeviceNotifier"),
     ResourceSchemaCandidate("graviteeam_authorization_engine", ROOT / "internal" / "resources" / "authorizationengine", "UpdateAuthorizationEngine"),
     ResourceSchemaCandidate("graviteeam_bot_detection", ROOT / "internal" / "resources" / "botdetection", "UpdateBotDetection"),
     ResourceSchemaCandidate("graviteeam_certificate", ROOT / "internal" / "resources" / "certificate", "UpdateCertificate"),
     ResourceSchemaCandidate("graviteeam_device_identifier", ROOT / "internal" / "resources" / "deviceidentifier", "UpdateDeviceIdentifier"),
     ResourceSchemaCandidate("graviteeam_domain", ROOT / "internal" / "resources" / "domain", "PatchDomain"),
+    ResourceSchemaCandidate("graviteeam_domain_member", ROOT / "internal" / "resources" / "domainmember", "NewMembership"),
     ResourceSchemaCandidate("graviteeam_email_template", ROOT / "internal" / "resources" / "emailtemplate", "UpdateEmail"),
     ResourceSchemaCandidate("graviteeam_extension_grant", ROOT / "internal" / "resources" / "extensiongrant", "UpdateExtensionGrant"),
     ResourceSchemaCandidate("graviteeam_factor", ROOT / "internal" / "resources" / "factor", "UpdateFactor"),
@@ -529,15 +612,20 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_org_reporter", ROOT / "internal" / "resources" / "orgreporter", "UpdateReporter"),
     ResourceSchemaCandidate("graviteeam_org_role", ROOT / "internal" / "resources" / "orgrole", "UpdateRole"),
     ResourceSchemaCandidate("graviteeam_org_tag", ROOT / "internal" / "resources" / "orgtag", "UpdateTag"),
+    ResourceSchemaCandidate("graviteeam_org_member", ROOT / "internal" / "resources" / "orgmember", "NewMembership"),
+    ResourceSchemaCandidate("graviteeam_org_user_token", ROOT / "internal" / "resources" / "orgusertoken", "NewAccountAccessToken"),
     ResourceSchemaCandidate("graviteeam_org_user", ROOT / "internal" / "resources" / "orguser", "UpdateUser"),
     ResourceSchemaCandidate("graviteeam_password_policy", ROOT / "internal" / "resources" / "passwordpolicy", "UpdatePasswordPolicy"),
     ResourceSchemaCandidate("graviteeam_protected_resource", ROOT / "internal" / "resources" / "protectedresource", "UpdateProtectedResource"),
+    ResourceSchemaCandidate("graviteeam_protected_resource_member", ROOT / "internal" / "resources" / "protectedresourcemember", "NewMembership"),
+    ResourceSchemaCandidate("graviteeam_protected_resource_secret", ROOT / "internal" / "resources" / "protectedresourcesecret", "NewClientSecret"),
     ResourceSchemaCandidate("graviteeam_reporter", ROOT / "internal" / "resources" / "reporter", "UpdateReporter"),
     ResourceSchemaCandidate("graviteeam_role", ROOT / "internal" / "resources" / "role", "UpdateRole"),
     ResourceSchemaCandidate("graviteeam_scope", ROOT / "internal" / "resources" / "scope", "UpdateScope"),
     ResourceSchemaCandidate("graviteeam_service_resource", ROOT / "internal" / "resources" / "serviceresource", "UpdateServiceResource"),
     ResourceSchemaCandidate("graviteeam_theme", ROOT / "internal" / "resources" / "theme", "NewTheme"),
     ResourceSchemaCandidate("graviteeam_user", ROOT / "internal" / "resources" / "user", "UpdateUser"),
+    ResourceSchemaCandidate("graviteeam_user_certificate_credential", ROOT / "internal" / "resources" / "usercertificatecredential", "NewCertificateCredential"),
 ]
 
 TFSDK_RE = re.compile(r'`tfsdk:"([^"]+)"`')
