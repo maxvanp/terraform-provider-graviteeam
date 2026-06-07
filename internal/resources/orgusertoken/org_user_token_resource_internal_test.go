@@ -1,11 +1,81 @@
 package orgusertoken
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestOrgUserTokenMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgUserTokenResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if resp.TypeName != "graviteeam_org_user_token" {
+		t.Fatalf("type name = %q, want graviteeam_org_user_token", resp.TypeName)
+	}
+}
+
+func TestOrgUserTokenSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgUserTokenResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"user_id", "name"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{"id", "token_id", "token"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["token"]; !attr.IsSensitive() {
+		t.Fatal("token should be sensitive")
+	}
+}
+
+func TestOrgUserTokenConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgUserTokenResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
+func TestOrgUserTokenUpdateIsUnsupported(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.UpdateResponse
+	NewOrgUserTokenResource().Update(context.Background(), resource.UpdateRequest{}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostic")
+	}
+}
 
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()
