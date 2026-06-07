@@ -255,6 +255,69 @@ func TestOrgUserTokenCRUDPreservesCreateOnlySecret(t *testing.T) {
 	}
 }
 
+func TestOrgUserTokenReadRemovesMissingTokenAndDeleteIgnores404(t *testing.T) {
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/user-123/tokens", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("collection method = %s, want GET", r.Method)
+		}
+		methods = append(methods, "read")
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"tokenId": "other-token", "name": "other"},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/user-123/tokens/missing-token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		methods = append(methods, "delete")
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgUserTokenResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &OrgUserTokenModel{
+		ID:      types.StringValue("user-123/missing-token"),
+		UserID:  types.StringValue("user-123"),
+		TokenID: types.StringValue("missing-token"),
+		Name:    types.StringValue("automation-token"),
+		Token:   types.StringValue("secret-token-value"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing token to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"read", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+}
+
 func orgUserTokenPlan(t *testing.T, schema resourceschema.Schema, model OrgUserTokenModel) tfsdk.Plan {
 	t.Helper()
 

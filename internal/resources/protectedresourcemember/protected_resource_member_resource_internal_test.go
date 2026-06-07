@@ -323,6 +323,83 @@ func TestProtectedResourceMemberCRUDReadsManagedMembershipOnly(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceMemberReadRemovesMissingMembershipAndDeleteIgnores404(t *testing.T) {
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("collection method = %s, want GET", r.Method)
+		}
+		methods = append(methods, "read")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"memberships": []map[string]interface{}{
+				{
+					"id":         "other-membership",
+					"memberId":   "other-user",
+					"memberType": "USER",
+					"roleId":     "role-123",
+				},
+			},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members/missing-membership", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		methods = append(methods, "delete")
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ProtectedResourceMemberResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &ProtectedResourceMemberModel{
+		ID:                  types.StringValue("missing-membership"),
+		DomainID:            types.StringValue("domain-123"),
+		ProtectedResourceID: types.StringValue("resource-123"),
+		MemberID:            types.StringValue("user-123"),
+		MemberType:          types.StringValue("USER"),
+		RoleID:              types.StringValue("role-123"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing membership to remove state, got %#v", readResp.State.Raw)
+	}
+
+	updateResp := &resource.UpdateResponse{}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected unsupported update diagnostic")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"read", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+}
+
 func protectedResourceMemberPlan(t *testing.T, schema resourceschema.Schema, model ProtectedResourceMemberModel) tfsdk.Plan {
 	t.Helper()
 
