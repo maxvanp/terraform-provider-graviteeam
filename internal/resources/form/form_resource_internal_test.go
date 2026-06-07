@@ -282,6 +282,103 @@ func TestFormCRUDPreservesCurrentAssetsOnUpdate(t *testing.T) {
 	}
 }
 
+func TestFormReadRemovesMissingForm(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &FormModel{
+		ID:       types.StringValue("form-123"),
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing form to remove state, got %#v", readResp.State.Raw)
+	}
+}
+
+func TestFormUpdateAndDeleteReportRemoteErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("collection method = %s, want GET", r.Method)
+		}
+		http.Error(w, "read before update failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "delete failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &FormModel{
+		ID:       types.StringValue("form-123"),
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	plan := formPlan(t, schemaResp.Schema, FormModel{
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(false),
+		Content:  types.StringValue("<html>updated</html>"),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
 func formPlan(t *testing.T, schema resourceschema.Schema, model FormModel) tfsdk.Plan {
 	t.Helper()
 
