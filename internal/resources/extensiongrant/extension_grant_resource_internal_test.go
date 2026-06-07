@@ -78,3 +78,59 @@ func TestBuildUpdateBodyOmitsIdentityProviderWhenPlanAndStateNull(t *testing.T) 
 		t.Fatalf("identityProvider should be omitted: %#v", got)
 	}
 }
+
+func TestReadIntoModelMapsExtensionGrantFields(t *testing.T) {
+	t.Parallel()
+
+	model := ExtensionGrantModel{}
+
+	readIntoModel(&model, map[string]interface{}{
+		"name":             "jwt bearer",
+		"type":             "jwtbearer-am-extension-grant",
+		"grantType":        "urn:ietf:params:oauth:grant-type:jwt-bearer",
+		"configuration":    `{"issuer":"test"}`,
+		"identityProvider": "idp-1",
+		"createUser":       true,
+		"userExists":       false,
+	})
+
+	if model.Name.ValueString() != "jwt bearer" ||
+		model.Type.ValueString() != "jwtbearer-am-extension-grant" ||
+		model.GrantType.ValueString() != "urn:ietf:params:oauth:grant-type:jwt-bearer" ||
+		model.Configuration.ValueString() != `{"issuer":"test"}` ||
+		model.IdentityProvider.ValueString() != "idp-1" ||
+		!model.CreateUser.ValueBool() ||
+		model.UserExists.ValueBool() {
+		t.Fatalf("model = %#v", model)
+	}
+}
+
+func TestReadIntoModelClearsEmptyIdentityProvider(t *testing.T) {
+	t.Parallel()
+
+	model := ExtensionGrantModel{
+		IdentityProvider: types.StringValue("idp-1"),
+	}
+
+	readIntoModel(&model, map[string]interface{}{
+		"identityProvider": "",
+	})
+
+	if !model.IdentityProvider.IsNull() {
+		t.Fatalf("identityProvider = %#v, want null", model.IdentityProvider)
+	}
+}
+
+func TestReadIntoModelKeepsNullIdentityProviderWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	model := ExtensionGrantModel{
+		IdentityProvider: types.StringNull(),
+	}
+
+	readIntoModel(&model, map[string]interface{}{})
+
+	if !model.IdentityProvider.IsNull() {
+		t.Fatalf("identityProvider = %#v, want null", model.IdentityProvider)
+	}
+}

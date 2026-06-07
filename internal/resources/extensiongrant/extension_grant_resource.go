@@ -146,31 +146,7 @@ func (r *ExtensionGrantResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	if gt, ok := result["grantType"].(string); ok {
-		state.GrantType = types.StringValue(gt)
-	}
-	if cfg, ok := result["configuration"].(string); ok {
-		state.Configuration = types.StringValue(cfg)
-	}
-	if idp, ok := result["identityProvider"].(string); ok && idp != "" {
-		state.IdentityProvider = types.StringValue(idp)
-	} else if state.IdentityProvider.IsNull() {
-		// keep null
-	} else {
-		state.IdentityProvider = types.StringNull()
-	}
-	if cu, ok := result["createUser"].(bool); ok {
-		state.CreateUser = types.BoolValue(cu)
-	}
-	if ue, ok := result["userExists"].(bool); ok {
-		state.UserExists = types.BoolValue(ue)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -218,6 +194,32 @@ func buildUpdateBody(plan, state ExtensionGrantModel) map[string]interface{} {
 	}
 
 	return body
+}
+
+func readIntoModel(model *ExtensionGrantModel, result map[string]interface{}) {
+	if name, ok := result["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if extensionType, ok := result["type"].(string); ok {
+		model.Type = types.StringValue(extensionType)
+	}
+	if grantType, ok := result["grantType"].(string); ok {
+		model.GrantType = types.StringValue(grantType)
+	}
+	if configuration, ok := result["configuration"].(string); ok {
+		model.Configuration = types.StringValue(configuration)
+	}
+	if identityProvider, ok := result["identityProvider"].(string); ok && identityProvider != "" {
+		model.IdentityProvider = types.StringValue(identityProvider)
+	} else if !model.IdentityProvider.IsNull() {
+		model.IdentityProvider = types.StringNull()
+	}
+	if createUser, ok := result["createUser"].(bool); ok {
+		model.CreateUser = types.BoolValue(createUser)
+	}
+	if userExists, ok := result["userExists"].(bool); ok {
+		model.UserExists = types.BoolValue(userExists)
+	}
 }
 
 func (r *ExtensionGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
