@@ -70,10 +70,7 @@ func (d *AuditsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	size := 10
-	if !config.Size.IsNull() && !config.Size.IsUnknown() {
-		size = int(config.Size.ValueInt64())
-	}
+	size := auditSize(config)
 
 	result, err := d.client.ListAudits(ctx, config.DomainID.ValueString(), 0, size)
 	if err != nil {
@@ -81,22 +78,39 @@ func (d *AuditsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	// Extract the audit entries from the response
-	var entries []interface{}
-	if data, ok := result["data"].([]interface{}); ok {
-		entries = data
-	}
-
-	auditsJSON, err := json.MarshalIndent(entries, "", "  ")
+	auditsJSON, err := formatAuditEntries(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling audits", err.Error())
 		return
 	}
 
-	config.Audits = types.StringValue(string(auditsJSON))
+	config.Audits = types.StringValue(auditsJSON)
 	if config.Size.IsNull() || config.Size.IsUnknown() {
 		config.Size = types.Int64Value(int64(size))
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func auditSize(config AuditsModel) int {
+	if !config.Size.IsNull() && !config.Size.IsUnknown() {
+		return int(config.Size.ValueInt64())
+	}
+	return 10
+}
+
+func formatAuditEntries(result map[string]interface{}) (string, error) {
+	entries := extractAuditEntries(result)
+	auditsJSON, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(auditsJSON), nil
+}
+
+func extractAuditEntries(result map[string]interface{}) []interface{} {
+	if data, ok := result["data"].([]interface{}); ok {
+		return data
+	}
+	return nil
 }
