@@ -95,12 +95,7 @@ func (r *BotDetectionResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"detectionType": plan.DetectionType.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildCreateBody(plan)
 
 	result, err := r.client.CreateBotDetection(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -125,16 +120,7 @@ func (r *BotDetectionResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	if dt, ok := result["detectionType"].(string); ok {
-		state.DetectionType = types.StringValue(dt)
-	}
-	// configuration may contain masked secrets — preserve from state
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -154,11 +140,7 @@ func (r *BotDetectionResource) Update(ctx context.Context, req resource.UpdateRe
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildUpdateBody(plan)
 
 	_, err := r.client.UpdateBotDetection(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -183,11 +165,46 @@ func (r *BotDetectionResource) Delete(ctx context.Context, req resource.DeleteRe
 }
 
 func (r *BotDetectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, botDetectionID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/bot_detection_id, got: %s", req.ID))
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), botDetectionID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func buildCreateBody(plan BotDetectionModel) map[string]interface{} {
+	body := buildUpdateBody(plan)
+	body["detectionType"] = plan.DetectionType.ValueString()
+	return body
+}
+
+func buildUpdateBody(plan BotDetectionModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+	}
+}
+
+func readIntoModel(model *BotDetectionModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if t, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(t)
+	}
+	if dt, ok := data["detectionType"].(string); ok {
+		model.DetectionType = types.StringValue(dt)
+	}
+	// Configuration may contain masked secrets, so preserve it from state.
 }
