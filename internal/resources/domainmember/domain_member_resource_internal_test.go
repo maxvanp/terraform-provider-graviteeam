@@ -1,11 +1,53 @@
 package domainmember
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewDomainMemberResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_domain_member"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewDomainMemberResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	assertStringAttribute(t, resp.Schema.Attributes, "id", false, false, true)
+	assertStringAttribute(t, resp.Schema.Attributes, "domain_id", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "member_id", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "member_type", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "role_id", true, false, false)
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&DomainMemberResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
 
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
@@ -165,5 +207,18 @@ func TestReadIntoModelMapsDomainMembership(t *testing.T) {
 	}
 	if model.RoleID.ValueString() != "role-id" {
 		t.Fatalf("role_id = %q, want role-id", model.RoleID.ValueString())
+	}
+}
+
+func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
 	}
 }

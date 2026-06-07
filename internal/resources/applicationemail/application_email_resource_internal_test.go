@@ -1,10 +1,57 @@
 package applicationemail
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewApplicationEmailResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_application_email"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewApplicationEmailResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	assertStringAttribute(t, resp.Schema.Attributes, "id", false, false, true)
+	assertStringAttribute(t, resp.Schema.Attributes, "domain_id", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "application_id", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "template", true, false, false)
+	assertBoolAttribute(t, resp.Schema.Attributes, "enabled", false, true, true)
+	assertStringAttribute(t, resp.Schema.Attributes, "from", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "from_name", false, true, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "subject", true, false, false)
+	assertStringAttribute(t, resp.Schema.Attributes, "content", true, false, false)
+	assertInt64Attribute(t, resp.Schema.Attributes, "expires_after", true, false, false)
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ApplicationEmailResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
 
 func TestBuildBodyIncludesConfiguredFromName(t *testing.T) {
 	model := ApplicationEmailModel{
@@ -96,5 +143,44 @@ func TestReadIntoModelKeepsExistingFromNameWhenAPIOmitsEmptyValue(t *testing.T) 
 
 	if model.FromName.ValueString() != "Support" {
 		t.Fatalf("from_name = %q, want preserved Support", model.FromName.ValueString())
+	}
+}
+
+func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
+	}
+}
+
+func assertBoolAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.BoolAttribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.BoolAttribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
+	}
+}
+
+func assertInt64Attribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+	t.Helper()
+
+	attr, ok := attrs[name].(schema.Int64Attribute)
+	if !ok {
+		t.Fatalf("%s attribute = %T, want schema.Int64Attribute", name, attrs[name])
+	}
+	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
+		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
+			name, attr.Required, attr.Optional, attr.Computed, required, optional, computed)
 	}
 }
