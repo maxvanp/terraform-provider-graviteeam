@@ -111,9 +111,7 @@ func (r *UserCertificateCredentialResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	result, err := r.client.CreateUserCertificateCredential(ctx, plan.DomainID.ValueString(), plan.UserID.ValueString(), map[string]interface{}{
-		"certificatePem": plan.CertificatePEM.ValueString(),
-	})
+	result, err := r.client.CreateUserCertificateCredential(ctx, plan.DomainID.ValueString(), plan.UserID.ValueString(), buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating user certificate credential", err.Error())
 		return
@@ -216,5 +214,11 @@ func timestampString(value interface{}) types.String {
 		return types.StringValue(fmt.Sprintf("%.0f", typed))
 	default:
 		return types.StringNull()
+	}
+}
+
+func buildCreateBody(plan UserCertificateCredentialModel) map[string]interface{} {
+	return map[string]interface{}{
+		"certificatePem": plan.CertificatePEM.ValueString(),
 	}
 }
