@@ -2,13 +2,20 @@ package i18ndictionary
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -189,6 +196,170 @@ func TestReadIntoModelLeavesEntriesWhenAPIReturnsEmptyEntries(t *testing.T) {
 	if want := map[string]string{"existing": "value"}; !reflect.DeepEqual(entries, want) {
 		t.Fatalf("entries = %#v, want preserved %#v", entries, want)
 	}
+}
+
+func TestI18nDictionaryCRUDManagesEntriesSeparately(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var dictionaryBodies []map[string]interface{}
+	var entriesBodies []map[string]string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected dictionary collection method %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		dictionaryBodies = append(dictionaryBodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":     "dict-123",
+			"name":   body["name"],
+			"locale": body["locale"],
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":     "dict-123",
+				"name":   "French",
+				"locale": "fr",
+				"entries": map[string]interface{}{
+					"login.title": "Connexion",
+				},
+			})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			dictionaryBodies = append(dictionaryBodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":     "dict-123",
+				"name":   body["name"],
+				"locale": body["locale"],
+			})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected dictionary item method %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123/entries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected dictionary entries method %s", r.Method)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode entries body: %v", err)
+		}
+		entriesBodies = append(entriesBodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": body})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createEntries := mapValue(t, map[string]string{"login.title": "Connexion"})
+	createPlan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  createEntries,
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState I18nDictionaryModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	readEntries := map[string]string{}
+	if diags := readState.Entries.ElementsAs(context.Background(), &readEntries, false); diags.HasError() {
+		t.Fatalf("get read entries: %#v", diags)
+	}
+	if want := map[string]string{"login.title": "Connexion"}; !reflect.DeepEqual(readEntries, want) {
+		t.Fatalf("read entries = %#v, want %#v", readEntries, want)
+	}
+
+	updateEntries := mapValue(t, map[string]string{"login.title": "Bienvenue"})
+	updatePlan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French updated"),
+		Locale:   types.StringValue("fr"),
+		Entries:  updateEntries,
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	wantDictionaryBodies := []map[string]interface{}{
+		{"name": "French", "locale": "fr"},
+		{"name": "French updated", "locale": "fr"},
+	}
+	if !reflect.DeepEqual(dictionaryBodies, wantDictionaryBodies) {
+		t.Fatalf("dictionary bodies = %#v, want %#v", dictionaryBodies, wantDictionaryBodies)
+	}
+	wantEntriesBodies := []map[string]string{
+		{"login.title": "Connexion"},
+		{"login.title": "Bienvenue"},
+	}
+	if !reflect.DeepEqual(entriesBodies, wantEntriesBodies) {
+		t.Fatalf("entries bodies = %#v, want %#v", entriesBodies, wantEntriesBodies)
+	}
+}
+
+func i18nDictionaryPlan(t *testing.T, schema resourceschema.Schema, model I18nDictionaryModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
+}
+
+func mapValue(t *testing.T, values map[string]string) types.Map {
+	t.Helper()
+
+	value, diags := types.MapValueFrom(context.Background(), types.StringType, values)
+	if diags.HasError() {
+		t.Fatalf("map value diagnostics: %#v", diags)
+	}
+	return value
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
