@@ -79,11 +79,7 @@ func (r *GroupRolesResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	roleIDs := make([]string, len(plan.Roles))
-	for i, role := range plan.Roles {
-		roleIDs[i] = role.ValueString()
-	}
-
+	roleIDs := stringValues(plan.Roles)
 	if len(roleIDs) > 0 {
 		_, err := r.client.SetGroupRoles(ctx, plan.DomainID.ValueString(), plan.GroupID.ValueString(), roleIDs)
 		if err != nil {
@@ -112,15 +108,7 @@ func (r *GroupRolesResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	var roleIDs []types.String
-	for _, item := range result {
-		if roleMap, ok := item.(map[string]interface{}); ok {
-			if id, ok := roleMap["id"].(string); ok {
-				roleIDs = append(roleIDs, types.StringValue(id))
-			}
-		}
-	}
-	state.Roles = roleIDs
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -141,7 +129,7 @@ func (r *GroupRolesResource) Update(ctx context.Context, req resource.UpdateRequ
 	domainID := plan.DomainID.ValueString()
 	groupID := plan.GroupID.ValueString()
 
-	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Roles), stringValues(state.Roles))
+	toAdd, toRemove := diffRoles(plan.Roles, state.Roles)
 
 	for _, roleID := range toRemove {
 		err := r.client.RemoveGroupRole(ctx, domainID, groupID, roleID)
@@ -183,14 +171,42 @@ func (r *GroupRolesResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *GroupRolesResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/group_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	domainID, groupID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/group_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), groupID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func readIntoModel(model *GroupRolesModel, roles []interface{}) {
+	roleIDs := make([]types.String, 0, len(roles))
+	for _, item := range roles {
+		roleMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, ok := roleMap["id"].(string)
+		if !ok {
+			continue
+		}
+		roleIDs = append(roleIDs, types.StringValue(id))
+	}
+	model.Roles = roleIDs
+}
+
+func diffRoles(desired, current []types.String) (toAdd []string, toRemove []string) {
+	return reconcile.DiffStrings(stringValues(desired), stringValues(current))
 }
 
 func stringValues(values []types.String) []string {
