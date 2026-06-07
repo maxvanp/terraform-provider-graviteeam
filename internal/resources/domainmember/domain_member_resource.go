@@ -94,11 +94,7 @@ func (r *DomainMemberResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	body := map[string]interface{}{
-		"memberId":   plan.MemberID.ValueString(),
-		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
-		"role":       plan.RoleID.ValueString(),
-	}
+	body := buildBody(plan)
 	result, err := r.client.AddOrUpdateDomainMember(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating domain member", err.Error())
@@ -158,16 +154,32 @@ func (r *DomainMemberResource) Delete(ctx context.Context, req resource.DeleteRe
 
 func (r *DomainMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/member_id/member_type/role_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 4 {
+	domainID, memberID, memberType, roleID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/member_id/member_type/role_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), strings.ToUpper(parts[2]))...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), parts[3])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), memberID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), memberType)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), roleID)...)
+}
+
+func parseImportID(id string) (string, string, string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 4 {
+		return "", "", "", "", false
+	}
+	return parts[0], parts[1], strings.ToUpper(parts[2]), parts[3], true
+}
+
+func buildBody(plan DomainMemberModel) map[string]interface{} {
+	return map[string]interface{}{
+		"memberId":   plan.MemberID.ValueString(),
+		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
+		"role":       plan.RoleID.ValueString(),
+	}
 }
 
 func (r *DomainMemberResource) readMembership(ctx context.Context, model *DomainMemberModel) error {
