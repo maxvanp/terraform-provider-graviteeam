@@ -2,11 +2,19 @@ package applicationemail
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -144,6 +152,159 @@ func TestReadIntoModelKeepsExistingFromNameWhenAPIOmitsEmptyValue(t *testing.T) 
 	if model.FromName.ValueString() != "Support" {
 		t.Fatalf("from_name = %q, want preserved Support", model.FromName.ValueString())
 	}
+}
+
+func TestApplicationEmailCRUDClearsRemovedFromName(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			methods = append(methods, "create")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(applicationEmailResponse("email-123", body))
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "RESET_PASSWORD" {
+				t.Fatalf("template query = %q", r.URL.RawQuery)
+			}
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":           "email-123",
+				"template":     "reset_password",
+				"enabled":      true,
+				"from":         "noreply@example.test",
+				"fromName":     "Support",
+				"subject":      "Reset",
+				"content":      "<html>Reset</html>",
+				"expiresAfter": float64(3600),
+			})
+		default:
+			t.Fatalf("collection method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails/email-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(applicationEmailResponse("email-123", body))
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationEmailResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := applicationEmailPlan(t, schemaResp.Schema, ApplicationEmailModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := applicationEmailPlan(t, schemaResp.Schema, ApplicationEmailModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(false),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringNull(),
+		Subject:       types.StringValue("Reset updated"),
+		Content:       types.StringValue("<html>Updated</html>"),
+		ExpiresAfter:  types.Int64Value(7200),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["template"]; got != "RESET_PASSWORD" {
+		t.Fatalf("create template = %#v, want RESET_PASSWORD", got)
+	}
+	if got := bodies[1]["fromName"]; got != "" {
+		t.Fatalf("update fromName = %#v, want clear string", got)
+	}
+	if _, ok := bodies[1]["template"]; ok {
+		t.Fatalf("update body should not include immutable template: %#v", bodies[1])
+	}
+}
+
+func applicationEmailResponse(id string, body map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{
+		"id":           id,
+		"template":     "RESET_PASSWORD",
+		"enabled":      body["enabled"],
+		"from":         body["from"],
+		"subject":      body["subject"],
+		"content":      body["content"],
+		"expiresAfter": body["expiresAfter"],
+	}
+	if fromName, ok := body["fromName"]; ok {
+		result["fromName"] = fromName
+	}
+	return result
+}
+
+func applicationEmailPlan(t *testing.T, schema resourceschema.Schema, model ApplicationEmailModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
