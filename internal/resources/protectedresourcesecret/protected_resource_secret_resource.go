@@ -104,9 +104,7 @@ func (r *ProtectedResourceSecretResource) Create(ctx context.Context, req resour
 		return
 	}
 
-	result, err := r.client.CreateProtectedResourceSecret(ctx, plan.DomainID.ValueString(), plan.ProtectedResourceID.ValueString(), map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	})
+	result, err := r.client.CreateProtectedResourceSecret(ctx, plan.DomainID.ValueString(), plan.ProtectedResourceID.ValueString(), buildBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating protected resource secret", err.Error())
 		return
@@ -185,15 +183,29 @@ func (r *ProtectedResourceSecretResource) Delete(ctx context.Context, req resour
 
 func (r *ProtectedResourceSecretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/protected_resource_id/secret_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	domainID, protectedResourceID, secretID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/protected_resource_id/secret_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("protected_resource_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("protected_resource_id"), protectedResourceID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), secretID)...)
+}
+
+func parseImportID(id string) (string, string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 3 {
+		return "", "", "", false
+	}
+	return parts[0], parts[1], parts[2], true
+}
+
+func buildBody(plan ProtectedResourceSecretModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name": plan.Name.ValueString(),
+	}
 }
 
 func (r *ProtectedResourceSecretResource) findSecret(ctx context.Context, domainID, protectedResourceID, secretID string) (map[string]interface{}, error) {
