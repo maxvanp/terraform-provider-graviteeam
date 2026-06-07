@@ -78,9 +78,8 @@ func (r *ApplicationFlowResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	var flowsData []interface{}
-	if err := json.Unmarshal([]byte(plan.Flows.ValueString()), &flowsData); err != nil {
-		resp.Diagnostics.AddError("Invalid flows JSON", fmt.Sprintf("Error parsing flows: %s", err))
+	flowsData, ok := decodeFlows(plan.Flows.ValueString(), &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -90,12 +89,12 @@ func (r *ApplicationFlowResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	plan.Flows = types.StringValue(string(resultJSON))
+	plan.Flows = types.StringValue(resultJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -117,12 +116,12 @@ func (r *ApplicationFlowResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	state.Flows = types.StringValue(string(resultJSON))
+	state.Flows = types.StringValue(resultJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -134,9 +133,8 @@ func (r *ApplicationFlowResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	var flowsData []interface{}
-	if err := json.Unmarshal([]byte(plan.Flows.ValueString()), &flowsData); err != nil {
-		resp.Diagnostics.AddError("Invalid flows JSON", fmt.Sprintf("Error parsing flows: %s", err))
+	flowsData, ok := decodeFlows(plan.Flows.ValueString(), &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -146,12 +144,12 @@ func (r *ApplicationFlowResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	plan.Flows = types.StringValue(string(resultJSON))
+	plan.Flows = types.StringValue(resultJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -180,4 +178,23 @@ func (r *ApplicationFlowResource) ImportState(ctx context.Context, req resource.
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("application_id"), parts[1])...)
+}
+
+func decodeFlows(value string, diagnostics interface {
+	AddError(summary string, detail string)
+}) ([]interface{}, bool) {
+	var flowsData []interface{}
+	if err := json.Unmarshal([]byte(value), &flowsData); err != nil {
+		diagnostics.AddError("Invalid flows JSON", fmt.Sprintf("Error parsing flows: %s", err))
+		return nil, false
+	}
+	return flowsData, true
+}
+
+func encodeFlows(value interface{}) (string, error) {
+	flowsJSON, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(flowsJSON), nil
 }
