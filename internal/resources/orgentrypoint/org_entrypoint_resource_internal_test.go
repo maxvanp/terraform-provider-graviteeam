@@ -2,11 +2,18 @@ package orgentrypoint
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -197,4 +204,132 @@ func TestInterfaceStringsSkipsNonStringEntries(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("tags = %#v, want %#v", got, want)
 	}
+}
+
+func TestOrgEntrypointCRUDClearsRemovedDescription(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/entrypoints", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(entrypointResponse("entrypoint-123", body, false))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/entrypoints/entrypoint-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":                "entrypoint-123",
+				"name":              "entrypoint",
+				"description":       "created",
+				"url":               "https://login.example.test",
+				"tags":              []interface{}{"tag-1"},
+				"defaultEntrypoint": true,
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(entrypointResponse("entrypoint-123", body, true))
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgEntrypointResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := orgEntrypointPlan(t, schemaResp.Schema, OrgEntrypointModel{
+		Name:        types.StringValue("entrypoint"),
+		Description: types.StringValue("created"),
+		URL:         types.StringValue("https://login.example.test"),
+		Tags:        []types.String{types.StringValue("tag-1")},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := orgEntrypointPlan(t, schemaResp.Schema, OrgEntrypointModel{
+		Name:        types.StringValue("entrypoint-updated"),
+		Description: types.StringNull(),
+		URL:         types.StringValue("https://login-updated.example.test"),
+		Tags:        []types.String{types.StringValue("tag-2")},
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[1]["description"]; got != "" {
+		t.Fatalf("update description = %#v, want clear string", got)
+	}
+	if got := bodies[1]["tags"]; !reflect.DeepEqual(got, []interface{}{"tag-2"}) {
+		t.Fatalf("update tags = %#v", got)
+	}
+}
+
+func entrypointResponse(id string, body map[string]interface{}, defaultEntrypoint bool) map[string]interface{} {
+	return map[string]interface{}{
+		"id":                id,
+		"name":              body["name"],
+		"description":       body["description"],
+		"url":               body["url"],
+		"tags":              body["tags"],
+		"defaultEntrypoint": defaultEntrypoint,
+	}
+}
+
+func orgEntrypointPlan(t *testing.T, schema resourceschema.Schema, model OrgEntrypointModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }

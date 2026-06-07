@@ -2,12 +2,19 @@ package protectedresource
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -254,4 +261,204 @@ func TestProtectedResourceReadSecretIntoModelMapsCreationSecrets(t *testing.T) {
 		model.ClientSecret.ValueString() != "secret-1" {
 		t.Fatalf("model = %#v", model)
 	}
+}
+
+func TestProtectedResourceCRUDPreservesSecretAndClearsRemovedSettings(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":           "resource-123",
+			"clientId":     "client-123",
+			"clientSecret": "clear-secret",
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if got := r.URL.Query().Get("type"); got != "MCP_SERVER" {
+				t.Fatalf("type query = %q, want MCP_SERVER", got)
+			}
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(protectedResourceResponse("resource-123", map[string]interface{}{
+				"name":                "mcp",
+				"description":         "MCP server",
+				"type":                "MCP_SERVER",
+				"clientId":            "client-123",
+				"resourceIdentifiers": []interface{}{"https://api.example.test/mcp"},
+				"features": []interface{}{
+					map[string]interface{}{
+						"key":         "list_items",
+						"type":        "MCP_TOOL",
+						"description": "List items",
+						"scopes":      []interface{}{"openid"},
+					},
+				},
+			}))
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(protectedResourceResponse("resource-123", map[string]interface{}{
+				"name":                body["name"],
+				"type":                "MCP_SERVER",
+				"clientId":            "client-123",
+				"resourceIdentifiers": body["resourceIdentifiers"],
+				"features":            body["features"],
+			}))
+		case http.MethodDelete:
+			if got := r.URL.Query().Get("type"); got != "MCP_SERVER" {
+				t.Fatalf("type query = %q, want MCP_SERVER", got)
+			}
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ProtectedResourceResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := protectedResourcePlan(t, schemaResp.Schema, ProtectedResourceModel{
+		DomainID:            types.StringValue("domain-123"),
+		Name:                types.StringValue("mcp"),
+		Description:         types.StringValue("MCP server"),
+		Type:                types.StringValue("MCP_SERVER"),
+		ResourceIdentifiers: []types.String{types.StringValue("https://api.example.test/mcp")},
+		SettingsJSON:        types.StringValue(`{"authorizationServer":"as-1"}`),
+		Features: []ProtectedResourceFeatureModel{
+			{
+				Key:         types.StringValue("list_items"),
+				Type:        types.StringValue("MCP_TOOL"),
+				Description: types.StringValue("List items"),
+				Scopes:      []types.String{types.StringValue("openid")},
+			},
+		},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var createdState ProtectedResourceModel
+	if diags := createResp.State.Get(context.Background(), &createdState); diags.HasError() {
+		t.Fatalf("get created state: %#v", diags)
+	}
+	if createdState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("client_secret = %q, want clear-secret", createdState.ClientSecret.ValueString())
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState ProtectedResourceModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if readState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("read client_secret = %q, want preserved clear-secret", readState.ClientSecret.ValueString())
+	}
+	if readState.SettingsJSON.ValueString() != `{"authorizationServer":"as-1"}` {
+		t.Fatalf("read settings_json = %q, want preserved plan settings", readState.SettingsJSON.ValueString())
+	}
+
+	updatePlan := protectedResourcePlan(t, schemaResp.Schema, ProtectedResourceModel{
+		DomainID:            types.StringValue("domain-123"),
+		Name:                types.StringValue("mcp-updated"),
+		Type:                types.StringValue("MCP_SERVER"),
+		ResourceIdentifiers: []types.String{types.StringValue("https://api.example.test/mcp-updated")},
+		SettingsJSON:        types.StringNull(),
+		Features:            nil,
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updatedState ProtectedResourceModel
+	if diags := updateResp.State.Get(context.Background(), &updatedState); diags.HasError() {
+		t.Fatalf("get updated state: %#v", diags)
+	}
+	if !updatedState.SettingsJSON.IsNull() {
+		t.Fatalf("updated settings_json = %#v, want null after explicit removal", updatedState.SettingsJSON)
+	}
+	if updatedState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("updated client_secret = %q, want preserved clear-secret", updatedState.ClientSecret.ValueString())
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["type"]; got != "MCP_SERVER" {
+		t.Fatalf("create type = %#v, want MCP_SERVER", got)
+	}
+	createSettings, ok := bodies[0]["settings"].(map[string]interface{})
+	if !ok || createSettings["authorizationServer"] != "as-1" {
+		t.Fatalf("create settings = %#v", bodies[0]["settings"])
+	}
+	if _, ok := bodies[1]["type"]; ok {
+		t.Fatalf("update body should not send immutable type: %#v", bodies[1])
+	}
+	updateSettings, ok := bodies[1]["settings"].(map[string]interface{})
+	if !ok || len(updateSettings) != 0 {
+		t.Fatalf("update settings = %#v, want empty object", bodies[1]["settings"])
+	}
+	if got, ok := bodies[1]["features"].([]interface{}); !ok || len(got) != 0 {
+		t.Fatalf("update features = %#v, want empty list", bodies[1]["features"])
+	}
+}
+
+func protectedResourceResponse(id string, body map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{
+		"id": id,
+	}
+	for key, value := range body {
+		result[key] = value
+	}
+	return result
+}
+
+func protectedResourcePlan(t *testing.T, schema resourceschema.Schema, model ProtectedResourceModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }

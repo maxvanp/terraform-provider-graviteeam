@@ -208,9 +208,10 @@ func (r *ProtectedResourceResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
+	savedSettingsJSON := plan.SettingsJSON
 	r.readIntoModel(&plan, result)
 	plan.ClientSecret = state.ClientSecret
-	plan.SettingsJSON = state.SettingsJSON
+	plan.SettingsJSON = savedSettingsJSON
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
