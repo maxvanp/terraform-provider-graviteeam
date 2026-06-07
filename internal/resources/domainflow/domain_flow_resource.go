@@ -82,12 +82,12 @@ func (r *DomainFlowResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	flowsJSON, err := json.Marshal(result)
+	flowsJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	plan.Flows = types.StringValue(string(flowsJSON))
+	plan.Flows = types.StringValue(flowsJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -109,12 +109,12 @@ func (r *DomainFlowResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	flowsJSON, err := json.Marshal(result)
+	flowsJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	state.Flows = types.StringValue(string(flowsJSON))
+	state.Flows = types.StringValue(flowsJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -137,12 +137,12 @@ func (r *DomainFlowResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	flowsJSON, err := json.Marshal(result)
+	flowsJSON, err := encodeFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
 	}
-	plan.Flows = types.StringValue(string(flowsJSON))
+	plan.Flows = types.StringValue(flowsJSON)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -173,4 +173,12 @@ func decodeFlows(value string, diagnostics interface {
 		return nil, false
 	}
 	return flowsData, true
+}
+
+func encodeFlows(value interface{}) (string, error) {
+	flowsJSON, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(flowsJSON), nil
 }

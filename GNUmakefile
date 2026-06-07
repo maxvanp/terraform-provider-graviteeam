@@ -53,6 +53,10 @@ coverage-baseline:
 	$(GO) test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
 	./scripts/update-test-coverage-baseline.py --go "$(GO)" --coverprofile /tmp/graviteeam-coverage.out
 
+verify-local: coverage-baseline docs-check coverage-audit
+	$(GO) test ./... -count=1
+	git diff --check
+
 docs-tool:
 	@if ! env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' command -v $(TFPLUGINDOCS) >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
 		echo "installing tfplugindocs $(TFPLUGINDOCS_VERSION)"; \
@@ -78,4 +82,4 @@ docs-check: docs-tool
 	rm -f "$$log"
 	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date; run 'make docs' and commit the generated changes" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs-tool docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline verify-local docs-tool docs docs-check
