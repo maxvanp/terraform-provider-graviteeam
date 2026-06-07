@@ -2,11 +2,18 @@ package orggroup
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -166,4 +173,149 @@ func TestInterfaceStringsIgnoresNonStringValuesAsZeroValue(t *testing.T) {
 	if got[0].ValueString() != "user-1" || !got[1].IsNull() {
 		t.Fatalf("converted values = %#v", got)
 	}
+}
+
+func TestOrgGroupCRUDPreservesManagedCollections(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        body["name"],
+			"description": body["description"],
+			"members":     body["members"],
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":          "group-123",
+				"name":        "admins",
+				"description": "Admin group",
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":          "group-123",
+				"name":        body["name"],
+				"description": body["description"],
+				"members":     body["members"],
+				"roles":       body["roles"],
+			})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgGroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := orgGroupPlan(t, schemaResp.Schema, OrgGroupModel{
+		Name:        types.StringValue("admins"),
+		Description: types.StringValue("Admin group"),
+		Members:     []types.String{types.StringValue("user-1")},
+		Roles:       []types.String{types.StringValue("role-1")},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState OrgGroupModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got := stringValues(readState.Members); !reflect.DeepEqual(got, []string{"user-1"}) {
+		t.Fatalf("read members = %#v", got)
+	}
+	if got := stringValues(readState.Roles); !reflect.DeepEqual(got, []string{"role-1"}) {
+		t.Fatalf("read roles = %#v", got)
+	}
+
+	updatePlan := orgGroupPlan(t, schemaResp.Schema, OrgGroupModel{
+		Name:        types.StringValue("admins-updated"),
+		Description: types.StringNull(),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "update", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["members"]; !reflect.DeepEqual(got, []interface{}{"user-1"}) {
+		t.Fatalf("create members = %#v", got)
+	}
+	if _, ok := bodies[0]["roles"]; ok {
+		t.Fatalf("create body should not include roles: %#v", bodies[0])
+	}
+	if got := bodies[1]["roles"]; !reflect.DeepEqual(got, []interface{}{"role-1"}) {
+		t.Fatalf("post-create roles = %#v", got)
+	}
+	if got := bodies[2]["description"]; got != "" {
+		t.Fatalf("update description = %#v, want clear string", got)
+	}
+	if got := bodies[2]["members"]; !reflect.DeepEqual(got, []interface{}{}) {
+		t.Fatalf("update members = %#v, want clear list", got)
+	}
+	if got := bodies[2]["roles"]; !reflect.DeepEqual(got, []interface{}{}) {
+		t.Fatalf("update roles = %#v, want clear list", got)
+	}
+}
+
+func orgGroupPlan(t *testing.T, schema resourceschema.Schema, model OrgGroupModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }

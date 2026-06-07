@@ -2,11 +2,18 @@ package passwordpolicy
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -244,6 +251,170 @@ func TestReadMissingValuesAsNull(t *testing.T) {
 	if !model.IncludeNumbers.IsNull() {
 		t.Fatalf("missing includeNumbers should be null")
 	}
+}
+
+func TestPasswordPolicyCRUDUsesDedicatedDefaultEndpoint(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(passwordPolicyResponse("policy-123", body, false))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":                       "policy-123",
+				"name":                     "Strict Policy",
+				"minLength":                float64(12),
+				"includeNumbers":           true,
+				"passwordHistoryEnabled":   true,
+				"defaultPolicy":            true,
+				"includeSpecialCharacters": true,
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			defaultPolicy, _ := body["defaultPolicy"].(bool)
+			_ = json.NewEncoder(w).Encode(passwordPolicyResponse("policy-123", body, defaultPolicy))
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123/default", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("default method = %s", r.Method)
+		}
+		methods = append(methods, "default")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":                       "policy-123",
+			"name":                     "Strict Policy",
+			"minLength":                float64(12),
+			"includeNumbers":           true,
+			"passwordHistoryEnabled":   true,
+			"defaultPolicy":            true,
+			"includeSpecialCharacters": true,
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &PasswordPolicyResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := passwordPolicyPlan(t, schemaResp.Schema, PasswordPolicyModel{
+		DomainID:               types.StringValue("domain-123"),
+		Name:                   types.StringValue("Strict Policy"),
+		MinLength:              types.Int64Value(12),
+		IncludeNumbers:         types.BoolValue(true),
+		PasswordHistoryEnabled: types.BoolValue(true),
+		DefaultPolicy:          types.BoolValue(true),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := passwordPolicyPlan(t, schemaResp.Schema, PasswordPolicyModel{
+		DomainID:               types.StringValue("domain-123"),
+		Name:                   types.StringValue("Strict Policy updated"),
+		MinLength:              types.Int64Value(10),
+		IncludeNumbers:         types.BoolValue(false),
+		PasswordHistoryEnabled: types.BoolValue(false),
+		DefaultPolicy:          types.BoolValue(false),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "default", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if _, ok := bodies[0]["defaultPolicy"]; ok {
+		t.Fatalf("create body should not include defaultPolicy: %#v", bodies[0])
+	}
+	if got := bodies[1]["defaultPolicy"]; got != false {
+		t.Fatalf("update defaultPolicy = %#v, want false", got)
+	}
+}
+
+func passwordPolicyResponse(id string, body map[string]interface{}, defaultPolicy bool) map[string]interface{} {
+	result := map[string]interface{}{
+		"id":            id,
+		"name":          body["name"],
+		"defaultPolicy": defaultPolicy,
+	}
+	for _, key := range []string{
+		"minLength",
+		"maxLength",
+		"maxConsecutiveLetters",
+		"expiryDuration",
+		"oldPasswords",
+		"includeNumbers",
+		"includeSpecialCharacters",
+		"lettersInMixedCase",
+		"excludePasswordsInDictionary",
+		"excludeUserProfileInfoInPassword",
+		"passwordHistoryEnabled",
+	} {
+		if value, ok := body[key]; ok {
+			result[key] = value
+		}
+	}
+	return result
+}
+
+func passwordPolicyPlan(t *testing.T, schema resourceschema.Schema, model PasswordPolicyModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func assertString(t *testing.T, value types.String, name string, want string) {
