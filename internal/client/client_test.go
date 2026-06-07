@@ -887,6 +887,285 @@ func TestThemeFormEmailAndPluginCRUDOperations(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceI18nAndAlertOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create protected resource body: %v", err)
+		}
+		if body["name"] != "resource" {
+			t.Fatalf("unexpected create protected resource body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-1", "name": "resource"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-2", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("type") != "UMA Resource" {
+			t.Fatalf("unexpected protected resource type query: %s", r.URL.RawQuery)
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-2", "name": "resource"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodDelete:
+			if r.URL.Query().Get("type") != "MCP_SERVER" {
+				t.Fatalf("unexpected protected resource type query: %s", r.URL.RawQuery)
+			}
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-1", "name": "resource"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update protected resource body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1/secrets", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "secret-1"}, {"id": "secret-2"}})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create protected resource secret body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "secret-3", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1/secrets/secret-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1/secrets/secret-2/_renew", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "secret-2", "secret": "renewed"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1/members", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"memberships": []map[string]interface{}{{"id": "membership-1"}, {"id": "membership-2"}},
+			})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode protected resource member body: %v", err)
+			}
+			if body["memberId"] != "user-1" {
+				t.Fatalf("unexpected protected resource member body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "membership-3", "memberId": "user-1"})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-1/members/membership-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create i18n dictionary body: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dictionary-1", "name": body["name"]})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dictionary-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dictionary-1", "locale": "fr"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update i18n dictionary body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dictionary-1", "name": body["name"]})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dictionary-1/entries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode replace i18n entries body: %v", err)
+		}
+		if body["login.title"] != "Bonjour" {
+			t.Fatalf("unexpected i18n entries body: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dictionary-1", "entries": body})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/notifiers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create alert notifier body: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "notifier-1", "name": body["name"]})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/notifiers/notifier-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "notifier-1", "name": "notifier"})
+		case http.MethodPatch:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch alert notifier body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "notifier-1", "name": body["name"]})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PATCH, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/triggers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "trigger-1", "enabled": false}})
+		case http.MethodPatch:
+			var body []map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch alert triggers body: %v", err)
+			}
+			if len(body) != 1 || body[0]["id"] != "trigger-1" {
+				t.Fatalf("unexpected alert triggers body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		default:
+			t.Errorf("expected GET or PATCH, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	resource, err := c.CreateProtectedResource(context.Background(), "domain-123", map[string]interface{}{"name": "resource"})
+	if err != nil || resource["id"] != "resource-1" {
+		t.Fatalf("create protected resource: resource=%#v err=%v", resource, err)
+	}
+	resource, err = c.GetProtectedResource(context.Background(), "domain-123", "resource-1", "")
+	if err != nil || resource["id"] != "resource-1" {
+		t.Fatalf("get protected resource with default type: resource=%#v err=%v", resource, err)
+	}
+	resource, err = c.GetProtectedResource(context.Background(), "domain-123", "resource-2", "UMA Resource")
+	if err != nil || resource["id"] != "resource-2" {
+		t.Fatalf("get protected resource with explicit type: resource=%#v err=%v", resource, err)
+	}
+	resource, err = c.UpdateProtectedResource(context.Background(), "domain-123", "resource-1", map[string]interface{}{"name": "updated-resource"})
+	if err != nil || resource["name"] != "updated-resource" {
+		t.Fatalf("update protected resource: resource=%#v err=%v", resource, err)
+	}
+	secrets, err := c.ListProtectedResourceSecrets(context.Background(), "domain-123", "resource-1")
+	if err != nil || len(secrets) != 2 {
+		t.Fatalf("list protected resource secrets: secrets=%#v err=%v", secrets, err)
+	}
+	secret, err := c.CreateProtectedResourceSecret(context.Background(), "domain-123", "resource-1", map[string]interface{}{"name": "secret"})
+	if err != nil || secret["id"] != "secret-3" {
+		t.Fatalf("create protected resource secret: secret=%#v err=%v", secret, err)
+	}
+	secret, err = c.RenewProtectedResourceSecret(context.Background(), "domain-123", "resource-1", "secret-2")
+	if err != nil || secret["secret"] != "renewed" {
+		t.Fatalf("renew protected resource secret: secret=%#v err=%v", secret, err)
+	}
+	if err := c.DeleteProtectedResourceSecret(context.Background(), "domain-123", "resource-1", "secret-3"); err != nil {
+		t.Fatalf("delete protected resource secret: %v", err)
+	}
+	members, err := c.ListProtectedResourceMembers(context.Background(), "domain-123", "resource-1")
+	if err != nil || len(members) != 2 {
+		t.Fatalf("list protected resource members: members=%#v err=%v", members, err)
+	}
+	member, err := c.AddOrUpdateProtectedResourceMember(context.Background(), "domain-123", "resource-1", map[string]interface{}{"memberId": "user-1"})
+	if err != nil || member["id"] != "membership-3" {
+		t.Fatalf("add protected resource member: member=%#v err=%v", member, err)
+	}
+	if err := c.DeleteProtectedResourceMember(context.Background(), "domain-123", "resource-1", "membership-3"); err != nil {
+		t.Fatalf("delete protected resource member: %v", err)
+	}
+	if err := c.DeleteProtectedResource(context.Background(), "domain-123", "resource-1", ""); err != nil {
+		t.Fatalf("delete protected resource: %v", err)
+	}
+	if err := c.DeleteProtectedResource(context.Background(), "domain-123", "resource-2", "UMA Resource"); err != nil {
+		t.Fatalf("delete protected resource with explicit type: %v", err)
+	}
+	dictionary, err := c.CreateI18nDictionary(context.Background(), "domain-123", map[string]interface{}{"name": "dictionary"})
+	if err != nil || dictionary["id"] != "dictionary-1" {
+		t.Fatalf("create i18n dictionary: dictionary=%#v err=%v", dictionary, err)
+	}
+	dictionary, err = c.GetI18nDictionary(context.Background(), "domain-123", "dictionary-1")
+	if err != nil || dictionary["locale"] != "fr" {
+		t.Fatalf("get i18n dictionary: dictionary=%#v err=%v", dictionary, err)
+	}
+	dictionary, err = c.UpdateI18nDictionary(context.Background(), "domain-123", "dictionary-1", map[string]interface{}{"name": "updated-dictionary"})
+	if err != nil || dictionary["name"] != "updated-dictionary" {
+		t.Fatalf("update i18n dictionary: dictionary=%#v err=%v", dictionary, err)
+	}
+	dictionary, err = c.ReplaceI18nDictionaryEntries(context.Background(), "domain-123", "dictionary-1", map[string]string{"login.title": "Bonjour"})
+	if err != nil || dictionary["id"] != "dictionary-1" {
+		t.Fatalf("replace i18n dictionary entries: dictionary=%#v err=%v", dictionary, err)
+	}
+	if err := c.DeleteI18nDictionary(context.Background(), "domain-123", "dictionary-1"); err != nil {
+		t.Fatalf("delete i18n dictionary: %v", err)
+	}
+	notifier, err := c.CreateAlertNotifier(context.Background(), "domain-123", map[string]interface{}{"name": "notifier"})
+	if err != nil || notifier["id"] != "notifier-1" {
+		t.Fatalf("create alert notifier: notifier=%#v err=%v", notifier, err)
+	}
+	notifier, err = c.GetAlertNotifier(context.Background(), "domain-123", "notifier-1")
+	if err != nil || notifier["name"] != "notifier" {
+		t.Fatalf("get alert notifier: notifier=%#v err=%v", notifier, err)
+	}
+	notifier, err = c.PatchAlertNotifier(context.Background(), "domain-123", "notifier-1", map[string]interface{}{"name": "updated-notifier"})
+	if err != nil || notifier["name"] != "updated-notifier" {
+		t.Fatalf("patch alert notifier: notifier=%#v err=%v", notifier, err)
+	}
+	triggers, err := c.ListAlertTriggers(context.Background(), "domain-123")
+	if err != nil || len(triggers) != 1 {
+		t.Fatalf("list alert triggers: triggers=%#v err=%v", triggers, err)
+	}
+	triggers, err = c.PatchAlertTriggers(context.Background(), "domain-123", []map[string]interface{}{{"id": "trigger-1", "enabled": true}})
+	if err != nil || len(triggers) != 1 {
+		t.Fatalf("patch alert triggers: triggers=%#v err=%v", triggers, err)
+	}
+	if err := c.DeleteAlertNotifier(context.Background(), "domain-123", "notifier-1"); err != nil {
+		t.Fatalf("delete alert notifier: %v", err)
+	}
+}
+
 func TestUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
