@@ -1,13 +1,72 @@
 package alerttrigger
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewAlertTriggerResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_alert_trigger"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewAlertTriggerResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "type"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{"enabled", "alert_notifier_ids"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() || !attr.IsComputed() {
+			t.Fatalf("attribute %q should be optional+computed", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["id"]; attr == nil || !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&AlertTriggerResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
 func TestValidateTriggerTypeNormalizesAcceptedValues(t *testing.T) {
+	t.Parallel()
+
 	for _, value := range []string{"too_many_login_failures", "TOO_MANY_LOGIN_FAILURES", "risk_assessment", "RISK_ASSESSMENT"} {
 		if err := validateTriggerType(value); err != nil {
 			t.Fatalf("validateTriggerType(%q) returned error: %v", value, err)
@@ -16,6 +75,8 @@ func TestValidateTriggerTypeNormalizesAcceptedValues(t *testing.T) {
 }
 
 func TestValidateTriggerTypeRejectsUnknownValue(t *testing.T) {
+	t.Parallel()
+
 	if err := validateTriggerType("unknown"); err == nil {
 		t.Fatal("validateTriggerType(unknown) returned nil, want error")
 	}

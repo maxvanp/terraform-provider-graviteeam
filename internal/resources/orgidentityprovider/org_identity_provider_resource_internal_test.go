@@ -1,12 +1,52 @@
 package orgidentityprovider
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgIdentityProviderResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"name", "type", "configuration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{"mappers", "domain_whitelist", "external", "group_mapper", "role_mapper"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() {
+			t.Fatalf("attribute %q should be optional", name)
+		}
+	}
+	for _, name := range []string{"id", "external"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["configuration"]; attr == nil || !attr.IsSensitive() {
+		t.Fatalf("configuration should be sensitive")
+	}
+}
 
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()

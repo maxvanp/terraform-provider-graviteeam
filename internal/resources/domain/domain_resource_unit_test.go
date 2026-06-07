@@ -1,12 +1,76 @@
 package domain
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewDomainResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_domain"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewDomainResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["name"]; attr == nil || !attr.IsRequired() {
+		t.Fatalf("name should be required")
+	}
+	for _, name := range []string{"description", "enabled", "data_plane_id", "settings_json"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() {
+			t.Fatalf("attribute %q should be optional", name)
+		}
+	}
+	for _, name := range []string{"id", "enabled", "data_plane_id", "default_idp_id"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+	for _, name := range []string{"oidc", "login_settings"} {
+		if _, ok := resp.Schema.Blocks[name]; !ok {
+			t.Fatalf("missing schema block %q", name)
+		}
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&DomainResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
 func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
+	t.Parallel()
+
 	resource := &DomainResource{}
 	plan := DomainModel{
 		Name:        types.StringValue("updated"),
@@ -115,6 +179,8 @@ func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 }
 
 func TestDomainBuildUpdateBodyRejectsInvalidSettingsJSON(t *testing.T) {
+	t.Parallel()
+
 	resource := &DomainResource{}
 	for _, settingsJSON := range []string{`[]`, `null`} {
 		plan := DomainModel{

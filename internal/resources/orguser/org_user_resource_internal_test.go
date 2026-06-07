@@ -1,11 +1,87 @@
 package orguser
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgUserResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_org_user"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewOrgUserResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	if attr := resp.Schema.Attributes["username"]; attr == nil || !attr.IsRequired() {
+		t.Fatalf("username should be required")
+	}
+	for _, name := range []string{
+		"password",
+		"email",
+		"first_name",
+		"last_name",
+		"force_reset_password",
+		"enabled",
+		"pre_registration",
+		"reset_password",
+		"reset_password_trigger",
+	} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() {
+			t.Fatalf("attribute %q should be optional", name)
+		}
+	}
+	for _, name := range []string{"id", "force_reset_password", "enabled", "pre_registration"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+	for _, name := range []string{"password", "reset_password"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsSensitive() {
+			t.Fatalf("attribute %q should be sensitive", name)
+		}
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgUserResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestBuildCreateBodyIncludesRequiredAndOptionalFields(t *testing.T) {
 	t.Parallel()

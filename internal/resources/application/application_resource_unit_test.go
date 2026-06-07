@@ -1,14 +1,93 @@
 package application
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewApplicationResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_application"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewApplicationResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name", "type"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{"description", "metadata_json", "settings_json", "identity_providers", "factors"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() {
+			t.Fatalf("attribute %q should be optional", name)
+		}
+	}
+	for _, name := range []string{"id", "client_id", "client_secret"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsComputed() {
+			t.Fatalf("attribute %q should be computed", name)
+		}
+	}
+	for _, name := range []string{"client_secret", "settings_json"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsSensitive() {
+			t.Fatalf("attribute %q should be sensitive", name)
+		}
+	}
+	for _, name := range []string{"identity_provider_rule", "oauth_settings", "mfa_settings"} {
+		if _, ok := resp.Schema.Blocks[name]; !ok {
+			t.Fatalf("missing schema block %q", name)
+		}
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ApplicationResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
+
 func TestApplicationBuildUpdateBodyMergesSettingsJSONWithTypedBlocks(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	plan := ApplicationModel{
 		Name: types.StringValue("test-app"),
@@ -72,6 +151,8 @@ func TestApplicationBuildUpdateBodyMergesSettingsJSONWithTypedBlocks(t *testing.
 }
 
 func TestApplicationBuildUpdateBodyRejectsInvalidSettingsJSON(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	for _, settingsJSON := range []string{`[]`, `null`} {
 		plan := ApplicationModel{
@@ -87,6 +168,8 @@ func TestApplicationBuildUpdateBodyRejectsInvalidSettingsJSON(t *testing.T) {
 }
 
 func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	plan := ApplicationModel{
 		Name: types.StringValue("test-app"),
@@ -109,6 +192,8 @@ func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
 }
 
 func TestApplicationBuildBodiesIncludeMetadataJSON(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	plan := ApplicationModel{
 		Name: types.StringValue("test-app"),
@@ -149,6 +234,8 @@ func TestApplicationBuildBodiesIncludeMetadataJSON(t *testing.T) {
 }
 
 func TestApplicationBuildBodiesRejectInvalidMetadataJSON(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	for _, metadataJSON := range []string{`[]`, `null`} {
 		plan := ApplicationModel{
@@ -167,6 +254,8 @@ func TestApplicationBuildBodiesRejectInvalidMetadataJSON(t *testing.T) {
 }
 
 func TestApplicationReadIntoModelPreservesUnownedMetadata(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	model := &ApplicationModel{}
 
@@ -182,6 +271,8 @@ func TestApplicationReadIntoModelPreservesUnownedMetadata(t *testing.T) {
 }
 
 func TestApplicationReadIntoModelReadsOwnedMetadata(t *testing.T) {
+	t.Parallel()
+
 	resource := &ApplicationResource{}
 	model := &ApplicationModel{
 		MetadataJSON: types.StringValue(`{"tenant":{"id":"old"}}`),

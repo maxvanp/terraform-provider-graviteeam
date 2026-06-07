@@ -1,11 +1,81 @@
 package passwordpolicy
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewPasswordPolicyResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_password_policy"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestSchemaAttributes(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewPasswordPolicyResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+
+	for _, name := range []string{"domain_id", "name"} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsRequired() {
+			t.Fatalf("attribute %q should be required", name)
+		}
+	}
+	for _, name := range []string{
+		"min_length",
+		"max_length",
+		"max_consecutive_letters",
+		"expiry_duration",
+		"old_passwords",
+		"include_numbers",
+		"include_special_characters",
+		"letters_in_mixed_case",
+		"exclude_passwords_in_dictionary",
+		"exclude_user_profile_info_in_password",
+		"password_history_enabled",
+		"default_policy",
+	} {
+		attr, ok := resp.Schema.Attributes[name]
+		if !ok {
+			t.Fatalf("missing schema attribute %q", name)
+		}
+		if !attr.IsOptional() || !attr.IsComputed() {
+			t.Fatalf("attribute %q should be optional+computed", name)
+		}
+	}
+	if attr := resp.Schema.Attributes["id"]; attr == nil || !attr.IsComputed() {
+		t.Fatalf("id should be computed")
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&PasswordPolicyResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostic")
+	}
+}
 
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
