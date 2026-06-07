@@ -2,11 +2,18 @@ package authdevicenotifier
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestAuthDeviceNotifierMetadata(t *testing.T) {
@@ -162,4 +169,128 @@ func TestReadIntoModelPreservesConfiguration(t *testing.T) {
 	if got, want := model.Configuration.ValueString(), `{"headerValue":"real-secret"}`; got != want {
 		t.Fatalf("configuration = %q, want preserved %q", got, want)
 	}
+}
+
+func TestAuthDeviceNotifierCRUDPreservesSecretConfiguration(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+	var bodies []map[string]interface{}
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/auth-device-notifiers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		body := decodeAuthDeviceNotifierBody(t, r)
+		bodies = append(bodies, body)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "notifier-123", "name": body["name"], "type": body["type"]})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/auth-device-notifiers/notifier-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":            "notifier-123",
+				"name":          "read-notifier",
+				"type":          "http-am-authdevice-notifier",
+				"configuration": `{"headerValue":"********"}`,
+			})
+		case http.MethodPut:
+			body := decodeAuthDeviceNotifierBody(t, r)
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "notifier-123", "name": body["name"], "type": body["type"]})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &AuthDeviceNotifierResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := authDeviceNotifierPlan(t, schemaResp.Schema, AuthDeviceNotifierModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("created-notifier"),
+		Type:          types.StringValue("http-am-authdevice-notifier"),
+		Configuration: types.StringValue(`{"headerValue":"real-secret"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var created AuthDeviceNotifierModel
+	if diags := createResp.State.Get(context.Background(), &created); diags.HasError() {
+		t.Fatalf("get created state: %#v", diags)
+	}
+	if created.ID.ValueString() != "notifier-123" {
+		t.Fatalf("created id = %q", created.ID.ValueString())
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var read AuthDeviceNotifierModel
+	if diags := readResp.State.Get(context.Background(), &read); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if read.Configuration.ValueString() != `{"headerValue":"real-secret"}` {
+		t.Fatalf("read configuration = %q", read.Configuration.ValueString())
+	}
+
+	updatePlan := authDeviceNotifierPlan(t, schemaResp.Schema, AuthDeviceNotifierModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("updated-notifier"),
+		Type:          types.StringValue("http-am-authdevice-notifier"),
+		Configuration: types.StringValue(`{"headerValue":"updated-secret"}`),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan, State: readResp.State}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+	wantBodies := []map[string]interface{}{
+		{"name": "created-notifier", "type": "http-am-authdevice-notifier", "configuration": `{"headerValue":"real-secret"}`},
+		{"name": "updated-notifier", "type": "http-am-authdevice-notifier", "configuration": `{"headerValue":"updated-secret"}`},
+	}
+	if !reflect.DeepEqual(bodies, wantBodies) {
+		t.Fatalf("bodies = %#v, want %#v", bodies, wantBodies)
+	}
+}
+
+func decodeAuthDeviceNotifierBody(t *testing.T, r *http.Request) map[string]interface{} {
+	t.Helper()
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	return body
+}
+
+func authDeviceNotifierPlan(t *testing.T, schema resourceschema.Schema, model AuthDeviceNotifierModel) tfsdk.Plan {
+	t.Helper()
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
