@@ -88,11 +88,7 @@ func (r *AuthorizationEngineResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	result, err := r.client.CreateAuthorizationEngine(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -100,7 +96,7 @@ func (r *AuthorizationEngineResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	r.readIntoModel(&plan, result)
+	readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -117,7 +113,7 @@ func (r *AuthorizationEngineResource) Read(ctx context.Context, req resource.Rea
 		return
 	}
 
-	r.readIntoModel(&state, result)
+	readIntoModel(&state, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -135,11 +131,7 @@ func (r *AuthorizationEngineResource) Update(ctx context.Context, req resource.U
 	}
 
 	plan.ID = state.ID
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	result, err := r.client.UpdateAuthorizationEngine(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -147,7 +139,7 @@ func (r *AuthorizationEngineResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	r.readIntoModel(&plan, result)
+	readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -165,16 +157,32 @@ func (r *AuthorizationEngineResource) Delete(ctx context.Context, req resource.D
 }
 
 func (r *AuthorizationEngineResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, engineID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/authorization_engine_id, got: %s", req.ID))
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), engineID)...)
 }
 
-func (r *AuthorizationEngineResource) readIntoModel(model *AuthorizationEngineModel, data map[string]interface{}) {
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func buildBody(plan AuthorizationEngineModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+	}
+}
+
+func readIntoModel(model *AuthorizationEngineModel, data map[string]interface{}) {
 	if id, ok := data["id"].(string); ok {
 		model.ID = types.StringValue(id)
 	}
