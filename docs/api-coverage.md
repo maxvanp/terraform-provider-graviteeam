@@ -12,7 +12,7 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 | OpenAPI path entries | `201` |
 | Path entries with at least one write verb | `123` |
 | Terraform resources registered | `52` |
-| Terraform data sources registered | `17` |
+| Terraform data sources registered | `19` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -24,6 +24,12 @@ Run the coverage audit with:
 
 ```bash
 ./scripts/audit-openapi-coverage.py
+```
+
+When the local docker-compose stack is running, verify plugin availability with:
+
+```bash
+./scripts/probe-local-compose-plugins.py --check
 ```
 
 Current automated audit summary:
@@ -51,7 +57,7 @@ Current test coverage baseline:
 | Import-capable resources with import tests | `52/52` |
 | `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `3.6%` total statement coverage |
 
-The remaining local compose acceptance gap is `graviteeam_authorization_engine`, because the bundled Gravitee AM 4.11.4 compose stack reports the `openfga` authorization engine plugin as not deployed.
+The remaining local compose acceptance gap is `graviteeam_authorization_engine`. The bundled Gravitee AM 4.11.4 image loads the `openfga` authorization engine zip, but the local API reports it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint does not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
 
 ## Covered Resources
 

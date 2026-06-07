@@ -30,6 +30,7 @@ vet:
 coverage-audit:
 	./scripts/audit-openapi-coverage.py --check-doc
 	./scripts/audit-test-coverage.py --check
+	./scripts/probe-local-compose-plugins.py --check
 
 lint:
 	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
