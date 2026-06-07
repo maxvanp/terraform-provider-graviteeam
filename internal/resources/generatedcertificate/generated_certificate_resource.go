@@ -100,8 +100,8 @@ func (r *GeneratedCertificateResource) Create(ctx context.Context, req resource.
 		return
 	}
 
-	id, ok := result["id"].(string)
-	if !ok || id == "" {
+	id, ok := certificateID(result)
+	if !ok {
 		resp.Diagnostics.AddError("Error generating certificate", "API response did not include a certificate id")
 		return
 	}
@@ -159,4 +159,12 @@ func readGeneratedCertificate(model *GeneratedCertificateModel, result map[strin
 	if certificateType, ok := result["type"].(string); ok {
 		model.Type = types.StringValue(certificateType)
 	}
+}
+
+func certificateID(result map[string]interface{}) (string, bool) {
+	id, ok := result["id"].(string)
+	if !ok || id == "" {
+		return "", false
+	}
+	return id, true
 }
