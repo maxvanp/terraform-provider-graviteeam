@@ -46,6 +46,17 @@ AUDITS = [
         intentionally_unmanaged={},
     ),
     ResourceSchemaAudit(
+        name="graviteeam_alert_trigger",
+        package_dir=ROOT / "internal" / "resources" / "alerttrigger",
+        schema_name="PatchAlertTrigger",
+        api_to_tf={
+            "alertNotifiers": "alert_notifier_ids",
+            "enabled": "enabled",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
         name="graviteeam_application",
         package_dir=ROOT / "internal" / "resources" / "application",
         schema_name="PatchApplication",
@@ -180,6 +191,15 @@ AUDITS = [
             "memberId": "member_id",
             "memberType": "member_type",
             "role": "role_id",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_domain_certificate_settings",
+        package_dir=ROOT / "internal" / "resources" / "domaincertificatesettings",
+        schema_name="CertificateSettings",
+        api_to_tf={
+            "fallbackCertificate": "fallback_certificate_id",
         },
         intentionally_unmanaged={},
     ),
@@ -336,6 +356,15 @@ AUDITS = [
             "members": "members",
             "name": "name",
             "roles": "roles",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_settings",
+        package_dir=ROOT / "internal" / "resources" / "orgsettings",
+        schema_name="PatchOrganization",
+        api_to_tf={
+            "identities": "identities",
         },
         intentionally_unmanaged={},
     ),
@@ -587,6 +616,7 @@ AUDITS = [
 
 AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_alert_notifier", ROOT / "internal" / "resources" / "alertnotifier", "NewAlertNotifier"),
+    ResourceSchemaCandidate("graviteeam_alert_trigger", ROOT / "internal" / "resources" / "alerttrigger", "PatchAlertTrigger"),
     ResourceSchemaCandidate("graviteeam_application", ROOT / "internal" / "resources" / "application", "PatchApplication"),
     ResourceSchemaCandidate("graviteeam_application_member", ROOT / "internal" / "resources" / "applicationmember", "NewMembership"),
     ResourceSchemaCandidate("graviteeam_application_secret", ROOT / "internal" / "resources" / "applicationsecret", "NewClientSecret"),
@@ -596,6 +626,7 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_certificate", ROOT / "internal" / "resources" / "certificate", "UpdateCertificate"),
     ResourceSchemaCandidate("graviteeam_device_identifier", ROOT / "internal" / "resources" / "deviceidentifier", "UpdateDeviceIdentifier"),
     ResourceSchemaCandidate("graviteeam_domain", ROOT / "internal" / "resources" / "domain", "PatchDomain"),
+    ResourceSchemaCandidate("graviteeam_domain_certificate_settings", ROOT / "internal" / "resources" / "domaincertificatesettings", "CertificateSettings"),
     ResourceSchemaCandidate("graviteeam_domain_member", ROOT / "internal" / "resources" / "domainmember", "NewMembership"),
     ResourceSchemaCandidate("graviteeam_email_template", ROOT / "internal" / "resources" / "emailtemplate", "UpdateEmail"),
     ResourceSchemaCandidate("graviteeam_extension_grant", ROOT / "internal" / "resources" / "extensiongrant", "UpdateExtensionGrant"),
@@ -609,6 +640,7 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_org_entrypoint", ROOT / "internal" / "resources" / "orgentrypoint", "UpdateEntrypoint"),
     ResourceSchemaCandidate("graviteeam_org_form", ROOT / "internal" / "resources" / "orgform", "UpdateForm"),
     ResourceSchemaCandidate("graviteeam_org_group", ROOT / "internal" / "resources" / "orggroup", "UpdateGroup"),
+    ResourceSchemaCandidate("graviteeam_org_settings", ROOT / "internal" / "resources" / "orgsettings", "PatchOrganization"),
     ResourceSchemaCandidate("graviteeam_org_reporter", ROOT / "internal" / "resources" / "orgreporter", "UpdateReporter"),
     ResourceSchemaCandidate("graviteeam_org_role", ROOT / "internal" / "resources" / "orgrole", "UpdateRole"),
     ResourceSchemaCandidate("graviteeam_org_tag", ROOT / "internal" / "resources" / "orgtag", "UpdateTag"),
