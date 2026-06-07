@@ -2,10 +2,18 @@ package generatedcertificate
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestGeneratedCertificateMetadata(t *testing.T) {
@@ -136,4 +144,96 @@ func TestCertificateIDRejectsMissingEmptyOrMalformedID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGeneratedCertificateCRUDUsesRotateReadDelete(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var methods []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates/rotate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected rotate method %s", r.Method)
+		}
+		methods = append(methods, "rotate")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":   "cert-123",
+			"name": "generated-cert",
+			"type": "pem",
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates/cert-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":   "cert-123",
+				"name": "generated-cert-read",
+				"type": "pem",
+			})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected certificate item method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GeneratedCertificateResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := generatedCertificatePlan(t, schemaResp.Schema, GeneratedCertificateModel{
+		DomainID:        types.StringValue("domain-123"),
+		RotationTrigger: types.StringValue("initial"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState GeneratedCertificateModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := readState.Name.ValueString(), "generated-cert-read"; got != want {
+		t.Fatalf("name = %q, want %q", got, want)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: readResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if want := []string{"rotate", "read", "delete"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("methods = %#v, want %#v", methods, want)
+	}
+}
+
+func generatedCertificatePlan(t *testing.T, schema resourceschema.Schema, model GeneratedCertificateModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
