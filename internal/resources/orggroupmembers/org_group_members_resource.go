@@ -100,11 +100,7 @@ func (r *OrgGroupMembersResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	var members []types.String
-	for _, id := range memberIDs {
-		members = append(members, types.StringValue(id))
-	}
-	state.Members = members
+	readIntoModel(&state, memberIDs)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -123,7 +119,7 @@ func (r *OrgGroupMembersResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	groupID := plan.GroupID.ValueString()
-	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Members), stringValues(state.Members))
+	toAdd, toRemove := diffMembers(plan.Members, state.Members)
 
 	for _, memberID := range toRemove {
 		err := r.client.RemoveOrgGroupMember(ctx, groupID, memberID)
@@ -163,12 +159,28 @@ func (r *OrgGroupMembersResource) Delete(ctx context.Context, req resource.Delet
 
 func (r *OrgGroupMembersResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: group_id
-	if strings.TrimSpace(req.ID) == "" {
+	if !validImportID(req.ID) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: group_id, got: %s", req.ID))
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), req.ID)...)
+}
+
+func validImportID(id string) bool {
+	return strings.TrimSpace(id) != ""
+}
+
+func readIntoModel(model *OrgGroupMembersModel, memberIDs []string) {
+	members := make([]types.String, 0, len(memberIDs))
+	for _, id := range memberIDs {
+		members = append(members, types.StringValue(id))
+	}
+	model.Members = members
+}
+
+func diffMembers(desired, current []types.String) (toAdd []string, toRemove []string) {
+	return reconcile.DiffStrings(stringValues(desired), stringValues(current))
 }
 
 func stringValues(values []types.String) []string {
