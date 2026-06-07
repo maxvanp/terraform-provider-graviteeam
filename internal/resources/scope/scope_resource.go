@@ -76,6 +76,16 @@ func (r *ScopeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:    true,
 				Description: "Scope expiration in seconds",
 			},
+			"icon_uri": schema.StringAttribute{
+				Optional:    true,
+				Description: "URI of the icon associated with the scope",
+			},
+			"parameterized": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the scope is parameterized",
+			},
 		},
 	}
 }
@@ -183,9 +193,10 @@ func (r *ScopeResource) ImportState(ctx context.Context, req resource.ImportStat
 
 func (r *ScopeResource) buildBody(plan ScopeModel) map[string]interface{} {
 	body := map[string]interface{}{
-		"key":       plan.Key.ValueString(),
-		"name":      plan.Name.ValueString(),
-		"discovery": plan.Discovery.ValueBool(),
+		"key":           plan.Key.ValueString(),
+		"name":          plan.Name.ValueString(),
+		"discovery":     plan.Discovery.ValueBool(),
+		"parameterized": plan.Parameterized.ValueBool(),
 	}
 
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
@@ -194,14 +205,18 @@ func (r *ScopeResource) buildBody(plan ScopeModel) map[string]interface{} {
 	if !plan.ExpiresIn.IsNull() && !plan.ExpiresIn.IsUnknown() {
 		body["expiresIn"] = plan.ExpiresIn.ValueInt64()
 	}
+	if !plan.IconURI.IsNull() && !plan.IconURI.IsUnknown() {
+		body["iconUri"] = plan.IconURI.ValueString()
+	}
 
 	return body
 }
 
 func (r *ScopeResource) buildUpdateBody(plan, state ScopeModel) map[string]interface{} {
 	body := map[string]interface{}{
-		"name":      plan.Name.ValueString(),
-		"discovery": plan.Discovery.ValueBool(),
+		"name":          plan.Name.ValueString(),
+		"discovery":     plan.Discovery.ValueBool(),
+		"parameterized": plan.Parameterized.ValueBool(),
 	}
 
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
@@ -213,6 +228,11 @@ func (r *ScopeResource) buildUpdateBody(plan, state ScopeModel) map[string]inter
 		body["expiresIn"] = plan.ExpiresIn.ValueInt64()
 	} else if !state.ExpiresIn.IsNull() {
 		body["expiresIn"] = 0
+	}
+	if !plan.IconURI.IsNull() && !plan.IconURI.IsUnknown() {
+		body["iconUri"] = plan.IconURI.ValueString()
+	} else if !state.IconURI.IsNull() {
+		body["iconUri"] = nil
 	}
 
 	return body
@@ -253,5 +273,13 @@ func (r *ScopeResource) readIntoModel(model *ScopeModel, data map[string]interfa
 		}
 	} else {
 		model.ExpiresIn = types.Int64Null()
+	}
+	if iconURI, ok := data["iconUri"].(string); ok && iconURI != "" {
+		model.IconURI = types.StringValue(iconURI)
+	} else {
+		model.IconURI = types.StringNull()
+	}
+	if parameterized, ok := data["parameterized"].(bool); ok {
+		model.Parameterized = types.BoolValue(parameterized)
 	}
 }

@@ -59,6 +59,20 @@ AUDITS = [
             "passwordPolicy": "organization identity providers have no matching org password policy resource in the provider",
         },
     ),
+    ResourceSchemaAudit(
+        name="graviteeam_scope",
+        package_dir=ROOT / "internal" / "resources" / "scope",
+        schema_name="UpdateScope",
+        api_to_tf={
+            "description": "description",
+            "discovery": "discovery",
+            "expiresIn": "expires_in",
+            "iconUri": "icon_uri",
+            "name": "name",
+            "parameterized": "parameterized",
+        },
+        intentionally_unmanaged={},
+    ),
 ]
 
 TFSDK_RE = re.compile(r'`tfsdk:"([^"]+)"`')
