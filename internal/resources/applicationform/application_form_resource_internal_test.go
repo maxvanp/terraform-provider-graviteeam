@@ -2,13 +2,20 @@ package applicationform
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -137,6 +144,139 @@ func TestFormTemplateValidatorRejectsInvalidTemplate(t *testing.T) {
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected diagnostics for invalid template")
 	}
+}
+
+func TestApplicationFormCRUDPreservesCurrentAssetsOnUpdate(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	assets := []interface{}{"logo.png"}
+	var bodies []map[string]interface{}
+	var deletePaths []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":       "form-123",
+				"template": body["template"],
+				"enabled":  body["enabled"],
+				"content":  body["content"],
+			})
+		case http.MethodGet:
+			if got, want := r.URL.Query().Get("template"), "LOGIN"; got != want {
+				t.Fatalf("template query = %q, want %q", got, want)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":       "form-123",
+				"template": "login",
+				"enabled":  true,
+				"content":  "<html>api</html>",
+				"assets":   assets,
+			})
+		default:
+			t.Fatalf("unexpected application form collection method %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":       "form-123",
+				"template": "LOGIN",
+				"enabled":  body["enabled"],
+				"content":  body["content"],
+			})
+		case http.MethodDelete:
+			deletePaths = append(deletePaths, r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected application form item method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationFormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := applicationFormPlan(t, schemaResp.Schema, ApplicationFormModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("LOGIN"),
+		Enabled:       types.BoolValue(true),
+		Content:       types.StringValue("<html>create</html>"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := applicationFormPlan(t, schemaResp.Schema, ApplicationFormModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("LOGIN"),
+		Enabled:       types.BoolValue(false),
+		Content:       types.StringValue("<html>update</html>"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if got, want := bodies[0], (map[string]interface{}{"template": "LOGIN", "enabled": true, "content": "<html>create</html>"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("create body = %#v, want %#v", got, want)
+	}
+	if got, want := bodies[1]["assets"], assets; !reflect.DeepEqual(got, want) {
+		t.Fatalf("update assets = %#v, want preserved %#v", got, want)
+	}
+	if got, want := deletePaths, []string{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("delete paths = %#v, want %#v", got, want)
+	}
+}
+
+func applicationFormPlan(t *testing.T, schema resourceschema.Schema, model ApplicationFormModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
