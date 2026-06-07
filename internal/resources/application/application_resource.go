@@ -224,8 +224,14 @@ func (r *ApplicationResource) Create(ctx context.Context, req resource.CreateReq
 	r.readCredentials(&plan, result)
 	savedSecret := plan.ClientSecret
 
+	current, err := r.client.GetApplication(ctx, plan.DomainID.ValueString(), id)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading application before post-create update", err.Error())
+		return
+	}
+
 	// Step 2: Update with full config (identity providers, factors, settings)
-	result, err = r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), id, updateBody)
+	result, err = r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), id, mergeApplicationUpdateBody(current, updateBody))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application after creation", err.Error())
 		return
@@ -277,7 +283,13 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	result, err := r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
+	current, err := r.client.GetApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading application before update", err.Error())
+		return
+	}
+
+	result, err := r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), mergeApplicationUpdateBody(current, updateBody))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application", err.Error())
 		return
@@ -510,6 +522,31 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) (map[string
 	}
 
 	return body, nil
+}
+
+func mergeApplicationUpdateBody(current, update map[string]interface{}) map[string]interface{} {
+	allowed := []string{
+		"certificate",
+		"description",
+		"enabled",
+		"factors",
+		"identityProviders",
+		"metadata",
+		"name",
+		"requiredPermissions",
+		"settings",
+		"template",
+	}
+	body := make(map[string]interface{}, len(allowed))
+	for _, field := range allowed {
+		if value, ok := current[field]; ok {
+			body[field] = value
+		}
+	}
+	for field, value := range update {
+		body[field] = value
+	}
+	return body
 }
 
 func (r *ApplicationResource) readCredentials(model *ApplicationModel, data map[string]interface{}) {

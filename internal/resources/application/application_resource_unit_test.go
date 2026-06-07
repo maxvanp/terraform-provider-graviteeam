@@ -3,11 +3,17 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -294,4 +300,267 @@ func TestApplicationReadIntoModelReadsOwnedMetadata(t *testing.T) {
 	if metadata["tenant"]["id"] != "tenant-a" || metadata["tenant"]["name"] != "Tenant A" {
 		t.Fatalf("unexpected metadata_json value: %#v", metadata)
 	}
+}
+
+func TestMergeApplicationUpdateBodyPreservesUnmanagedCurrentFields(t *testing.T) {
+	t.Parallel()
+
+	current := map[string]interface{}{
+		"id":                  "ignored",
+		"certificate":         "certificate-1",
+		"description":         "old description",
+		"enabled":             true,
+		"requiredPermissions": []interface{}{"APPLICATION_READ"},
+		"settings": map[string]interface{}{
+			"advanced": map[string]interface{}{"skipConsent": true},
+		},
+		"template":   true,
+		"unexpected": "must-not-leak",
+	}
+	update := map[string]interface{}{
+		"name":        "updated",
+		"description": "new description",
+		"settings": map[string]interface{}{
+			"oauth": map[string]interface{}{"redirectUris": []interface{}{"https://app.example.test/callback"}},
+		},
+	}
+
+	got := mergeApplicationUpdateBody(current, update)
+
+	for _, field := range []string{"certificate", "enabled", "requiredPermissions", "template"} {
+		if !reflect.DeepEqual(got[field], current[field]) {
+			t.Fatalf("%s = %#v, want preserved %#v", field, got[field], current[field])
+		}
+	}
+	if got["name"] != "updated" || got["description"] != "new description" {
+		t.Fatalf("planned fields not applied: %#v", got)
+	}
+	if !reflect.DeepEqual(got["settings"], update["settings"]) {
+		t.Fatalf("settings = %#v, want update settings", got["settings"])
+	}
+	if _, ok := got["unexpected"]; ok {
+		t.Fatalf("unexpected field leaked into update body: %#v", got)
+	}
+	if _, ok := got["id"]; ok {
+		t.Fatalf("id leaked into update body: %#v", got)
+	}
+}
+
+func TestApplicationCRUDPreservesSecretAndMergesUpdatePayloads(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(applicationResponse("app-123", map[string]interface{}{
+			"name":        body["name"],
+			"type":        body["type"],
+			"description": body["description"],
+			"settings": map[string]interface{}{
+				"oauth": map[string]interface{}{
+					"clientId":     "client-123",
+					"clientSecret": "clear-secret",
+				},
+			},
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(applicationResponse("app-123", map[string]interface{}{
+				"name":                "app",
+				"type":                "web",
+				"description":         "created",
+				"certificate":         "certificate-1",
+				"enabled":             true,
+				"requiredPermissions": []interface{}{"APPLICATION_READ"},
+				"template":            true,
+				"metadata":            map[string]interface{}{"owner": map[string]interface{}{"team": "iam"}},
+				"identityProviders": []interface{}{
+					map[string]interface{}{"identity": "idp-current", "priority": float64(0)},
+				},
+				"factors": []interface{}{"factor-current"},
+				"settings": map[string]interface{}{
+					"advanced": map[string]interface{}{"skipConsent": true},
+					"oauth": map[string]interface{}{
+						"clientId":     "client-123",
+						"clientSecret": "********",
+						"redirectUris": []interface{}{"https://app.example.test/callback"},
+					},
+				},
+			}))
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(applicationResponse("app-123", body))
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/type", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("type method = %s, want PUT", r.Method)
+		}
+		methods = append(methods, "type")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode type body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(applicationResponse("app-123", map[string]interface{}{
+			"name":        "app-updated",
+			"type":        body["type"],
+			"description": "updated",
+			"settings": map[string]interface{}{
+				"oauth": map[string]interface{}{
+					"clientId":     "client-123",
+					"clientSecret": "********",
+				},
+			},
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app"),
+		Type:         types.StringValue("WEB"),
+		Description:  types.StringValue("created"),
+		MetadataJSON: types.StringValue(`{"owner":{"team":"iam"}}`),
+		SettingsJSON: types.StringValue(`{"oauth":{"redirectUris":["https://app.example.test/callback"]}}`),
+		IdentityProviderRules: []IdentityProviderRuleModel{
+			{
+				Identity:      types.StringValue("idp-1"),
+				SelectionRule: types.StringValue("{#context.attributes['tenant'] == 'a'}"),
+				Priority:      types.Int64Value(0),
+			},
+		},
+		Factors: []types.String{types.StringValue("factor-1")},
+		OAuthSettings: &OAuthSettingsModel{
+			RedirectURIs: []types.String{types.StringValue("https://app.example.test/callback")},
+			GrantTypes:   []types.String{types.StringValue("authorization_code")},
+		},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var createState ApplicationModel
+	if diags := createResp.State.Get(context.Background(), &createState); diags.HasError() {
+		t.Fatalf("get create state: %#v", diags)
+	}
+	if createState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("client_secret after create = %q", createState.ClientSecret.ValueString())
+	}
+
+	updatePlan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app-updated"),
+		Type:         types.StringValue("BROWSER"),
+		Description:  types.StringValue("updated"),
+		MetadataJSON: types.StringValue(`{"owner":{"team":"platform"}}`),
+		SettingsJSON: types.StringValue(`{"oauth":{"redirectUris":["https://app.example.test/updated"]}}`),
+		IdentityProviders: []types.String{
+			types.StringValue("idp-2"),
+		},
+		Factors: []types.String{types.StringValue("factor-2")},
+		OAuthSettings: &OAuthSettingsModel{
+			RedirectURIs: []types.String{types.StringValue("https://app.example.test/updated")},
+			GrantTypes:   []types.String{types.StringValue("authorization_code")},
+		},
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: createResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updateState ApplicationModel
+	if diags := updateResp.State.Get(context.Background(), &updateState); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if updateState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("client_secret after update = %q", updateState.ClientSecret.ValueString())
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "read", "update", "read", "update", "type", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["type"]; got != "WEB" {
+		t.Fatalf("create type = %#v", got)
+	}
+	if _, ok := bodies[1]["type"]; ok {
+		t.Fatalf("post-create update body should not include type: %#v", bodies[1])
+	}
+	for _, bodyIndex := range []int{1, 2} {
+		body := bodies[bodyIndex]
+		for _, field := range []string{"certificate", "enabled", "requiredPermissions", "template"} {
+			if _, ok := body[field]; !ok {
+				t.Fatalf("update body %d missing preserved field %q: %#v", bodyIndex, field, body)
+			}
+		}
+	}
+	if got := bodies[2]["name"]; got != "app-updated" {
+		t.Fatalf("update name = %#v", got)
+	}
+	if got := bodies[3]["type"]; got != "BROWSER" {
+		t.Fatalf("type update body = %#v", bodies[3])
+	}
+}
+
+func applicationResponse(id string, body map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{
+		"id": id,
+	}
+	for key, value := range body {
+		result[key] = value
+	}
+	return result
+}
+
+func applicationPlan(t *testing.T, schema resourceschema.Schema, model ApplicationModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
