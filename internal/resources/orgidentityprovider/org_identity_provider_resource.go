@@ -109,22 +109,7 @@ func (r *OrgIdentityProviderResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-		"external":      plan.External.ValueBool(),
-	}
-
-	if plan.DomainWhitelist != nil {
-		wl := make([]string, len(plan.DomainWhitelist))
-		for i, d := range plan.DomainWhitelist {
-			wl[i] = d.ValueString()
-		}
-		body["domainWhitelist"] = wl
-	}
-
-	result, err := r.client.CreateOrgIdentityProvider(ctx, body)
+	result, err := r.client.CreateOrgIdentityProvider(ctx, buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization identity provider", err.Error())
 		return
@@ -309,6 +294,25 @@ func buildUpdateBody(plan OrgIdentityProviderModel, state *OrgIdentityProviderMo
 		body["roleMapper"] = invertConditionMapperToAPI(plan.RoleMapper)
 	} else if state != nil && !state.RoleMapper.IsNull() && !state.RoleMapper.IsUnknown() {
 		body["roleMapper"] = map[string][]string{}
+	}
+
+	return body
+}
+
+func buildCreateBody(plan OrgIdentityProviderModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+		"external":      plan.External.ValueBool(),
+	}
+
+	if plan.DomainWhitelist != nil {
+		wl := make([]string, len(plan.DomainWhitelist))
+		for i, d := range plan.DomainWhitelist {
+			wl[i] = d.ValueString()
+		}
+		body["domainWhitelist"] = wl
 	}
 
 	return body
