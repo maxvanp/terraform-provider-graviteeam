@@ -275,6 +275,192 @@ func TestDoRequest_ServerError(t *testing.T) {
 	}
 }
 
+func TestGroupMembersOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.RawQuery != "page=0&size=100" {
+			t.Errorf("expected pagination query, got %q", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "user-1"},
+				{"id": "user-2"},
+				{"displayName": "ignored"},
+			},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members/user-3", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected POST or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	members, err := c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+	if err != nil {
+		t.Fatalf("get group members: %v", err)
+	}
+	if len(members) != 2 || members[0] != "user-1" || members[1] != "user-2" {
+		t.Fatalf("unexpected members: %#v", members)
+	}
+	if err := c.AddGroupMember(context.Background(), "domain-123", "group-123", "user-3"); err != nil {
+		t.Fatalf("add group member: %v", err)
+	}
+	if err := c.RemoveGroupMember(context.Background(), "domain-123", "group-123", "user-3"); err != nil {
+		t.Fatalf("remove group member: %v", err)
+	}
+}
+
+func TestOrgGroupMembersOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.RawQuery != "page=0&size=100" {
+			t.Errorf("expected pagination query, got %q", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "org-user-1"},
+				{"id": "org-user-2"},
+			},
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123/members/org-user-3", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected POST or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	members, err := c.GetOrgGroupMembers(context.Background(), "group-123")
+	if err != nil {
+		t.Fatalf("get organization group members: %v", err)
+	}
+	if len(members) != 2 || members[0] != "org-user-1" || members[1] != "org-user-2" {
+		t.Fatalf("unexpected members: %#v", members)
+	}
+	if err := c.AddOrgGroupMember(context.Background(), "group-123", "org-user-3"); err != nil {
+		t.Fatalf("add organization group member: %v", err)
+	}
+	if err := c.RemoveOrgGroupMember(context.Background(), "group-123", "org-user-3"); err != nil {
+		t.Fatalf("remove organization group member: %v", err)
+	}
+}
+
+func TestGroupRolesOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"id": "role-1"},
+				{"id": "role-2"},
+			})
+		case http.MethodPost:
+			var body []string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode set group roles body: %v", err)
+			}
+			if len(body) != 2 || body[0] != "role-2" || body[1] != "role-3" {
+				t.Fatalf("unexpected set group roles body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"updated": true})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles/role-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	roles, err := c.GetGroupRoles(context.Background(), "domain-123", "group-123")
+	if err != nil {
+		t.Fatalf("get group roles: %v", err)
+	}
+	if len(roles) != 2 {
+		t.Fatalf("unexpected roles: %#v", roles)
+	}
+	result, err := c.SetGroupRoles(context.Background(), "domain-123", "group-123", []string{"role-2", "role-3"})
+	if err != nil {
+		t.Fatalf("set group roles: %v", err)
+	}
+	if result["updated"] != true {
+		t.Fatalf("unexpected set group roles response: %#v", result)
+	}
+	if err := c.RemoveGroupRole(context.Background(), "domain-123", "group-123", "role-1"); err != nil {
+		t.Fatalf("remove group role: %v", err)
+	}
+}
+
+func TestUserRolesOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/roles", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "role-1"}})
+		case http.MethodPost:
+			var body []string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode set user roles body: %v", err)
+			}
+			if len(body) != 1 || body[0] != "role-2" {
+				t.Fatalf("unexpected set user roles body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"updated": true})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/roles/role-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	roles, err := c.GetUserRoles(context.Background(), "domain-123", "user-123")
+	if err != nil {
+		t.Fatalf("get user roles: %v", err)
+	}
+	if len(roles) != 1 {
+		t.Fatalf("unexpected roles: %#v", roles)
+	}
+	result, err := c.SetUserRoles(context.Background(), "domain-123", "user-123", []string{"role-2"})
+	if err != nil {
+		t.Fatalf("set user roles: %v", err)
+	}
+	if result["updated"] != true {
+		t.Fatalf("unexpected set user roles response: %#v", result)
+	}
+	if err := c.RemoveUserRole(context.Background(), "domain-123", "user-123", "role-1"); err != nil {
+		t.Fatalf("remove user role: %v", err)
+	}
+}
+
 func TestCreateFactor_Success(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/d1/factors", func(w http.ResponseWriter, r *http.Request) {
