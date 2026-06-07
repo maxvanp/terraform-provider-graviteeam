@@ -814,6 +814,169 @@ func TestScopeRoleGroupCRUDOperations(t *testing.T) {
 	}
 }
 
+func TestIdentityProviderOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create identity provider body: %v", err)
+		}
+		if body["name"] != "idp-name" {
+			t.Fatalf("unexpected create identity provider body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "idp-123", "name": "idp-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "idp-123", "name": "idp-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update identity provider body: %v", err)
+			}
+			if body["name"] != "idp-updated" {
+				t.Fatalf("unexpected update identity provider body: %#v", body)
+			}
+			if _, ok := body["groupMapper"]; !ok {
+				t.Fatalf("expected groupMapper in update identity provider body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "idp-123", "name": "idp-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123/password-policy", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode identity provider password policy body: %v", err)
+		}
+		if _, ok := body["passwordPolicy"]; !ok {
+			t.Fatalf("expected passwordPolicy field, got %#v", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateIdentityProvider(context.Background(), "domain-123", map[string]interface{}{"name": "idp-name"})
+	if err != nil {
+		t.Fatalf("create identity provider: %v", err)
+	}
+	if created["id"] != "idp-123" {
+		t.Fatalf("unexpected created identity provider: %#v", created)
+	}
+	got, err := c.GetIdentityProvider(context.Background(), "domain-123", "idp-123")
+	if err != nil {
+		t.Fatalf("get identity provider: %v", err)
+	}
+	if got["name"] != "idp-name" {
+		t.Fatalf("unexpected identity provider: %#v", got)
+	}
+	updated, err := c.UpdateIdentityProvider(context.Background(), "domain-123", "idp-123", map[string]interface{}{
+		"name":        "idp-updated",
+		"groupMapper": map[string]interface{}{"groups": []string{"group-1"}},
+		"roleMapper":  map[string]interface{}{"roles": []string{"role-1"}},
+	})
+	if err != nil {
+		t.Fatalf("update identity provider: %v", err)
+	}
+	if updated["name"] != "idp-updated" {
+		t.Fatalf("unexpected updated identity provider: %#v", updated)
+	}
+	if err := c.AssignIdentityProviderPasswordPolicy(context.Background(), "domain-123", "idp-123", "policy-123"); err != nil {
+		t.Fatalf("assign identity provider password policy: %v", err)
+	}
+	if err := c.ClearIdentityProviderPasswordPolicy(context.Background(), "domain-123", "idp-123"); err != nil {
+		t.Fatalf("clear identity provider password policy: %v", err)
+	}
+	if err := c.DeleteIdentityProvider(context.Background(), "domain-123", "idp-123"); err != nil {
+		t.Fatalf("delete identity provider: %v", err)
+	}
+}
+
+func TestOrgIdentityProviderOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/identities", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create organization identity provider body: %v", err)
+		}
+		if body["name"] != "org-idp-name" {
+			t.Fatalf("unexpected create organization identity provider body: %#v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-idp-123", "name": "org-idp-name"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/identities/org-idp-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-idp-123", "name": "org-idp-name"})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update organization identity provider body: %v", err)
+			}
+			if body["name"] != "org-idp-updated" {
+				t.Fatalf("unexpected update organization identity provider body: %#v", body)
+			}
+			if _, ok := body["roleMapper"]; !ok {
+				t.Fatalf("expected roleMapper in update organization identity provider body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "org-idp-123", "name": "org-idp-updated"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	created, err := c.CreateOrgIdentityProvider(context.Background(), map[string]interface{}{"name": "org-idp-name"})
+	if err != nil {
+		t.Fatalf("create organization identity provider: %v", err)
+	}
+	if created["id"] != "org-idp-123" {
+		t.Fatalf("unexpected created organization identity provider: %#v", created)
+	}
+	got, err := c.GetOrgIdentityProvider(context.Background(), "org-idp-123")
+	if err != nil {
+		t.Fatalf("get organization identity provider: %v", err)
+	}
+	if got["name"] != "org-idp-name" {
+		t.Fatalf("unexpected organization identity provider: %#v", got)
+	}
+	updated, err := c.UpdateOrgIdentityProvider(context.Background(), "org-idp-123", map[string]interface{}{
+		"name":        "org-idp-updated",
+		"groupMapper": map[string]interface{}{"groups": []string{"group-1"}},
+		"roleMapper":  map[string]interface{}{"roles": []string{"role-1"}},
+	})
+	if err != nil {
+		t.Fatalf("update organization identity provider: %v", err)
+	}
+	if updated["name"] != "org-idp-updated" {
+		t.Fatalf("unexpected updated organization identity provider: %#v", updated)
+	}
+	if err := c.DeleteOrgIdentityProvider(context.Background(), "org-idp-123"); err != nil {
+		t.Fatalf("delete organization identity provider: %v", err)
+	}
+}
+
 func TestOrgUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/users", func(w http.ResponseWriter, r *http.Request) {

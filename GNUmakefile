@@ -47,10 +47,14 @@ test: coverage-audit
 testacc:
 	TF_ACC=1 $(GO) test ./... -v -p 1 $(TESTARGS) -timeout 120m
 
+coverage-baseline:
+	$(GO) test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
+	./scripts/update-test-coverage-baseline.py --go "$(GO)" --coverprofile /tmp/graviteeam-coverage.out
+
 docs:
 	env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
 
 docs-check: docs
 	@git diff --exit-code docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs docs-check
