@@ -156,7 +156,7 @@ func buildPatchBody(model OrgSettingsModel) map[string]interface{} {
 	body := map[string]interface{}{}
 
 	if !model.Identities.IsNull() && !model.Identities.IsUnknown() {
-		var ids []string
+		ids := make([]string, 0, len(model.Identities.Elements()))
 		for _, v := range model.Identities.Elements() {
 			if sv, ok := v.(types.String); ok {
 				ids = append(ids, sv.ValueString())
