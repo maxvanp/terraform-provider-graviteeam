@@ -8,6 +8,7 @@ OS_ARCH=$(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 GOLANGCI_LINT?=golangci-lint
 TFPLUGINDOCS?=$(or $(shell command -v tfplugindocs 2>/dev/null),$(wildcard $(HOME)/go/bin/tfplugindocs),tfplugindocs)
 LINT_TIMEOUT?=5m
+DOCS_GENERATE=env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
 
 default: build
 
@@ -52,9 +53,16 @@ coverage-baseline:
 	./scripts/update-test-coverage-baseline.py --go "$(GO)" --coverprofile /tmp/graviteeam-coverage.out
 
 docs:
-	env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
+	$(DOCS_GENERATE)
 
-docs-check: docs
+docs-check:
+	@log=$$(mktemp); \
+	if ! $(DOCS_GENERATE) >"$$log" 2>&1; then \
+		cat "$$log"; \
+		rm -f "$$log"; \
+		exit 1; \
+	fi; \
+	rm -f "$$log"
 	@git diff --exit-code docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
 
 .PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs docs-check
