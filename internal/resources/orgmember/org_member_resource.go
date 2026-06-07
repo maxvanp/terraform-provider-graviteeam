@@ -87,11 +87,7 @@ func (r *OrgMemberResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	body := map[string]interface{}{
-		"memberId":   plan.MemberID.ValueString(),
-		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
-		"role":       plan.RoleID.ValueString(),
-	}
+	body := buildBody(plan)
 	result, err := r.client.AddOrUpdateOrgMember(ctx, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating organization member", err.Error())
@@ -151,15 +147,31 @@ func (r *OrgMemberResource) Delete(ctx context.Context, req resource.DeleteReque
 
 func (r *OrgMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: member_id/member_type/role_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	memberID, memberType, roleID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: member_id/member_type/role_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), strings.ToUpper(parts[1]))...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), parts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), memberID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), memberType)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), roleID)...)
+}
+
+func parseImportID(id string) (string, string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 3 {
+		return "", "", "", false
+	}
+	return parts[0], strings.ToUpper(parts[1]), parts[2], true
+}
+
+func buildBody(plan OrgMemberModel) map[string]interface{} {
+	return map[string]interface{}{
+		"memberId":   plan.MemberID.ValueString(),
+		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
+		"role":       plan.RoleID.ValueString(),
+	}
 }
 
 func (r *OrgMemberResource) readMembership(ctx context.Context, model *OrgMemberModel) error {
