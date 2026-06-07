@@ -603,6 +603,290 @@ func TestUserCertificateCredentialOperations(t *testing.T) {
 	}
 }
 
+func TestThemeFormEmailAndPluginCRUDOperations(t *testing.T) {
+	mux := testMux()
+	handleJSON := func(path string, methods map[string]map[string]interface{}) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			body, ok := methods[r.Method]
+			if !ok {
+				t.Errorf("unexpected method %s for %s", r.Method, path)
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			if r.Method == http.MethodPost || r.Method == http.MethodPut {
+				var requestBody map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+					t.Fatalf("decode %s %s body: %v", r.Method, path, err)
+				}
+				if requestBody["name"] != nil && requestBody["name"] != body["name"] {
+					t.Fatalf("unexpected %s %s body: %#v", r.Method, path, requestBody)
+				}
+			}
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		})
+	}
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes/theme-1", map[string]map[string]interface{}{
+		http.MethodGet:    {"id": "theme-1", "name": "theme"},
+		http.MethodPut:    {"id": "theme-1", "name": "updated-theme"},
+		http.MethodDelete: nil,
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "theme-1"}})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create theme body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "theme-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms/form-1", map[string]map[string]interface{}{
+		http.MethodPut:    {"id": "form-1", "name": "updated-form"},
+		http.MethodDelete: nil,
+	})
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/app-form-1", map[string]map[string]interface{}{
+		http.MethodPut:    {"id": "app-form-1", "name": "updated-app-form"},
+		http.MethodDelete: nil,
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "LOGIN" {
+				t.Errorf("unexpected form lookup: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "form-1", "template": "LOGIN"})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create form body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "form-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "LOGIN" {
+				t.Errorf("unexpected application form lookup: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-form-1", "template": "LOGIN"})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create application form body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-form-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms/preview", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		_, _ = w.Write([]byte("<html>preview</html>"))
+	})
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/emails/email-1", map[string]map[string]interface{}{
+		http.MethodPut:    {"id": "email-1", "name": "updated-email"},
+		http.MethodDelete: nil,
+	})
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails/app-email-1", map[string]map[string]interface{}{
+		http.MethodPut:    {"id": "app-email-1", "name": "updated-app-email"},
+		http.MethodDelete: nil,
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/emails", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "LOGIN" {
+				t.Errorf("unexpected email lookup: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "email-1", "template": "LOGIN"})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create email body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "email-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "LOGIN" {
+				t.Errorf("unexpected application email lookup: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-email-1", "template": "LOGIN"})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create application email body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "app-email-1", "name": body["name"]})
+		default:
+			t.Errorf("expected GET or POST, got %s", r.Method)
+		}
+	})
+	for _, tc := range []struct {
+		path        string
+		createdName string
+		updatedName string
+	}{
+		{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/extensionGrants", "created-extension-grant", "updated-extension-grant"},
+		{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/reporters", "created-reporter", "updated-reporter"},
+		{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/bot-detections", "created-bot-detection", "updated-bot-detection"},
+		{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/authorization-engines", "created-authorization-engine", "updated-authorization-engine"},
+	} {
+		path := tc.path
+		createdName := tc.createdName
+		updatedName := tc.updatedName
+		handleJSON(path, map[string]map[string]interface{}{
+			http.MethodPost: {"id": "plugin-1", "name": createdName},
+		})
+		handleJSON(path+"/plugin-1", map[string]map[string]interface{}{
+			http.MethodGet:    {"id": "plugin-1", "name": createdName},
+			http.MethodPut:    {"id": "plugin-1", "name": updatedName},
+			http.MethodDelete: nil,
+		})
+	}
+	handleJSON("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificate-settings", map[string]map[string]interface{}{
+		http.MethodPut: {"enabled": true},
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	themes, err := c.GetThemes(context.Background(), "domain-123")
+	if err != nil || len(themes) != 1 {
+		t.Fatalf("get themes: themes=%#v err=%v", themes, err)
+	}
+	if theme, err := c.CreateTheme(context.Background(), "domain-123", map[string]interface{}{"name": "created-theme"}); err != nil || theme["id"] != "theme-1" {
+		t.Fatalf("create theme: theme=%#v err=%v", theme, err)
+	}
+	if theme, err := c.GetTheme(context.Background(), "domain-123", "theme-1"); err != nil || theme["id"] != "theme-1" {
+		t.Fatalf("get theme: theme=%#v err=%v", theme, err)
+	}
+	if theme, err := c.UpdateTheme(context.Background(), "domain-123", "theme-1", map[string]interface{}{"name": "updated-theme"}); err != nil || theme["name"] != "updated-theme" {
+		t.Fatalf("update theme: theme=%#v err=%v", theme, err)
+	}
+	if err := c.DeleteTheme(context.Background(), "domain-123", "theme-1"); err != nil {
+		t.Fatalf("delete theme: %v", err)
+	}
+	if form, err := c.GetForm(context.Background(), "domain-123", "", "LOGIN"); err != nil || form["id"] != "form-1" {
+		t.Fatalf("get form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.GetForm(context.Background(), "domain-123", "app-123", "LOGIN"); err != nil || form["id"] != "app-form-1" {
+		t.Fatalf("get application form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.CreateForm(context.Background(), "domain-123", "", map[string]interface{}{"name": "created-form"}); err != nil || form["id"] != "form-1" {
+		t.Fatalf("create form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.CreateForm(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "created-app-form"}); err != nil || form["id"] != "app-form-1" {
+		t.Fatalf("create application form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.UpdateForm(context.Background(), "domain-123", "", "form-1", map[string]interface{}{"name": "updated-form"}); err != nil || form["name"] != "updated-form" {
+		t.Fatalf("update form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.UpdateForm(context.Background(), "domain-123", "app-123", "app-form-1", map[string]interface{}{"name": "updated-app-form"}); err != nil || form["name"] != "updated-app-form" {
+		t.Fatalf("update application form: form=%#v err=%v", form, err)
+	}
+	if preview, err := c.PreviewForm(context.Background(), "domain-123", map[string]interface{}{"name": "preview"}); err != nil || string(preview) != "<html>preview</html>" {
+		t.Fatalf("preview form: preview=%q err=%v", string(preview), err)
+	}
+	if err := c.DeleteForm(context.Background(), "domain-123", "", "form-1"); err != nil {
+		t.Fatalf("delete form: %v", err)
+	}
+	if err := c.DeleteForm(context.Background(), "domain-123", "app-123", "app-form-1"); err != nil {
+		t.Fatalf("delete application form: %v", err)
+	}
+	if email, err := c.GetEmail(context.Background(), "domain-123", "", "LOGIN"); err != nil || email["id"] != "email-1" {
+		t.Fatalf("get email: email=%#v err=%v", email, err)
+	}
+	if email, err := c.GetEmail(context.Background(), "domain-123", "app-123", "LOGIN"); err != nil || email["id"] != "app-email-1" {
+		t.Fatalf("get application email: email=%#v err=%v", email, err)
+	}
+	if email, err := c.CreateEmail(context.Background(), "domain-123", "", map[string]interface{}{"name": "created-email"}); err != nil || email["id"] != "email-1" {
+		t.Fatalf("create email: email=%#v err=%v", email, err)
+	}
+	if email, err := c.CreateEmail(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "created-app-email"}); err != nil || email["id"] != "app-email-1" {
+		t.Fatalf("create application email: email=%#v err=%v", email, err)
+	}
+	if email, err := c.UpdateEmail(context.Background(), "domain-123", "", "email-1", map[string]interface{}{"name": "updated-email"}); err != nil || email["name"] != "updated-email" {
+		t.Fatalf("update email: email=%#v err=%v", email, err)
+	}
+	if email, err := c.UpdateEmail(context.Background(), "domain-123", "app-123", "app-email-1", map[string]interface{}{"name": "updated-app-email"}); err != nil || email["name"] != "updated-app-email" {
+		t.Fatalf("update application email: email=%#v err=%v", email, err)
+	}
+	if err := c.DeleteEmail(context.Background(), "domain-123", "", "email-1"); err != nil {
+		t.Fatalf("delete email: %v", err)
+	}
+	if err := c.DeleteEmail(context.Background(), "domain-123", "app-123", "app-email-1"); err != nil {
+		t.Fatalf("delete application email: %v", err)
+	}
+	if grant, err := c.CreateExtensionGrant(context.Background(), "domain-123", map[string]interface{}{"name": "created-extension-grant"}); err != nil || grant["id"] != "plugin-1" {
+		t.Fatalf("create extension grant: grant=%#v err=%v", grant, err)
+	}
+	if grant, err := c.GetExtensionGrant(context.Background(), "domain-123", "plugin-1"); err != nil || grant["id"] != "plugin-1" {
+		t.Fatalf("get extension grant: grant=%#v err=%v", grant, err)
+	}
+	if grant, err := c.UpdateExtensionGrant(context.Background(), "domain-123", "plugin-1", map[string]interface{}{"name": "updated-extension-grant"}); err != nil || grant["name"] != "updated-extension-grant" {
+		t.Fatalf("update extension grant: grant=%#v err=%v", grant, err)
+	}
+	if err := c.DeleteExtensionGrant(context.Background(), "domain-123", "plugin-1"); err != nil {
+		t.Fatalf("delete extension grant: %v", err)
+	}
+	if reporter, err := c.CreateReporter(context.Background(), "domain-123", map[string]interface{}{"name": "created-reporter"}); err != nil || reporter["id"] != "plugin-1" {
+		t.Fatalf("create reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if reporter, err := c.GetReporter(context.Background(), "domain-123", "plugin-1"); err != nil || reporter["id"] != "plugin-1" {
+		t.Fatalf("get reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if reporter, err := c.UpdateReporter(context.Background(), "domain-123", "plugin-1", map[string]interface{}{"name": "updated-reporter"}); err != nil || reporter["name"] != "updated-reporter" {
+		t.Fatalf("update reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if err := c.DeleteReporter(context.Background(), "domain-123", "plugin-1"); err != nil {
+		t.Fatalf("delete reporter: %v", err)
+	}
+	if bot, err := c.CreateBotDetection(context.Background(), "domain-123", map[string]interface{}{"name": "created-bot-detection"}); err != nil || bot["id"] != "plugin-1" {
+		t.Fatalf("create bot detection: bot=%#v err=%v", bot, err)
+	}
+	if bot, err := c.GetBotDetection(context.Background(), "domain-123", "plugin-1"); err != nil || bot["id"] != "plugin-1" {
+		t.Fatalf("get bot detection: bot=%#v err=%v", bot, err)
+	}
+	if bot, err := c.UpdateBotDetection(context.Background(), "domain-123", "plugin-1", map[string]interface{}{"name": "updated-bot-detection"}); err != nil || bot["name"] != "updated-bot-detection" {
+		t.Fatalf("update bot detection: bot=%#v err=%v", bot, err)
+	}
+	if err := c.DeleteBotDetection(context.Background(), "domain-123", "plugin-1"); err != nil {
+		t.Fatalf("delete bot detection: %v", err)
+	}
+	if engine, err := c.CreateAuthorizationEngine(context.Background(), "domain-123", map[string]interface{}{"name": "created-authorization-engine"}); err != nil || engine["id"] != "plugin-1" {
+		t.Fatalf("create authorization engine: engine=%#v err=%v", engine, err)
+	}
+	if engine, err := c.GetAuthorizationEngine(context.Background(), "domain-123", "plugin-1"); err != nil || engine["id"] != "plugin-1" {
+		t.Fatalf("get authorization engine: engine=%#v err=%v", engine, err)
+	}
+	if engine, err := c.UpdateAuthorizationEngine(context.Background(), "domain-123", "plugin-1", map[string]interface{}{"name": "updated-authorization-engine"}); err != nil || engine["name"] != "updated-authorization-engine" {
+		t.Fatalf("update authorization engine: engine=%#v err=%v", engine, err)
+	}
+	if err := c.DeleteAuthorizationEngine(context.Background(), "domain-123", "plugin-1"); err != nil {
+		t.Fatalf("delete authorization engine: %v", err)
+	}
+	if settings, err := c.UpdateDomainCertificateSettings(context.Background(), "domain-123", map[string]interface{}{"enabled": true}); err != nil || settings["enabled"] != true {
+		t.Fatalf("update domain certificate settings: settings=%#v err=%v", settings, err)
+	}
+}
+
 func TestUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
