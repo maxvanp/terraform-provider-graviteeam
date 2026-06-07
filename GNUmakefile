@@ -30,6 +30,7 @@ vet:
 coverage-audit:
 	./scripts/audit-openapi-coverage.py --check-doc
 	./scripts/audit-test-coverage.py --check
+	./scripts/audit-resource-schema-fields.py --check
 	./scripts/probe-local-compose-plugins.py --check
 
 lint:
