@@ -545,6 +545,64 @@ func TestUserCRUDUsesMergedProfileUpdateAndSeparateActions(t *testing.T) {
 	}
 }
 
+func TestUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodDelete:
+			http.Error(w, "not found", http.StatusNotFound)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &UserModel{
+		ID:                  types.StringValue("user-123"),
+		DomainID:            types.StringValue("domain-123"),
+		Username:            types.StringValue("alice"),
+		Email:               types.StringValue("alice@example.com"),
+		FirstName:           types.StringValue("Alice"),
+		LastName:            types.StringValue("Liddell"),
+		DisplayName:         types.StringValue("Alice Liddell"),
+		ForceResetPassword:  types.BoolValue(false),
+		Enabled:             types.BoolValue(true),
+		Locked:              types.BoolValue(false),
+		PreRegistration:     types.BoolValue(true),
+		ResetPassword:       types.StringValue("secret"),
+		ResetTrigger:        types.StringValue("rotation-1"),
+		RegistrationTrigger: types.StringValue("registration-1"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing user to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func userResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,

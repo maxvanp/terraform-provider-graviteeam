@@ -253,6 +253,10 @@ func (r *ApplicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading application", err.Error())
 		return
 	}
@@ -319,6 +323,9 @@ func (r *ApplicationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	err := r.client.DeleteApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting application", err.Error())
 	}
 }

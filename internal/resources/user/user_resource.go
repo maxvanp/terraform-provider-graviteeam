@@ -194,6 +194,10 @@ func (r *UserResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	result, err := r.client.GetUser(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading user", err.Error())
 		return
 	}
@@ -312,6 +316,9 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	err := r.client.DeleteUser(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting user", err.Error())
 	}
 }

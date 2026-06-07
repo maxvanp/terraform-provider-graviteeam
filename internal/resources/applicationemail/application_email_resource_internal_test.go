@@ -281,6 +281,125 @@ func TestApplicationEmailCRUDClearsRemovedFromName(t *testing.T) {
 	}
 }
 
+func TestApplicationEmailReadRemovesMissingTemplateAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("collection method = %s, want GET", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails/email-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationEmailResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &ApplicationEmailModel{
+		ID:            types.StringValue("email-123"),
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing application email to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestApplicationEmailUpdateAndDeleteReportRemoteErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails/email-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut, http.MethodDelete:
+			http.Error(w, "remote error", http.StatusInternalServerError)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationEmailResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &ApplicationEmailModel{
+		ID:            types.StringValue("email-123"),
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	plan := applicationEmailPlan(t, schemaResp.Schema, ApplicationEmailModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(false),
+		From:          types.StringValue("noreply@example.test"),
+		Subject:       types.StringValue("Reset updated"),
+		Content:       types.StringValue("<html>Updated</html>"),
+		ExpiresAfter:  types.Int64Value(7200),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
 func applicationEmailResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id":           id,

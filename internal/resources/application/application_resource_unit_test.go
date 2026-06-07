@@ -545,6 +545,57 @@ func TestApplicationCRUDPreservesSecretAndMergesUpdatePayloads(t *testing.T) {
 	}
 }
 
+func TestApplicationReadRemovesMissingApplicationAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodDelete:
+			http.Error(w, "not found", http.StatusNotFound)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &ApplicationModel{
+		ID:           types.StringValue("app-123"),
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app"),
+		Type:         types.StringValue("WEB"),
+		Description:  types.StringValue("application"),
+		ClientID:     types.StringValue("client-123"),
+		ClientSecret: types.StringValue("clear-secret"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing application to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func applicationResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,
