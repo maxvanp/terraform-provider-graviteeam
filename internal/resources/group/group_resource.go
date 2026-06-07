@@ -127,9 +127,13 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Preserve plan values for fields the API may not return
 	savedRoles := plan.Roles
+	savedMembers := plan.Members
 	r.readIntoModel(&plan, result)
 	if savedRoles != nil {
 		plan.Roles = savedRoles
+	}
+	if savedMembers != nil {
+		plan.Members = savedMembers
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -191,9 +195,13 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Preserve plan values for fields the API may not return
 	savedRoles := plan.Roles
+	savedMembers := plan.Members
 	r.readIntoModel(&plan, result)
 	if savedRoles != nil {
 		plan.Roles = savedRoles
+	}
+	if savedMembers != nil {
+		plan.Members = savedMembers
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

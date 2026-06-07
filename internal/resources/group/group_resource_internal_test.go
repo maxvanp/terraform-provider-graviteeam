@@ -2,13 +2,20 @@ package group
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -113,6 +120,162 @@ func TestReadIntoModelMapsGroupResponse(t *testing.T) {
 	if len(model.Roles) != 1 || model.Roles[0].ValueString() != "role-1" {
 		t.Fatalf("roles = %#v, want role-1", model.Roles)
 	}
+}
+
+func TestGroupCRUDPreservesAndClearsOptionalRelationships(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var bodies []map[string]interface{}
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected group collection method %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        body["name"],
+			"description": body["description"],
+			"members":     body["members"],
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":          "group-123",
+				"name":        "group-from-api",
+				"description": "from api",
+			})
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":          "group-123",
+				"name":        body["name"],
+				"description": body["description"],
+			})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected group item method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := groupPlan(t, schemaResp.Schema, GroupModel{
+		DomainID:    types.StringValue("domain-123"),
+		Name:        types.StringValue("group-name"),
+		Description: types.StringValue("created"),
+		Members:     []types.String{types.StringValue("user-a")},
+		Roles:       []types.String{types.StringValue("role-a")},
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	var createState GroupModel
+	if diags := createResp.State.Get(context.Background(), &createState); diags.HasError() {
+		t.Fatalf("get create state: %#v", diags)
+	}
+	if got, want := stringValues(createState.Members), []string{"user-a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("created members = %#v, want %#v; request bodies = %#v", got, want, bodies)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState GroupModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := stringValues(readState.Members), []string{"user-a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("preserved members = %#v, want %#v", got, want)
+	}
+	if got, want := stringValues(readState.Roles), []string{"role-a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("preserved roles = %#v, want %#v", got, want)
+	}
+
+	updatePlan := groupPlan(t, schemaResp.Schema, GroupModel{
+		DomainID:    types.StringValue("domain-123"),
+		Name:        types.StringValue("group-updated"),
+		Description: types.StringNull(),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if len(bodies) != 3 {
+		t.Fatalf("request bodies = %#v, want create plus two updates", bodies)
+	}
+	if got, want := bodies[0]["members"], []interface{}{"user-a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("create members = %#v, want %#v", got, want)
+	}
+	if got, want := bodies[1]["roles"], []interface{}{"role-a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("create follow-up roles = %#v, want %#v", got, want)
+	}
+	if got, want := bodies[2]["members"], []interface{}{}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("update members = %#v, want clear list %#v", got, want)
+	}
+	if got, want := bodies[2]["roles"], []interface{}{}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("update roles = %#v, want clear list %#v", got, want)
+	}
+	if _, ok := bodies[2]["description"]; ok {
+		t.Fatalf("update body should omit removed description: %#v", bodies[2])
+	}
+}
+
+func groupPlan(t *testing.T, schema resourceschema.Schema, model GroupModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
+}
+
+func stringValues(values []types.String) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.ValueString()
+	}
+	return result
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
