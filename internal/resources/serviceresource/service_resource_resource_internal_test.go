@@ -60,6 +60,17 @@ func TestServiceResourceConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestServiceResourceConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ServiceResourceResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 

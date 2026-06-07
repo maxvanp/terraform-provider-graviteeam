@@ -1244,6 +1244,235 @@ func TestDoRequest_ServerError(t *testing.T) {
 	}
 }
 
+func TestDomainFlowOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/flows", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"id": "login", "enabled": true},
+				{"id": "mfa", "enabled": false},
+			})
+		case http.MethodPut:
+			var body []map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update domain flows body: %v", err)
+			}
+			if len(body) != 1 || body[0]["id"] != "login" || body[0]["enabled"] != true {
+				t.Fatalf("unexpected update domain flows body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		default:
+			t.Errorf("expected GET or PUT, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	flows, err := c.ListFlows(context.Background(), "domain-123")
+	if err != nil {
+		t.Fatalf("list domain flows: %v", err)
+	}
+	if len(flows) != 2 {
+		t.Fatalf("unexpected domain flows: %#v", flows)
+	}
+
+	updated, err := c.UpdateDomainFlows(context.Background(), "domain-123", []interface{}{
+		map[string]interface{}{"id": "login", "enabled": true},
+	})
+	if err != nil {
+		t.Fatalf("update domain flows: %v", err)
+	}
+	if len(updated) != 1 {
+		t.Fatalf("unexpected updated domain flows: %#v", updated)
+	}
+}
+
+func TestApplicationFlowOperations(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/flows", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"id": "login", "enabled": true},
+			})
+		case http.MethodPut:
+			var body []map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update application flows body: %v", err)
+			}
+			if len(body) != 1 || body[0]["id"] != "consent" || body[0]["enabled"] != false {
+				t.Fatalf("unexpected update application flows body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(body)
+		default:
+			t.Errorf("expected GET or PUT, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	flows, err := c.GetApplicationFlows(context.Background(), "domain-123", "app-123")
+	if err != nil {
+		t.Fatalf("get application flows: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("unexpected application flows: %#v", flows)
+	}
+
+	updated, err := c.UpdateApplicationFlows(context.Background(), "domain-123", "app-123", []interface{}{
+		map[string]interface{}{"id": "consent", "enabled": false},
+	})
+	if err != nil {
+		t.Fatalf("update application flows: %v", err)
+	}
+	if len(updated) != 1 {
+		t.Fatalf("unexpected updated application flows: %#v", updated)
+	}
+}
+
+func TestPluginLikeResourceOperations(t *testing.T) {
+	cases := map[string]struct {
+		collection string
+		create     func(context.Context, *Client, map[string]interface{}) (map[string]interface{}, error)
+		get        func(context.Context, *Client) (map[string]interface{}, error)
+		update     func(context.Context, *Client, map[string]interface{}) (map[string]interface{}, error)
+		delete     func(context.Context, *Client) error
+	}{
+		"auth device notifier": {
+			collection: "auth-device-notifiers",
+			create: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.CreateAuthDeviceNotifier(ctx, "domain-123", body)
+			},
+			get: func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+				return c.GetAuthDeviceNotifier(ctx, "domain-123", "resource-123")
+			},
+			update: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.UpdateAuthDeviceNotifier(ctx, "domain-123", "resource-123", body)
+			},
+			delete: func(ctx context.Context, c *Client) error {
+				return c.DeleteAuthDeviceNotifier(ctx, "domain-123", "resource-123")
+			},
+		},
+		"certificate": {
+			collection: "certificates",
+			create: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.CreateCertificate(ctx, "domain-123", body)
+			},
+			get: func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+				return c.GetCertificate(ctx, "domain-123", "resource-123")
+			},
+			update: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.UpdateCertificate(ctx, "domain-123", "resource-123", body)
+			},
+			delete: func(ctx context.Context, c *Client) error {
+				return c.DeleteCertificate(ctx, "domain-123", "resource-123")
+			},
+		},
+		"device identifier": {
+			collection: "device-identifiers",
+			create: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.CreateDeviceIdentifier(ctx, "domain-123", body)
+			},
+			get: func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+				return c.GetDeviceIdentifier(ctx, "domain-123", "resource-123")
+			},
+			update: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.UpdateDeviceIdentifier(ctx, "domain-123", "resource-123", body)
+			},
+			delete: func(ctx context.Context, c *Client) error {
+				return c.DeleteDeviceIdentifier(ctx, "domain-123", "resource-123")
+			},
+		},
+		"service resource": {
+			collection: "resources",
+			create: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.CreateServiceResource(ctx, "domain-123", body)
+			},
+			get: func(ctx context.Context, c *Client) (map[string]interface{}, error) {
+				return c.GetServiceResource(ctx, "domain-123", "resource-123")
+			},
+			update: func(ctx context.Context, c *Client, body map[string]interface{}) (map[string]interface{}, error) {
+				return c.UpdateServiceResource(ctx, "domain-123", "resource-123", body)
+			},
+			delete: func(ctx context.Context, c *Client) error {
+				return c.DeleteServiceResource(ctx, "domain-123", "resource-123")
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			mux := testMux()
+			collectionPath := "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/" + tc.collection
+			itemPath := collectionPath + "/resource-123"
+			mux.HandleFunc(collectionPath, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Errorf("expected POST, got %s", r.Method)
+				}
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode create body: %v", err)
+				}
+				if body["name"] != "created" {
+					t.Fatalf("unexpected create body: %#v", body)
+				}
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-123", "name": "created"})
+			})
+			mux.HandleFunc(itemPath, func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method {
+				case http.MethodGet:
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-123", "name": "created"})
+				case http.MethodPut:
+					var body map[string]interface{}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Fatalf("decode update body: %v", err)
+					}
+					if body["name"] != "updated" {
+						t.Fatalf("unexpected update body: %#v", body)
+					}
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "resource-123", "name": "updated"})
+				case http.MethodDelete:
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Errorf("expected GET, PUT, or DELETE, got %s", r.Method)
+				}
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			c := newTestClient(server)
+			created, err := tc.create(context.Background(), c, map[string]interface{}{"name": "created"})
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			if created["id"] != "resource-123" {
+				t.Fatalf("unexpected create result: %#v", created)
+			}
+			got, err := tc.get(context.Background(), c)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			if got["name"] != "created" {
+				t.Fatalf("unexpected get result: %#v", got)
+			}
+			updated, err := tc.update(context.Background(), c, map[string]interface{}{"name": "updated"})
+			if err != nil {
+				t.Fatalf("update: %v", err)
+			}
+			if updated["name"] != "updated" {
+				t.Fatalf("unexpected update result: %#v", updated)
+			}
+			if err := tc.delete(context.Background(), c); err != nil {
+				t.Fatalf("delete: %v", err)
+			}
+		})
+	}
+}
+
 func TestGroupMembersOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {

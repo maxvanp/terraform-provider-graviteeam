@@ -61,6 +61,17 @@ func TestOrgGroupMembersConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestOrgGroupMembersConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgGroupMembersResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestValidImportID(t *testing.T) {
 	t.Parallel()
 

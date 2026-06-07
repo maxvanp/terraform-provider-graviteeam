@@ -57,6 +57,17 @@ func TestApplicationFlowConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestApplicationFlowConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ApplicationFlowResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestDecodeFlowsParsesCompleteApplicationFlowList(t *testing.T) {
 	t.Parallel()
 
