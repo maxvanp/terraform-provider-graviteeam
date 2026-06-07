@@ -101,11 +101,7 @@ func (r *ProtectedResourceMemberResource) Create(ctx context.Context, req resour
 		return
 	}
 
-	body := map[string]interface{}{
-		"memberId":   plan.MemberID.ValueString(),
-		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
-		"role":       plan.RoleID.ValueString(),
-	}
+	body := buildBody(plan)
 	result, err := r.client.AddOrUpdateProtectedResourceMember(ctx, plan.DomainID.ValueString(), plan.ProtectedResourceID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating protected resource member", err.Error())
@@ -165,17 +161,33 @@ func (r *ProtectedResourceMemberResource) Delete(ctx context.Context, req resour
 
 func (r *ProtectedResourceMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/protected_resource_id/member_id/member_type/role_id
-	parts := strings.Split(req.ID, "/")
-	if len(parts) != 5 {
+	domainID, protectedResourceID, memberID, memberType, roleID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/protected_resource_id/member_id/member_type/role_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("protected_resource_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), strings.ToUpper(parts[3]))...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), parts[4])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("protected_resource_id"), protectedResourceID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_id"), memberID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("member_type"), memberType)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), roleID)...)
+}
+
+func parseImportID(id string) (string, string, string, string, string, bool) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 5 {
+		return "", "", "", "", "", false
+	}
+	return parts[0], parts[1], parts[2], strings.ToUpper(parts[3]), parts[4], true
+}
+
+func buildBody(plan ProtectedResourceMemberModel) map[string]interface{} {
+	return map[string]interface{}{
+		"memberId":   plan.MemberID.ValueString(),
+		"memberType": strings.ToUpper(plan.MemberType.ValueString()),
+		"role":       plan.RoleID.ValueString(),
+	}
 }
 
 func (r *ProtectedResourceMemberResource) readMembership(ctx context.Context, model *ProtectedResourceMemberModel) error {
