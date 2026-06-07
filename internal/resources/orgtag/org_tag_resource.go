@@ -72,12 +72,7 @@ func (r *OrgTagResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	body := map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	}
-	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		body["description"] = plan.Description.ValueString()
-	}
+	body := buildBody(plan, nil)
 
 	result, err := r.client.CreateOrgTag(ctx, body)
 	if err != nil {
@@ -122,14 +117,7 @@ func (r *OrgTagResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	}
-	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		body["description"] = plan.Description.ValueString()
-	} else if !state.Description.IsNull() {
-		body["description"] = ""
-	}
+	body := buildBody(plan, &state)
 
 	_, err := r.client.UpdateOrgTag(ctx, plan.ID.ValueString(), body)
 	if err != nil {
@@ -155,6 +143,18 @@ func (r *OrgTagResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 func (r *OrgTagResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func buildBody(plan OrgTagModel, state *OrgTagModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name": plan.Name.ValueString(),
+	}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		body["description"] = plan.Description.ValueString()
+	} else if state != nil && !state.Description.IsNull() {
+		body["description"] = ""
+	}
+	return body
 }
 
 func readIntoModel(model *OrgTagModel, result map[string]interface{}) {

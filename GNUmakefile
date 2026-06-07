@@ -7,6 +7,7 @@ GO?=$(or $(shell command -v go 2>/dev/null),$(wildcard /usr/local/go/bin/go),go)
 OS_ARCH=$(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 GOLANGCI_LINT?=golangci-lint
 TFPLUGINDOCS?=$(or $(shell command -v tfplugindocs 2>/dev/null),$(wildcard $(HOME)/go/bin/tfplugindocs),tfplugindocs)
+TFPLUGINDOCS_VERSION?=v0.25.0
 LINT_TIMEOUT?=5m
 DOCS_GENERATE=env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
 
@@ -52,7 +53,13 @@ coverage-baseline:
 	$(GO) test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic
 	./scripts/update-test-coverage-baseline.py --go "$(GO)" --coverprofile /tmp/graviteeam-coverage.out
 
-docs:
+docs-tool:
+	@if ! env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' command -v $(TFPLUGINDOCS) >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
+		echo "installing tfplugindocs $(TFPLUGINDOCS_VERSION)"; \
+		env 'PATH=/usr/local/go/bin:$(PATH)' GOBIN="$(HOME)/go/bin" $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION); \
+	fi
+
+docs: docs-tool
 	@log=$$(mktemp); \
 	if ! $(DOCS_GENERATE) >"$$log" 2>&1; then \
 		cat "$$log"; \
@@ -61,7 +68,7 @@ docs:
 	fi; \
 	rm -f "$$log"
 
-docs-check:
+docs-check: docs-tool
 	@log=$$(mktemp); \
 	if ! $(DOCS_GENERATE) >"$$log" 2>&1; then \
 		cat "$$log"; \
@@ -69,6 +76,6 @@ docs-check:
 		exit 1; \
 	fi; \
 	rm -f "$$log"
-	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date, run 'make docs'" && exit 1)
+	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date; run 'make docs' and commit the generated changes" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline docs-tool docs docs-check
