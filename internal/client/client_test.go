@@ -1166,6 +1166,189 @@ func TestProtectedResourceI18nAndAlertOperations(t *testing.T) {
 	}
 }
 
+func TestOrganizationScopedCRUDOperations(t *testing.T) {
+	mux := testMux()
+	const orgBase = "/management/organizations/DEFAULT"
+	handleOrgCRUD := func(collectionPath, id, createdName, updatedName string) {
+		mux.HandleFunc(orgBase+collectionPath, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("expected POST for %s, got %s", collectionPath, r.Method)
+				return
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create %s body: %v", collectionPath, err)
+			}
+			if body["name"] != createdName {
+				t.Fatalf("unexpected create %s body: %#v", collectionPath, body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "name": createdName})
+		})
+		mux.HandleFunc(orgBase+collectionPath+"/"+id, func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "name": createdName})
+			case http.MethodPut:
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode update %s body: %v", collectionPath, err)
+				}
+				if body["name"] != updatedName {
+					t.Fatalf("unexpected update %s body: %#v", collectionPath, body)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "name": updatedName})
+			case http.MethodDelete:
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				t.Errorf("expected GET, PUT, or DELETE for %s, got %s", collectionPath, r.Method)
+			}
+		})
+	}
+	handleOrgCRUD("/entrypoints", "entrypoint-1", "created-entrypoint", "updated-entrypoint")
+	handleOrgCRUD("/roles", "role-1", "created-role", "updated-role")
+	handleOrgCRUD("/groups", "group-1", "created-group", "updated-group")
+	handleOrgCRUD("/reporters", "reporter-1", "created-reporter", "updated-reporter")
+	handleOrgCRUD("/tags", "tag-1", "created-tag", "updated-tag")
+	mux.HandleFunc(orgBase+"/forms", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Query().Get("template") != "LOGIN" {
+				t.Fatalf("unexpected org form query: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "form-1", "template": "LOGIN"})
+		case http.MethodPost:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create org form body: %v", err)
+			}
+			if body["name"] != "created-form" {
+				t.Fatalf("unexpected create org form body: %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "form-1", "name": "created-form"})
+		default:
+			t.Errorf("expected GET or POST for org forms, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc(orgBase+"/forms/form-1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update org form body: %v", err)
+			}
+			if body["name"] != "updated-form" {
+				t.Fatalf("unexpected update org form body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "form-1", "name": "updated-form"})
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("expected PUT or DELETE for org form, got %s", r.Method)
+		}
+	})
+	mux.HandleFunc(orgBase+"/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "DEFAULT", "name": "org-settings"})
+		case http.MethodPatch:
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch org settings body: %v", err)
+			}
+			if body["name"] != "updated-settings" {
+				t.Fatalf("unexpected patch org settings body: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "DEFAULT", "name": "updated-settings"})
+		default:
+			t.Errorf("expected GET or PATCH for org settings, got %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	if entrypoint, err := c.CreateOrgEntrypoint(context.Background(), map[string]interface{}{"name": "created-entrypoint"}); err != nil || entrypoint["id"] != "entrypoint-1" {
+		t.Fatalf("create org entrypoint: entrypoint=%#v err=%v", entrypoint, err)
+	}
+	if entrypoint, err := c.GetOrgEntrypoint(context.Background(), "entrypoint-1"); err != nil || entrypoint["id"] != "entrypoint-1" {
+		t.Fatalf("get org entrypoint: entrypoint=%#v err=%v", entrypoint, err)
+	}
+	if entrypoint, err := c.UpdateOrgEntrypoint(context.Background(), "entrypoint-1", map[string]interface{}{"name": "updated-entrypoint"}); err != nil || entrypoint["name"] != "updated-entrypoint" {
+		t.Fatalf("update org entrypoint: entrypoint=%#v err=%v", entrypoint, err)
+	}
+	if err := c.DeleteOrgEntrypoint(context.Background(), "entrypoint-1"); err != nil {
+		t.Fatalf("delete org entrypoint: %v", err)
+	}
+	if role, err := c.CreateOrgRole(context.Background(), map[string]interface{}{"name": "created-role"}); err != nil || role["id"] != "role-1" {
+		t.Fatalf("create org role: role=%#v err=%v", role, err)
+	}
+	if role, err := c.GetOrgRole(context.Background(), "role-1"); err != nil || role["id"] != "role-1" {
+		t.Fatalf("get org role: role=%#v err=%v", role, err)
+	}
+	if role, err := c.UpdateOrgRole(context.Background(), "role-1", map[string]interface{}{"name": "updated-role"}); err != nil || role["name"] != "updated-role" {
+		t.Fatalf("update org role: role=%#v err=%v", role, err)
+	}
+	if err := c.DeleteOrgRole(context.Background(), "role-1"); err != nil {
+		t.Fatalf("delete org role: %v", err)
+	}
+	if group, err := c.CreateOrgGroup(context.Background(), map[string]interface{}{"name": "created-group"}); err != nil || group["id"] != "group-1" {
+		t.Fatalf("create org group: group=%#v err=%v", group, err)
+	}
+	if group, err := c.GetOrgGroup(context.Background(), "group-1"); err != nil || group["id"] != "group-1" {
+		t.Fatalf("get org group: group=%#v err=%v", group, err)
+	}
+	if group, err := c.UpdateOrgGroup(context.Background(), "group-1", map[string]interface{}{"name": "updated-group"}); err != nil || group["name"] != "updated-group" {
+		t.Fatalf("update org group: group=%#v err=%v", group, err)
+	}
+	if err := c.DeleteOrgGroup(context.Background(), "group-1"); err != nil {
+		t.Fatalf("delete org group: %v", err)
+	}
+	if reporter, err := c.CreateOrgReporter(context.Background(), map[string]interface{}{"name": "created-reporter"}); err != nil || reporter["id"] != "reporter-1" {
+		t.Fatalf("create org reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if reporter, err := c.GetOrgReporter(context.Background(), "reporter-1"); err != nil || reporter["id"] != "reporter-1" {
+		t.Fatalf("get org reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if reporter, err := c.UpdateOrgReporter(context.Background(), "reporter-1", map[string]interface{}{"name": "updated-reporter"}); err != nil || reporter["name"] != "updated-reporter" {
+		t.Fatalf("update org reporter: reporter=%#v err=%v", reporter, err)
+	}
+	if err := c.DeleteOrgReporter(context.Background(), "reporter-1"); err != nil {
+		t.Fatalf("delete org reporter: %v", err)
+	}
+	if form, err := c.GetOrgForm(context.Background(), "LOGIN"); err != nil || form["id"] != "form-1" {
+		t.Fatalf("get org form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.CreateOrgForm(context.Background(), map[string]interface{}{"name": "created-form"}); err != nil || form["id"] != "form-1" {
+		t.Fatalf("create org form: form=%#v err=%v", form, err)
+	}
+	if form, err := c.UpdateOrgForm(context.Background(), "form-1", map[string]interface{}{"name": "updated-form"}); err != nil || form["name"] != "updated-form" {
+		t.Fatalf("update org form: form=%#v err=%v", form, err)
+	}
+	if err := c.DeleteOrgForm(context.Background(), "form-1"); err != nil {
+		t.Fatalf("delete org form: %v", err)
+	}
+	if tag, err := c.CreateOrgTag(context.Background(), map[string]interface{}{"name": "created-tag"}); err != nil || tag["id"] != "tag-1" {
+		t.Fatalf("create org tag: tag=%#v err=%v", tag, err)
+	}
+	if tag, err := c.GetOrgTag(context.Background(), "tag-1"); err != nil || tag["id"] != "tag-1" {
+		t.Fatalf("get org tag: tag=%#v err=%v", tag, err)
+	}
+	if tag, err := c.UpdateOrgTag(context.Background(), "tag-1", map[string]interface{}{"name": "updated-tag"}); err != nil || tag["name"] != "updated-tag" {
+		t.Fatalf("update org tag: tag=%#v err=%v", tag, err)
+	}
+	if err := c.DeleteOrgTag(context.Background(), "tag-1"); err != nil {
+		t.Fatalf("delete org tag: %v", err)
+	}
+	if settings, err := c.GetOrgSettings(context.Background()); err != nil || settings["id"] != "DEFAULT" {
+		t.Fatalf("get org settings: settings=%#v err=%v", settings, err)
+	}
+	if settings, err := c.PatchOrgSettings(context.Background(), map[string]interface{}{"name": "updated-settings"}); err != nil || settings["name"] != "updated-settings" {
+		t.Fatalf("patch org settings: settings=%#v err=%v", settings, err)
+	}
+}
+
 func TestUserLifecycleOperations(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
