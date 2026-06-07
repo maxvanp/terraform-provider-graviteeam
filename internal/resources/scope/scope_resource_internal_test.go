@@ -2,10 +2,18 @@ package scope
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -137,4 +145,155 @@ func TestReadIntoModelMapsScopeResponse(t *testing.T) {
 	if !model.Parameterized.ValueBool() {
 		t.Fatalf("parameterized = false, want true")
 	}
+}
+
+func TestScopeCRUDClearsRemovedOptionalFields(t *testing.T) {
+	var bodies []map[string]interface{}
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/scopes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":            "scope-123",
+			"key":           body["key"],
+			"name":          body["name"],
+			"description":   body["description"],
+			"discovery":     body["discovery"],
+			"expiresIn":     body["expiresIn"],
+			"iconUri":       body["iconUri"],
+			"parameterized": body["parameterized"],
+		})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/scopes/scope-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":            "scope-123",
+				"key":           "claim_scope",
+				"name":          "Claim scope",
+				"description":   "created",
+				"discovery":     true,
+				"expiresIn":     float64(3600),
+				"iconUri":       "https://example.test/icon.png",
+				"parameterized": false,
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":            "scope-123",
+				"key":           "claim_scope",
+				"name":          body["name"],
+				"description":   body["description"],
+				"discovery":     body["discovery"],
+				"expiresIn":     body["expiresIn"],
+				"iconUri":       body["iconUri"],
+				"parameterized": body["parameterized"],
+			})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ScopeResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := scopePlan(t, schemaResp.Schema, ScopeModel{
+		DomainID:      types.StringValue("domain-123"),
+		Key:           types.StringValue("claim_scope"),
+		Name:          types.StringValue("Claim scope"),
+		Description:   types.StringValue("created"),
+		Discovery:     types.BoolValue(true),
+		ExpiresIn:     types.Int64Value(3600),
+		IconURI:       types.StringValue("https://example.test/icon.png"),
+		Parameterized: types.BoolValue(false),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := scopePlan(t, schemaResp.Schema, ScopeModel{
+		DomainID:      types.StringValue("domain-123"),
+		Key:           types.StringValue("claim_scope"),
+		Name:          types.StringValue("Claim scope updated"),
+		Description:   types.StringNull(),
+		Discovery:     types.BoolValue(false),
+		ExpiresIn:     types.Int64Null(),
+		IconURI:       types.StringNull(),
+		Parameterized: types.BoolValue(true),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if !reflect.DeepEqual(methods, []string{"create", "read", "update", "delete"}) {
+		t.Fatalf("methods = %#v", methods)
+	}
+	if got := bodies[0]["expiresIn"]; got != float64(3600) {
+		t.Fatalf("create expiresIn = %#v, want 3600", got)
+	}
+	if got := bodies[1]["description"]; got != "" {
+		t.Fatalf("update description = %#v, want clear string", got)
+	}
+	if got := bodies[1]["expiresIn"]; got != float64(0) {
+		t.Fatalf("update expiresIn = %#v, want clear zero", got)
+	}
+	if got := bodies[1]["iconUri"]; got != nil {
+		t.Fatalf("update iconUri = %#v, want nil", got)
+	}
+}
+
+func scopePlan(t *testing.T, schema resourceschema.Schema, model ScopeModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
