@@ -72,6 +72,12 @@ func (r *ReporterResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether the reporter is enabled",
 			},
+			"inherited": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the reporter inherits its configuration",
+			},
 		},
 	}
 }
@@ -100,6 +106,7 @@ func (r *ReporterResource) Create(ctx context.Context, req resource.CreateReques
 		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 		"enabled":       plan.Enabled.ValueBool(),
+		"inherited":     plan.Inherited.ValueBool(),
 	}
 
 	result, err := r.client.CreateReporter(ctx, plan.DomainID.ValueString(), body)
@@ -134,6 +141,9 @@ func (r *ReporterResource) Read(ctx context.Context, req resource.ReadRequest, r
 	// configuration may contain masked secrets for some reporter types — preserve from state
 	if enabled, ok := result["enabled"].(bool); ok {
 		state.Enabled = types.BoolValue(enabled)
+	}
+	if inherited, ok := result["inherited"].(bool); ok {
+		state.Inherited = types.BoolValue(inherited)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -177,9 +187,12 @@ func buildBody(plan ReporterModel, current map[string]interface{}) map[string]in
 		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 		"enabled":       plan.Enabled.ValueBool(),
+		"inherited":     plan.Inherited.ValueBool(),
 	}
-	if inherited, ok := current["inherited"]; ok {
-		body["inherited"] = inherited
+	if plan.Inherited.IsUnknown() {
+		if inherited, ok := current["inherited"]; ok {
+			body["inherited"] = inherited
+		}
 	}
 	return body
 }

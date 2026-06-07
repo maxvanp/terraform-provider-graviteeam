@@ -73,6 +73,32 @@ AUDITS = [
         },
         intentionally_unmanaged={},
     ),
+    ResourceSchemaAudit(
+        name="graviteeam_reporter",
+        package_dir=ROOT / "internal" / "resources" / "reporter",
+        schema_name="UpdateReporter",
+        api_to_tf={
+            "configuration": "configuration",
+            "enabled": "enabled",
+            "inherited": "inherited",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
+    ResourceSchemaAudit(
+        name="graviteeam_org_reporter",
+        package_dir=ROOT / "internal" / "resources" / "orgreporter",
+        schema_name="UpdateReporter",
+        api_to_tf={
+            "configuration": "configuration",
+            "enabled": "enabled",
+            "inherited": "inherited",
+            "name": "name",
+            "type": "type",
+        },
+        intentionally_unmanaged={},
+    ),
 ]
 
 TFSDK_RE = re.compile(r'`tfsdk:"([^"]+)"`')

@@ -18,6 +18,7 @@ resource "graviteeam_org_reporter" "test" {
   name          = "test-acc-org-reporter"
   type          = "reporter-am-file"
   enabled       = true
+  inherited     = false
   configuration = jsonencode({
     filename = "org-audit-test.log"
   })
@@ -28,6 +29,7 @@ resource "graviteeam_org_reporter" "test" {
 					resource.TestCheckResourceAttr("graviteeam_org_reporter.test", "name", "test-acc-org-reporter"),
 					resource.TestCheckResourceAttr("graviteeam_org_reporter.test", "type", "reporter-am-file"),
 					resource.TestCheckResourceAttr("graviteeam_org_reporter.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_org_reporter.test", "inherited", "false"),
 				),
 			},
 			{
@@ -42,6 +44,7 @@ resource "graviteeam_org_reporter" "test" {
   name          = "test-acc-org-reporter-updated"
   type          = "reporter-am-file"
   enabled       = true
+  inherited     = false
   configuration = jsonencode({
     filename = "org-audit-test.log"
   })

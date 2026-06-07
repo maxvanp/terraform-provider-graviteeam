@@ -18,6 +18,7 @@ resource "graviteeam_reporter" "example" {
   name      = "File Audit Reporter"
   type      = "reporter-am-file"
   enabled   = true
+  inherited = false
   configuration = jsonencode({
     filename = "audit-events.log"
   })
@@ -37,6 +38,7 @@ resource "graviteeam_reporter" "example" {
 ### Optional
 
 - `enabled` (Boolean) Whether the reporter is enabled
+- `inherited` (Boolean) Whether the reporter inherits its configuration
 
 ### Read-Only
 

@@ -63,6 +63,12 @@ func (r *OrgReporterResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether the reporter is enabled",
 			},
+			"inherited": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the reporter inherits its configuration",
+			},
 		},
 	}
 }
@@ -117,6 +123,9 @@ func (r *OrgReporterResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	if enabled, ok := result["enabled"].(bool); ok {
 		state.Enabled = types.BoolValue(enabled)
+	}
+	if inherited, ok := result["inherited"].(bool); ok {
+		state.Inherited = types.BoolValue(inherited)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -175,9 +184,12 @@ func buildBody(model OrgReporterModel, current map[string]interface{}) map[strin
 		"type":          model.Type.ValueString(),
 		"configuration": model.Configuration.ValueString(),
 		"enabled":       model.Enabled.ValueBool(),
+		"inherited":     model.Inherited.ValueBool(),
 	}
-	if inherited, ok := current["inherited"]; ok {
-		body["inherited"] = inherited
+	if model.Inherited.IsUnknown() {
+		if inherited, ok := current["inherited"]; ok {
+			body["inherited"] = inherited
+		}
 	}
 	return body
 }

@@ -14,9 +14,10 @@ Manages a Gravitee AM organization reporter
 
 ```terraform
 resource "graviteeam_org_reporter" "example" {
-  name    = "Organization File Reporter"
-  type    = "reporter-am-file"
-  enabled = true
+  name      = "Organization File Reporter"
+  type      = "reporter-am-file"
+  enabled   = true
+  inherited = false
   configuration = jsonencode({
     filename = "org-audit.log"
   })
@@ -35,6 +36,7 @@ resource "graviteeam_org_reporter" "example" {
 ### Optional
 
 - `enabled` (Boolean) Whether the reporter is enabled
+- `inherited` (Boolean) Whether the reporter inherits its configuration
 
 ### Read-Only
 

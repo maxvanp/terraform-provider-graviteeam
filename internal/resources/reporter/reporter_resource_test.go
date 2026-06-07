@@ -30,6 +30,7 @@ resource "graviteeam_reporter" "test" {
   name          = "Test File Reporter"
   type          = "reporter-am-file"
   enabled       = true
+  inherited     = false
   configuration = jsonencode({
     filename = "audit-test.log"
   })
@@ -40,6 +41,7 @@ resource "graviteeam_reporter" "test" {
 					resource.TestCheckResourceAttr("graviteeam_reporter.test", "name", "Test File Reporter"),
 					resource.TestCheckResourceAttr("graviteeam_reporter.test", "type", "reporter-am-file"),
 					resource.TestCheckResourceAttr("graviteeam_reporter.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_reporter.test", "inherited", "false"),
 				),
 			},
 			// ImportState
@@ -72,6 +74,7 @@ resource "graviteeam_reporter" "test" {
   name          = "Updated File Reporter"
   type          = "reporter-am-file"
   enabled       = true
+  inherited     = false
   configuration = jsonencode({
     filename = "audit-test.log"
   })
