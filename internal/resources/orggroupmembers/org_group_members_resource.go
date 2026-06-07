@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reconcile"
 )
 
 var (
@@ -122,32 +123,21 @@ func (r *OrgGroupMembersResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	groupID := plan.GroupID.ValueString()
-	desired := make(map[string]bool)
-	for _, member := range plan.Members {
-		desired[member.ValueString()] = true
-	}
-	current := make(map[string]bool)
-	for _, member := range state.Members {
-		current[member.ValueString()] = true
-	}
+	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Members), stringValues(state.Members))
 
-	for memberID := range current {
-		if !desired[memberID] {
-			err := r.client.RemoveOrgGroupMember(ctx, groupID, memberID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error removing organization group member", err.Error())
-				return
-			}
+	for _, memberID := range toRemove {
+		err := r.client.RemoveOrgGroupMember(ctx, groupID, memberID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error removing organization group member", err.Error())
+			return
 		}
 	}
 
-	for memberID := range desired {
-		if !current[memberID] {
-			err := r.client.AddOrgGroupMember(ctx, groupID, memberID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error adding organization group member", err.Error())
-				return
-			}
+	for _, memberID := range toAdd {
+		err := r.client.AddOrgGroupMember(ctx, groupID, memberID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error adding organization group member", err.Error())
+			return
 		}
 	}
 
@@ -179,4 +169,12 @@ func (r *OrgGroupMembersResource) ImportState(ctx context.Context, req resource.
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), req.ID)...)
+}
+
+func stringValues(values []types.String) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.ValueString()
+	}
+	return result
 }

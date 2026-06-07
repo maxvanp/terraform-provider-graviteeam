@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reconcile"
 )
 
 var (
@@ -140,34 +141,16 @@ func (r *GroupRolesResource) Update(ctx context.Context, req resource.UpdateRequ
 	domainID := plan.DomainID.ValueString()
 	groupID := plan.GroupID.ValueString()
 
-	// Build sets for reconciliation
-	desired := make(map[string]bool)
-	for _, role := range plan.Roles {
-		desired[role.ValueString()] = true
-	}
-	current := make(map[string]bool)
-	for _, role := range state.Roles {
-		current[role.ValueString()] = true
-	}
+	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Roles), stringValues(state.Roles))
 
-	// Remove roles no longer desired
-	for roleID := range current {
-		if !desired[roleID] {
-			err := r.client.RemoveGroupRole(ctx, domainID, groupID, roleID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error removing group role", err.Error())
-				return
-			}
+	for _, roleID := range toRemove {
+		err := r.client.RemoveGroupRole(ctx, domainID, groupID, roleID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error removing group role", err.Error())
+			return
 		}
 	}
 
-	// Add new roles
-	var toAdd []string
-	for roleID := range desired {
-		if !current[roleID] {
-			toAdd = append(toAdd, roleID)
-		}
-	}
 	if len(toAdd) > 0 {
 		_, err := r.client.SetGroupRoles(ctx, domainID, groupID, toAdd)
 		if err != nil {
@@ -208,4 +191,12 @@ func (r *GroupRolesResource) ImportState(ctx context.Context, req resource.Impor
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), parts[1])...)
+}
+
+func stringValues(values []types.String) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.ValueString()
+	}
+	return result
 }

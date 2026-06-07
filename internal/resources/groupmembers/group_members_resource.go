@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reconcile"
 )
 
 var (
@@ -134,35 +135,21 @@ func (r *GroupMembersResource) Update(ctx context.Context, req resource.UpdateRe
 	domainID := plan.DomainID.ValueString()
 	groupID := plan.GroupID.ValueString()
 
-	// Build sets for reconciliation
-	desired := make(map[string]bool)
-	for _, member := range plan.Members {
-		desired[member.ValueString()] = true
-	}
-	current := make(map[string]bool)
-	for _, member := range state.Members {
-		current[member.ValueString()] = true
-	}
+	toAdd, toRemove := reconcile.DiffStrings(stringValues(plan.Members), stringValues(state.Members))
 
-	// Remove members no longer desired
-	for memberID := range current {
-		if !desired[memberID] {
-			err := r.client.RemoveGroupMember(ctx, domainID, groupID, memberID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error removing group member", err.Error())
-				return
-			}
+	for _, memberID := range toRemove {
+		err := r.client.RemoveGroupMember(ctx, domainID, groupID, memberID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error removing group member", err.Error())
+			return
 		}
 	}
 
-	// Add new members
-	for memberID := range desired {
-		if !current[memberID] {
-			err := r.client.AddGroupMember(ctx, domainID, groupID, memberID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error adding group member", err.Error())
-				return
-			}
+	for _, memberID := range toAdd {
+		err := r.client.AddGroupMember(ctx, domainID, groupID, memberID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error adding group member", err.Error())
+			return
 		}
 	}
 
@@ -198,4 +185,12 @@ func (r *GroupMembersResource) ImportState(ctx context.Context, req resource.Imp
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), parts[1])...)
+}
+
+func stringValues(values []types.String) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.ValueString()
+	}
+	return result
 }
