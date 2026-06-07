@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -86,10 +87,7 @@ func (r *I18nDictionaryResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":   plan.Name.ValueString(),
-		"locale": plan.Locale.ValueString(),
-	}
+	body := buildBody(plan)
 
 	result, err := r.client.CreateI18nDictionary(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -130,23 +128,7 @@ func (r *I18nDictionaryResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if locale, ok := result["locale"].(string); ok {
-		state.Locale = types.StringValue(locale)
-	}
-	if entriesRaw, ok := result["entries"].(map[string]interface{}); ok && len(entriesRaw) > 0 {
-		entries := make(map[string]string)
-		for k, v := range entriesRaw {
-			if s, ok := v.(string); ok {
-				entries[k] = s
-			}
-		}
-		mapValue, diags := types.MapValueFrom(ctx, types.StringType, entries)
-		resp.Diagnostics.Append(diags...)
-		state.Entries = mapValue
-	}
+	resp.Diagnostics.Append(readIntoModel(ctx, &state, result)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -166,10 +148,7 @@ func (r *I18nDictionaryResource) Update(ctx context.Context, req resource.Update
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":   plan.Name.ValueString(),
-		"locale": plan.Locale.ValueString(),
-	}
+	body := buildBody(plan)
 
 	_, err := r.client.UpdateI18nDictionary(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -208,11 +187,48 @@ func (r *I18nDictionaryResource) Delete(ctx context.Context, req resource.Delete
 }
 
 func (r *I18nDictionaryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, dictionaryID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/dictionary_id, got: %s", req.ID))
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), dictionaryID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func buildBody(plan I18nDictionaryModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":   plan.Name.ValueString(),
+		"locale": plan.Locale.ValueString(),
+	}
+}
+
+func readIntoModel(ctx context.Context, model *I18nDictionaryModel, data map[string]interface{}) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if locale, ok := data["locale"].(string); ok {
+		model.Locale = types.StringValue(locale)
+	}
+	if entriesRaw, ok := data["entries"].(map[string]interface{}); ok && len(entriesRaw) > 0 {
+		entries := make(map[string]string)
+		for k, v := range entriesRaw {
+			if s, ok := v.(string); ok {
+				entries[k] = s
+			}
+		}
+		mapValue, mapDiags := types.MapValueFrom(ctx, types.StringType, entries)
+		diags.Append(mapDiags...)
+		model.Entries = mapValue
+	}
+	return diags
 }
