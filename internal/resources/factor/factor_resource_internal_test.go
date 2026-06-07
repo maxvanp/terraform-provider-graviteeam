@@ -2,12 +2,19 @@ package factor
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestFactorMetadata(t *testing.T) {
@@ -176,4 +183,124 @@ func TestFactorTypeValidatorRejectsUnknownValue(t *testing.T) {
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected unknown factor type to be rejected")
 	}
+}
+
+func TestFactorCRUDUsesPluginTypeAndOmitsFactorTypeOnUpdate(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var bodies []map[string]interface{}
+	var methods []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected factor collection method %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		methods = append(methods, "create")
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "factor-123"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors/factor-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":         "factor-123",
+				"name":       "Login TOTP",
+				"factorType": "otp",
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "factor-123"})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected factor item method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FactorResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := factorPlan(t, schemaResp.Schema, FactorModel{
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login TOTP"),
+		FactorType: types.StringValue("TOTP"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := factorPlan(t, schemaResp.Schema, FactorModel{
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login TOTP Updated"),
+		FactorType: types.StringValue("TOTP"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	wantCreate := map[string]interface{}{
+		"name":          "Login TOTP",
+		"type":          "otp-am-factor",
+		"factorType":    "TOTP",
+		"configuration": "{}",
+	}
+	if !reflect.DeepEqual(bodies[0], wantCreate) {
+		t.Fatalf("create body = %#v, want %#v", bodies[0], wantCreate)
+	}
+	if _, ok := bodies[1]["factorType"]; ok {
+		t.Fatalf("update body should omit factorType: %#v", bodies[1])
+	}
+	if want := []string{"create", "read", "update", "delete"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("methods = %#v, want %#v", methods, want)
+	}
+}
+
+func factorPlan(t *testing.T, schema resourceschema.Schema, model FactorModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }

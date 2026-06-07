@@ -2,12 +2,19 @@ package botdetection
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestMetadata(t *testing.T) {
@@ -172,6 +179,133 @@ func TestReadIntoModelPreservesConfiguration(t *testing.T) {
 	if got, want := model.Configuration.ValueString(), `{"secretKey":"real-secret"}`; got != want {
 		t.Fatalf("configuration = %q, want preserved %q", got, want)
 	}
+}
+
+func TestBotDetectionCRUDPreservesPlannedConfiguration(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "test-token",
+			"token_type":   "bearer",
+			"expires_in":   3600,
+		})
+	})
+
+	var bodies []map[string]interface{}
+	var methods []string
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/bot-detections", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected bot detection collection method %s", r.Method)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode create body: %v", err)
+		}
+		methods = append(methods, "create")
+		bodies = append(bodies, body)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "bot-123"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/bot-detections/bot-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			methods = append(methods, "read")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":            "bot-123",
+				"name":          "reCAPTCHA",
+				"type":          "google-recaptcha-v3-am-bot-detection",
+				"detectionType": "CAPTCHA",
+				"configuration": `{"secretKey":"********"}`,
+			})
+		case http.MethodPut:
+			methods = append(methods, "update")
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			bodies = append(bodies, body)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "bot-123"})
+		case http.MethodDelete:
+			methods = append(methods, "delete")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected bot detection item method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &BotDetectionResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := botDetectionPlan(t, schemaResp.Schema, BotDetectionModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("reCAPTCHA"),
+		Type:          types.StringValue("google-recaptcha-v3-am-bot-detection"),
+		DetectionType: types.StringValue("CAPTCHA"),
+		Configuration: types.StringValue(`{"secretKey":"real-secret"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState BotDetectionModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := readState.Configuration.ValueString(), `{"secretKey":"real-secret"}`; got != want {
+		t.Fatalf("configuration = %q, want preserved %q", got, want)
+	}
+
+	updatePlan := botDetectionPlan(t, schemaResp.Schema, BotDetectionModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("reCAPTCHA updated"),
+		Type:          types.StringValue("google-recaptcha-v3-am-bot-detection"),
+		DetectionType: types.StringValue("CAPTCHA"),
+		Configuration: types.StringValue(`{"secretKey":"new-secret"}`),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  updatePlan,
+		State: readResp.State,
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+
+	if got, want := bodies[1]["configuration"], `{"secretKey":"new-secret"}`; got != want {
+		t.Fatalf("update configuration = %#v, want %#v", got, want)
+	}
+	if _, ok := bodies[1]["detectionType"]; ok {
+		t.Fatalf("update body should omit detectionType: %#v", bodies[1])
+	}
+	if want := []string{"create", "read", "update", "delete"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("methods = %#v, want %#v", methods, want)
+	}
+}
+
+func botDetectionPlan(t *testing.T, schema resourceschema.Schema, model BotDetectionModel) tfsdk.Plan {
+	t.Helper()
+
+	plan := tfsdk.Plan{Schema: schema}
+	if diags := plan.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set plan: %#v", diags)
+	}
+	return plan
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
