@@ -206,10 +206,10 @@ func stringValues(values []types.String) []string {
 }
 
 func interfaceStrings(values []interface{}) []types.String {
-	result := make([]types.String, len(values))
-	for i, value := range values {
+	result := make([]types.String, 0, len(values))
+	for _, value := range values {
 		if stringValue, ok := value.(string); ok {
-			result[i] = types.StringValue(stringValue)
+			result = append(result, types.StringValue(stringValue))
 		}
 	}
 	return result
