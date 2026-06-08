@@ -467,6 +467,44 @@ func TestDomainReadIntoModelHandlesMinimalAPIResponse(t *testing.T) {
 	}
 }
 
+func TestDomainReadIntoModelCreatesNestedSettingsFromAPIResponse(t *testing.T) {
+	t.Parallel()
+
+	resource := &DomainResource{}
+	model := DomainModel{}
+
+	resource.readIntoModel(&model, map[string]interface{}{
+		"id":          "domain-123",
+		"name":        "domain",
+		"dataPlaneId": "custom-plane",
+		"oidc": map[string]interface{}{
+			"clientRegistrationSettings": map[string]interface{}{
+				"allowLocalhostRedirectUri":          true,
+				"allowHttpSchemeRedirectUri":         true,
+				"allowWildCardRedirectUri":           false,
+				"isDynamicClientRegistrationEnabled": true,
+			},
+		},
+		"loginSettings": map[string]interface{}{
+			"registerEnabled":        true,
+			"forgotPasswordEnabled":  true,
+			"identifierFirstEnabled": false,
+		},
+	})
+
+	if model.OIDC == nil || !model.OIDC.AllowLocalhostRedirectURI.ValueBool() ||
+		!model.OIDC.AllowHTTPSchemeRedirectURI.ValueBool() ||
+		model.OIDC.AllowWildcardRedirectURI.ValueBool() ||
+		!model.OIDC.DynamicClientRegistrationEnabled.ValueBool() {
+		t.Fatalf("oidc = %#v", model.OIDC)
+	}
+	if model.LoginSettings == nil || !model.LoginSettings.RegisterEnabled.ValueBool() ||
+		!model.LoginSettings.ForgotPasswordEnabled.ValueBool() ||
+		model.LoginSettings.IdentifierFirstEnabled.ValueBool() {
+		t.Fatalf("login settings = %#v", model.LoginSettings)
+	}
+}
+
 func TestDomainReadRemovesMissingDomain(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -508,6 +546,7 @@ func TestDomainCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int
 		itemStatus   int
+		putStatus    int
 		action       func(context.Context, *DomainResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
 	}{
 		"create": {
@@ -536,6 +575,14 @@ func TestDomainCRUDReportsRemoteErrors(t *testing.T) {
 		},
 		"update_read_before": {
 			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"update_put": {
+			putStatus: http.StatusInternalServerError,
 			action: func(ctx context.Context, r *DomainResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
 				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
@@ -578,7 +625,17 @@ func TestDomainCRUDReportsRemoteErrors(t *testing.T) {
 					return
 				}
 				switch r.Method {
-				case http.MethodGet, http.MethodPut:
+				case http.MethodGet:
+					_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
+						"name":        "domain",
+						"dataPlaneId": "default",
+						"enabled":     false,
+					}))
+				case http.MethodPut:
+					if tc.putStatus != 0 {
+						http.Error(w, "remote error", tc.putStatus)
+						return
+					}
 					_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
 						"name":        "domain",
 						"dataPlaneId": "default",
@@ -656,6 +713,43 @@ func TestDomainUpdateReportsInvalidSettingsJSON(t *testing.T) {
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
 
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid settings_json diagnostics")
+	}
+}
+
+func TestDomainCreateReportsInvalidSettingsJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
+			"name":        "domain",
+			"dataPlaneId": "default",
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := domainPlan(t, schemaResp.Schema, DomainModel{
+		Name:         types.StringValue("domain"),
+		Enabled:      types.BoolValue(true),
+		DataPlaneID:  types.StringValue("default"),
+		SettingsJSON: types.StringValue(`{`),
+	})
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid settings_json diagnostics")
 	}

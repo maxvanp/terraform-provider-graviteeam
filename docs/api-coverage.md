@@ -62,7 +62,7 @@ Current test coverage baseline:
 | Terraform types executable in stock local compose acceptance | `70/71` |
 | Import-capable resources with import tests | `52/52` |
 | Resources with disabled import verification | `0` |
-| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.6%` total statement coverage |
+| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.7%` total statement coverage |
 
 The remaining local compose acceptance gap is `graviteeam_authorization_engine`. The bundled Gravitee AM 4.11.4 image loads the `openfga` authorization engine zip, but the local API reports it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint does not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
 
