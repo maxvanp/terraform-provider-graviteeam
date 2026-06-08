@@ -158,6 +158,437 @@ func TestDeleteDomain_Success(t *testing.T) {
 	}
 }
 
+func TestClientResourceMethodsReportInvalidJSONResponses(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*Client) error
+	}{
+		{
+			name: "update domain",
+			call: func(c *Client) error {
+				_, err := c.UpdateDomain(context.Background(), "domain-123", map[string]interface{}{"name": "domain"})
+				return err
+			},
+		},
+		{
+			name: "create factor",
+			call: func(c *Client) error {
+				_, err := c.CreateFactor(context.Background(), "domain-123", map[string]interface{}{"name": "factor"})
+				return err
+			},
+		},
+		{
+			name: "get factor",
+			call: func(c *Client) error {
+				_, err := c.GetFactor(context.Background(), "domain-123", "factor-123")
+				return err
+			},
+		},
+		{
+			name: "update factor",
+			call: func(c *Client) error {
+				_, err := c.UpdateFactor(context.Background(), "domain-123", "factor-123", map[string]interface{}{"name": "factor"})
+				return err
+			},
+		},
+		{
+			name: "rotate certificate",
+			call: func(c *Client) error {
+				_, err := c.RotateCertificate(context.Background(), "domain-123")
+				return err
+			},
+		},
+		{
+			name: "update domain certificate settings",
+			call: func(c *Client) error {
+				_, err := c.UpdateDomainCertificateSettings(context.Background(), "domain-123", map[string]interface{}{"enabled": true})
+				return err
+			},
+		},
+		{
+			name: "create reporter",
+			call: func(c *Client) error {
+				_, err := c.CreateReporter(context.Background(), "domain-123", map[string]interface{}{"name": "reporter"})
+				return err
+			},
+		},
+		{
+			name: "get reporter",
+			call: func(c *Client) error {
+				_, err := c.GetReporter(context.Background(), "domain-123", "reporter-123")
+				return err
+			},
+		},
+		{
+			name: "update reporter",
+			call: func(c *Client) error {
+				_, err := c.UpdateReporter(context.Background(), "domain-123", "reporter-123", map[string]interface{}{"name": "reporter"})
+				return err
+			},
+		},
+		{
+			name: "create service resource",
+			call: func(c *Client) error {
+				_, err := c.CreateServiceResource(context.Background(), "domain-123", map[string]interface{}{"name": "resource"})
+				return err
+			},
+		},
+		{
+			name: "get service resource",
+			call: func(c *Client) error {
+				_, err := c.GetServiceResource(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name: "update service resource",
+			call: func(c *Client) error {
+				_, err := c.UpdateServiceResource(context.Background(), "domain-123", "resource-123", map[string]interface{}{"name": "resource"})
+				return err
+			},
+		},
+		{
+			name: "create bot detection",
+			call: func(c *Client) error {
+				_, err := c.CreateBotDetection(context.Background(), "domain-123", map[string]interface{}{"name": "bot"})
+				return err
+			},
+		},
+		{
+			name: "get bot detection",
+			call: func(c *Client) error {
+				_, err := c.GetBotDetection(context.Background(), "domain-123", "bot-123")
+				return err
+			},
+		},
+		{
+			name: "update bot detection",
+			call: func(c *Client) error {
+				_, err := c.UpdateBotDetection(context.Background(), "domain-123", "bot-123", map[string]interface{}{"name": "bot"})
+				return err
+			},
+		},
+		{
+			name: "create application",
+			call: func(c *Client) error {
+				_, err := c.CreateApplication(context.Background(), "domain-123", map[string]interface{}{"name": "app"})
+				return err
+			},
+		},
+		{
+			name: "get application",
+			call: func(c *Client) error {
+				_, err := c.GetApplication(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name: "update application",
+			call: func(c *Client) error {
+				_, err := c.UpdateApplication(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "app"})
+				return err
+			},
+		},
+		{
+			name: "update application type",
+			call: func(c *Client) error {
+				_, err := c.UpdateApplicationType(context.Background(), "domain-123", "app-123", "WEB")
+				return err
+			},
+		},
+		{
+			name: "list application secrets",
+			call: func(c *Client) error {
+				_, err := c.ListApplicationSecrets(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name: "create application secret",
+			call: func(c *Client) error {
+				_, err := c.CreateApplicationSecret(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name: "renew application secret",
+			call: func(c *Client) error {
+				_, err := c.RenewApplicationSecret(context.Background(), "domain-123", "app-123", "secret-123")
+				return err
+			},
+		},
+		{
+			name: "add application member",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateApplicationMember(context.Background(), "domain-123", "app-123", map[string]interface{}{"id": "member-123"})
+				return err
+			},
+		},
+		{
+			name: "create user",
+			call: func(c *Client) error {
+				_, err := c.CreateUser(context.Background(), "domain-123", map[string]interface{}{"username": "user"})
+				return err
+			},
+		},
+		{
+			name: "get user",
+			call: func(c *Client) error {
+				_, err := c.GetUser(context.Background(), "domain-123", "user-123")
+				return err
+			},
+		},
+		{
+			name: "update user",
+			call: func(c *Client) error {
+				_, err := c.UpdateUser(context.Background(), "domain-123", "user-123", map[string]interface{}{"username": "user"})
+				return err
+			},
+		},
+		{
+			name: "update user status",
+			call: func(c *Client) error {
+				_, err := c.UpdateUserStatus(context.Background(), "domain-123", "user-123", true)
+				return err
+			},
+		},
+		{
+			name: "update username",
+			call: func(c *Client) error {
+				_, err := c.UpdateUsername(context.Background(), "domain-123", "user-123", "user")
+				return err
+			},
+		},
+		{
+			name: "create user certificate credential",
+			call: func(c *Client) error {
+				_, err := c.CreateUserCertificateCredential(context.Background(), "domain-123", "user-123", map[string]interface{}{"certificate": "cert"})
+				return err
+			},
+		},
+		{
+			name: "get user certificate credential",
+			call: func(c *Client) error {
+				_, err := c.GetUserCertificateCredential(context.Background(), "domain-123", "user-123", "credential-123")
+				return err
+			},
+		},
+		{
+			name: "list domain members",
+			call: func(c *Client) error {
+				_, err := c.ListDomainMembers(context.Background(), "domain-123")
+				return err
+			},
+		},
+		{
+			name: "add domain member",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"id": "member-123"})
+				return err
+			},
+		},
+		{
+			name: "create password policy",
+			call: func(c *Client) error {
+				_, err := c.CreatePasswordPolicy(context.Background(), "domain-123", map[string]interface{}{"name": "policy"})
+				return err
+			},
+		},
+		{
+			name: "get password policy",
+			call: func(c *Client) error {
+				_, err := c.GetPasswordPolicy(context.Background(), "domain-123", "policy-123")
+				return err
+			},
+		},
+		{
+			name: "update password policy",
+			call: func(c *Client) error {
+				_, err := c.UpdatePasswordPolicy(context.Background(), "domain-123", "policy-123", map[string]interface{}{"name": "policy"})
+				return err
+			},
+		},
+		{
+			name: "set default password policy",
+			call: func(c *Client) error {
+				_, err := c.SetDefaultPasswordPolicy(context.Background(), "domain-123", "policy-123")
+				return err
+			},
+		},
+		{
+			name: "create scope",
+			call: func(c *Client) error {
+				_, err := c.CreateScope(context.Background(), "domain-123", map[string]interface{}{"key": "scope"})
+				return err
+			},
+		},
+		{
+			name: "get scope",
+			call: func(c *Client) error {
+				_, err := c.GetScope(context.Background(), "domain-123", "scope-123")
+				return err
+			},
+		},
+		{
+			name: "update scope",
+			call: func(c *Client) error {
+				_, err := c.UpdateScope(context.Background(), "domain-123", "scope-123", map[string]interface{}{"key": "scope"})
+				return err
+			},
+		},
+		{
+			name: "create role",
+			call: func(c *Client) error {
+				_, err := c.CreateRole(context.Background(), "domain-123", map[string]interface{}{"name": "role"})
+				return err
+			},
+		},
+		{
+			name: "get role",
+			call: func(c *Client) error {
+				_, err := c.GetRole(context.Background(), "domain-123", "role-123")
+				return err
+			},
+		},
+		{
+			name: "update role",
+			call: func(c *Client) error {
+				_, err := c.UpdateRole(context.Background(), "domain-123", "role-123", map[string]interface{}{"name": "role"})
+				return err
+			},
+		},
+		{
+			name: "create group",
+			call: func(c *Client) error {
+				_, err := c.CreateGroup(context.Background(), "domain-123", map[string]interface{}{"name": "group"})
+				return err
+			},
+		},
+		{
+			name: "get group",
+			call: func(c *Client) error {
+				_, err := c.GetGroup(context.Background(), "domain-123", "group-123")
+				return err
+			},
+		},
+		{
+			name: "update group",
+			call: func(c *Client) error {
+				_, err := c.UpdateGroup(context.Background(), "domain-123", "group-123", map[string]interface{}{"name": "group"})
+				return err
+			},
+		},
+		{
+			name: "create identity provider",
+			call: func(c *Client) error {
+				_, err := c.CreateIdentityProvider(context.Background(), "domain-123", map[string]interface{}{"name": "idp"})
+				return err
+			},
+		},
+		{
+			name: "get identity provider",
+			call: func(c *Client) error {
+				_, err := c.GetIdentityProvider(context.Background(), "domain-123", "idp-123")
+				return err
+			},
+		},
+		{
+			name: "update identity provider",
+			call: func(c *Client) error {
+				_, err := c.UpdateIdentityProvider(context.Background(), "domain-123", "idp-123", map[string]interface{}{"name": "idp"})
+				return err
+			},
+		},
+		{
+			name: "get themes",
+			call: func(c *Client) error {
+				_, err := c.GetThemes(context.Background(), "domain-123")
+				return err
+			},
+		},
+		{
+			name: "get theme",
+			call: func(c *Client) error {
+				_, err := c.GetTheme(context.Background(), "domain-123", "theme-123")
+				return err
+			},
+		},
+		{
+			name: "create theme",
+			call: func(c *Client) error {
+				_, err := c.CreateTheme(context.Background(), "domain-123", map[string]interface{}{"name": "theme"})
+				return err
+			},
+		},
+		{
+			name: "update theme",
+			call: func(c *Client) error {
+				_, err := c.UpdateTheme(context.Background(), "domain-123", "theme-123", map[string]interface{}{"name": "theme"})
+				return err
+			},
+		},
+		{
+			name: "create extension grant",
+			call: func(c *Client) error {
+				_, err := c.CreateExtensionGrant(context.Background(), "domain-123", map[string]interface{}{"name": "grant"})
+				return err
+			},
+		},
+		{
+			name: "get extension grant",
+			call: func(c *Client) error {
+				_, err := c.GetExtensionGrant(context.Background(), "domain-123", "grant-123")
+				return err
+			},
+		},
+		{
+			name: "update extension grant",
+			call: func(c *Client) error {
+				_, err := c.UpdateExtensionGrant(context.Background(), "domain-123", "grant-123", map[string]interface{}{"name": "grant"})
+				return err
+			},
+		},
+		{
+			name: "create certificate",
+			call: func(c *Client) error {
+				_, err := c.CreateCertificate(context.Background(), "domain-123", map[string]interface{}{"name": "cert"})
+				return err
+			},
+		},
+		{
+			name: "get certificate",
+			call: func(c *Client) error {
+				_, err := c.GetCertificate(context.Background(), "domain-123", "cert-123")
+				return err
+			},
+		},
+		{
+			name: "update certificate",
+			call: func(c *Client) error {
+				_, err := c.UpdateCertificate(context.Background(), "domain-123", "cert-123", map[string]interface{}{"name": "cert"})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{`))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if err := tt.call(newTestClient(server)); err == nil {
+				t.Fatal("expected invalid JSON error")
+			}
+		})
+	}
+}
+
 func TestRotateCertificate_Success(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates/rotate", func(w http.ResponseWriter, r *http.Request) {
