@@ -207,6 +207,43 @@ func TestAdminMetadataReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
 	}
 }
 
+func TestAdminMetadataReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AdminMetadataDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":        tftypes.Number,
+				"domain_id":   tftypes.String,
+				"user_id":     tftypes.String,
+				"hrid":        tftypes.String,
+				"size":        tftypes.Number,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":        tftypes.NewValue(tftypes.Number, 123),
+				"domain_id":   tftypes.NewValue(tftypes.String, nil),
+				"user_id":     tftypes.NewValue(tftypes.String, nil),
+				"hrid":        tftypes.NewValue(tftypes.String, nil),
+				"size":        tftypes.NewValue(tftypes.Number, nil),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func TestAdminMetadataReadReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

@@ -265,6 +265,7 @@ func TestPluginsReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
 	cases := []PluginsModel{
 		{Category: types.StringValue("unknown")},
 		{Category: types.StringValue("factors"), Schema: types.BoolValue(true)},
+		{Category: types.StringValue("policies"), Documentation: types.BoolValue(true)},
 		{Category: types.StringValue("factors"), PluginID: types.StringValue("otp"), Schema: types.BoolValue(true), Documentation: types.BoolValue(true)},
 		{Category: types.StringValue("factors"), PluginID: types.StringValue("otp"), Documentation: types.BoolValue(true)},
 	}
