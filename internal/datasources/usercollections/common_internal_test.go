@@ -2,9 +2,17 @@ package usercollections
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestCollectionDataSourceMetadataAndSchema(t *testing.T) {
@@ -101,5 +109,112 @@ func TestFormatCollectionItemsRejectsInvalidJSON(t *testing.T) {
 	_, err := formatCollectionItems([]byte(`{`))
 	if err == nil {
 		t.Fatalf("expected parse error")
+	}
+}
+
+func TestCollectionDataSourceReadFormatsRemoteItems(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/credentials", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write([]byte(`[{"id":"credential-1","type":"password"}]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &collectionDataSource{
+		client:     client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+		typeSuffix: "user_credentials",
+		collection: "credentials",
+		resultName: "credentials",
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := collectionConfig(schemaResp.Schema, collectionModel{
+		DomainID: types.StringValue("domain-123"),
+		UserID:   types.StringValue("user-123"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var state collectionModel
+	if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	want := "[\n  {\n    \"id\": \"credential-1\",\n    \"type\": \"password\"\n  }\n]"
+	if state.Items.ValueString() != want {
+		t.Fatalf("items_json = %q, want %q", state.Items.ValueString(), want)
+	}
+}
+
+func TestCollectionDataSourceReadReportsRemoteAndFormatErrors(t *testing.T) {
+	tests := map[string]struct {
+		status int
+		body   string
+	}{
+		"remote error": {status: http.StatusInternalServerError, body: "collection failed"},
+		"invalid json": {status: http.StatusOK, body: "{"},
+	}
+
+	for name, tt := range tests {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/devices", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			dataSource := &collectionDataSource{
+				client:     client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+				typeSuffix: "user_devices",
+				collection: "devices",
+				resultName: "devices",
+			}
+			var schemaResp datasource.SchemaResponse
+			dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+			config := collectionConfig(schemaResp.Schema, collectionModel{
+				DomainID: types.StringValue("domain-123"),
+				UserID:   types.StringValue("user-123"),
+			})
+
+			readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected diagnostics")
+			}
+		})
+	}
+}
+
+func collectionConfig(schema datasourceschema.Schema, model collectionModel) tfsdk.Config {
+	return tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id":  tftypes.String,
+				"user_id":    tftypes.String,
+				"items_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id":  tftypes.NewValue(tftypes.String, model.DomainID.ValueString()),
+				"user_id":    tftypes.NewValue(tftypes.String, model.UserID.ValueString()),
+				"items_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
 	}
 }
