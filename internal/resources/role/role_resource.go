@@ -141,6 +141,10 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	result, err := r.client.GetRole(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading role", err.Error())
 		return
 	}

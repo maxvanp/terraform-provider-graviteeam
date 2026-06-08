@@ -2,6 +2,7 @@ package orgtag
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -94,6 +95,10 @@ func (r *OrgTagResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	result, err := r.client.GetOrgTag(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization tag", err.Error())
 		return
 	}
