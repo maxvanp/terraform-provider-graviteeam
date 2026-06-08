@@ -55,6 +55,43 @@ func TestSchemaAttributes(t *testing.T) {
 	}
 }
 
+func TestMetadata(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.MetadataResponse
+	NewOrgIdentityProviderResource().Metadata(context.Background(), resource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &resp)
+
+	if got, want := resp.TypeName, "graviteeam_org_identity_provider"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgIdentityProviderResource{}).Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: "not-a-client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostics")
+	}
+}
+
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgIdentityProviderResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()
 
@@ -485,6 +522,207 @@ func TestOrgIdentityProviderCRUDPreservesMaskedConfigAndConditionMappers(t *test
 	}
 }
 
+func TestOrgIdentityProviderReadRemovesMissingProviderAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/identities/org-idp-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodDelete:
+			http.Error(w, "not found", http.StatusNotFound)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgIdentityProviderResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgIdentityProviderState(t, schemaResp.Schema, OrgIdentityProviderModel{
+		ID:            types.StringValue("org-idp-123"),
+		Name:          types.StringValue("org-inline"),
+		Type:          types.StringValue("inline-am-idp"),
+		External:      types.BoolValue(false),
+		Configuration: types.StringValue(`{"password":"plain"}`),
+		GroupMapper:   types.MapNull(types.ListType{ElemType: types.StringType}),
+		RoleMapper:    types.MapNull(types.ListType{ElemType: types.StringType}),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing organization identity provider to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestOrgIdentityProviderCRUDReportsRemoteErrors(t *testing.T) {
+	tests := map[string]struct {
+		createStatus int
+		itemStatus   int
+		action       func(context.Context, *OrgIdentityProviderResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
+	}{
+		"create": {
+			createStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgIdentityProviderResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"post_create_update": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgIdentityProviderResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"read": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgIdentityProviderResource, _ tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				r.Read(ctx, resource.ReadRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"update": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgIdentityProviderResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"delete": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgIdentityProviderResource, _ tfsdk.Plan, state tfsdk.State, _ resourceschema.Schema) bool {
+				resp := &resource.DeleteResponse{}
+				r.Delete(ctx, resource.DeleteRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/identities", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Fatalf("collection method = %s, want POST", r.Method)
+				}
+				if tc.createStatus != 0 {
+					http.Error(w, "remote error", tc.createStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"id":            "org-idp-123",
+					"name":          "org-inline",
+					"type":          "inline-am-idp",
+					"external":      false,
+					"configuration": map[string]interface{}{"password": "*****"},
+				})
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/identities/org-idp-123", func(w http.ResponseWriter, r *http.Request) {
+				if tc.itemStatus != 0 {
+					http.Error(w, "remote error", tc.itemStatus)
+					return
+				}
+				switch r.Method {
+				case http.MethodGet, http.MethodPut:
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"id":            "org-idp-123",
+						"name":          "org-inline",
+						"type":          "inline-am-idp",
+						"external":      false,
+						"configuration": map[string]interface{}{"password": "*****"},
+					})
+				case http.MethodDelete:
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Fatalf("item method = %s", r.Method)
+				}
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &OrgIdentityProviderResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			planModel := OrgIdentityProviderModel{
+				ID:            types.StringValue("org-idp-123"),
+				Name:          types.StringValue("org-inline"),
+				Type:          types.StringValue("inline-am-idp"),
+				External:      types.BoolValue(false),
+				Configuration: types.StringValue(`{"password":"plain"}`),
+				GroupMapper:   types.MapNull(types.ListType{ElemType: types.StringType}),
+				RoleMapper:    types.MapNull(types.ListType{ElemType: types.StringType}),
+			}
+			if name == "post_create_update" {
+				planModel.Mappers = map[string]types.String{"email": types.StringValue("mail")}
+			}
+			plan := orgIdentityProviderPlan(t, schemaResp.Schema, planModel)
+			state := orgIdentityProviderState(t, schemaResp.Schema, planModel)
+
+			if !tc.action(context.Background(), resourceUnderTest, plan, state, schemaResp.Schema) {
+				t.Fatal("expected diagnostics")
+			}
+		})
+	}
+}
+
+func TestOrgIdentityProviderImportStateSetsID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewOrgIdentityProviderResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgIdentityProviderState(t, schemaResp.Schema, OrgIdentityProviderModel{
+		ID:            types.StringValue("placeholder"),
+		Name:          types.StringValue("org-inline"),
+		Type:          types.StringValue("inline-am-idp"),
+		External:      types.BoolValue(false),
+		Configuration: types.StringValue(`{"password":"plain"}`),
+		GroupMapper:   types.MapNull(types.ListType{ElemType: types.StringType}),
+		RoleMapper:    types.MapNull(types.ListType{ElemType: types.StringType}),
+	})
+	importResp := &resource.ImportStateResponse{State: state}
+
+	NewOrgIdentityProviderResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "org-idp-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported OrgIdentityProviderModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if imported.ID.ValueString() != "org-idp-123" {
+		t.Fatalf("id = %q, want org-idp-123", imported.ID.ValueString())
+	}
+}
+
 func mustConditionMap(t *testing.T, values map[string][]string) types.Map {
 	t.Helper()
 
@@ -508,6 +746,16 @@ func orgIdentityProviderPlan(t *testing.T, schema resourceschema.Schema, model O
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func orgIdentityProviderState(t *testing.T, schema resourceschema.Schema, model OrgIdentityProviderModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func mustStringList(t *testing.T, values ...string) types.List {

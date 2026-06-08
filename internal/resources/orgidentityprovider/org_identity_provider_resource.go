@@ -3,6 +3,7 @@ package orgidentityprovider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -146,6 +147,10 @@ func (r *OrgIdentityProviderResource) Read(ctx context.Context, req resource.Rea
 
 	result, err := r.client.GetOrgIdentityProvider(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization identity provider", err.Error())
 		return
 	}
@@ -196,6 +201,9 @@ func (r *OrgIdentityProviderResource) Delete(ctx context.Context, req resource.D
 
 	err := r.client.DeleteOrgIdentityProvider(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting organization identity provider", err.Error())
 	}
 }

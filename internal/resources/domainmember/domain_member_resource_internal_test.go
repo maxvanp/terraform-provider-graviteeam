@@ -56,6 +56,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&DomainMemberResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
@@ -490,6 +501,39 @@ func TestDomainMemberCreateReportsReadAfterCreateError(t *testing.T) {
 	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected read-after-create diagnostics")
+	}
+}
+
+func TestDomainMemberImportStateSetsAttributes(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewDomainMemberResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := domainMemberState(t, schemaResp.Schema, DomainMemberModel{
+		ID:         types.StringValue("membership-123"),
+		DomainID:   types.StringValue("placeholder-domain"),
+		MemberID:   types.StringValue("placeholder-member"),
+		MemberType: types.StringValue("USER"),
+		RoleID:     types.StringValue("placeholder-role"),
+	})
+	importResp := &resource.ImportStateResponse{State: state}
+
+	NewDomainMemberResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/member-123/group/role-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported DomainMemberModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if imported.DomainID.ValueString() != "domain-123" ||
+		imported.MemberID.ValueString() != "member-123" ||
+		imported.MemberType.ValueString() != "GROUP" ||
+		imported.RoleID.ValueString() != "role-123" {
+		t.Fatalf("imported = %#v", imported)
 	}
 }
 
