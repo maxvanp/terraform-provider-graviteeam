@@ -558,6 +558,35 @@ func TestApplicationEmailDeleteReportsInvalidStateData(t *testing.T) {
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
 	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: applicationEmailState(t, schemaResp.Schema, ApplicationEmailModel{}),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	validPlan := applicationEmailPlan(t, schemaResp.Schema, ApplicationEmailModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	})
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update state diagnostics")
+	}
 }
 
 func TestApplicationEmailImportRejectsInvalidID(t *testing.T) {
