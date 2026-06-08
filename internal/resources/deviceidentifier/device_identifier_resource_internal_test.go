@@ -268,6 +268,138 @@ func TestDeviceIdentifierCRUDPreservesSecretConfiguration(t *testing.T) {
 	}
 }
 
+func TestDeviceIdentifierReadRemovesMissingIdentifierAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{"missing device identifier", http.StatusNotFound, true},
+		{"server error", http.StatusInternalServerError, false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/device-identifiers/device-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &DeviceIdentifierResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := deviceIdentifierState(t, schemaResp.Schema, DeviceIdentifierModel{
+				ID:            types.StringValue("device-123"),
+				DomainID:      types.StringValue("domain-123"),
+				Name:          types.StringValue("Fingerprint"),
+				Type:          types.StringValue("fingerprintjs-v3-am-device-identifier"),
+				Configuration: types.StringValue(`{"browserToken":"real-secret"}`),
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing device identifier to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestDeviceIdentifierReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/device-identifiers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/device-identifiers/device-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			http.Error(w, "update failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DeviceIdentifierResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := deviceIdentifierPlan(t, schemaResp.Schema, DeviceIdentifierModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("Fingerprint"),
+		Type:          types.StringValue("fingerprintjs-v3-am-device-identifier"),
+		Configuration: types.StringValue(`{"browserToken":"real-secret"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := deviceIdentifierState(t, schemaResp.Schema, DeviceIdentifierModel{
+		ID:            types.StringValue("device-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("Fingerprint"),
+		Type:          types.StringValue("fingerprintjs-v3-am-device-identifier"),
+		Configuration: types.StringValue(`{"browserToken":"real-secret"}`),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestDeviceIdentifierImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&DeviceIdentifierResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func decodeDeviceIdentifierBody(t *testing.T, r *http.Request) map[string]interface{} {
 	t.Helper()
 	var body map[string]interface{}
@@ -284,4 +416,13 @@ func deviceIdentifierPlan(t *testing.T, schema resourceschema.Schema, model Devi
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func deviceIdentifierState(t *testing.T, schema resourceschema.Schema, model DeviceIdentifierModel) tfsdk.State {
+	t.Helper()
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }

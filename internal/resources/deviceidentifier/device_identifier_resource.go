@@ -109,6 +109,10 @@ func (r *DeviceIdentifierResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading device identifier", err.Error())
 		return
 	}
