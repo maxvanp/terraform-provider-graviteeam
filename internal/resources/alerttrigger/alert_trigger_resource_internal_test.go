@@ -154,6 +154,30 @@ func TestStringValuesReturnsEmptyForNullOrUnknownSet(t *testing.T) {
 	}
 }
 
+func TestAlertTriggerCreateAndUpdateRejectInvalidType(t *testing.T) {
+	resourceUnderTest := &AlertTriggerResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := alertTriggerPlan(t, schemaResp.Schema, AlertTriggerModel{
+		DomainID:         types.StringValue("domain-123"),
+		Type:             types.StringValue("NOT_A_TRIGGER"),
+		Enabled:          types.BoolValue(true),
+		AlertNotifierIDs: stringSet(t, nil),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+}
+
 func TestReadIntoModelMapsAlertTriggerResponse(t *testing.T) {
 	model := AlertTriggerModel{
 		DomainID: types.StringValue("domain-id"),

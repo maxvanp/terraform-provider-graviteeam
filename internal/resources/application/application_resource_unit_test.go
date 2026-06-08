@@ -167,6 +167,43 @@ func TestApplicationBuildUpdateBodyMergesSettingsJSONWithTypedBlocks(t *testing.
 	}
 }
 
+func TestMergeStringInterfaceMapRecursesAndOverwritesValues(t *testing.T) {
+	t.Parallel()
+
+	dst := map[string]interface{}{
+		"oauth": map[string]interface{}{
+			"forcePKCE":               false,
+			"tokenEndpointAuthMethod": "client_secret_post",
+		},
+		"theme": "light",
+	}
+	src := map[string]interface{}{
+		"oauth": map[string]interface{}{
+			"forcePKCE":    true,
+			"redirectUris": []interface{}{"https://app.example.test/callback"},
+		},
+		"theme": map[string]interface{}{
+			"primary": "#000000",
+		},
+	}
+
+	mergeStringInterfaceMap(dst, src)
+
+	oauth := dst["oauth"].(map[string]interface{})
+	if oauth["forcePKCE"] != true {
+		t.Fatalf("forcePKCE = %#v", oauth["forcePKCE"])
+	}
+	if oauth["tokenEndpointAuthMethod"] != "client_secret_post" {
+		t.Fatalf("tokenEndpointAuthMethod = %#v", oauth["tokenEndpointAuthMethod"])
+	}
+	if !reflect.DeepEqual(oauth["redirectUris"], []interface{}{"https://app.example.test/callback"}) {
+		t.Fatalf("redirectUris = %#v", oauth["redirectUris"])
+	}
+	if !reflect.DeepEqual(dst["theme"], map[string]interface{}{"primary": "#000000"}) {
+		t.Fatalf("theme = %#v", dst["theme"])
+	}
+}
+
 func TestApplicationBuildUpdateBodyCoversSimpleIDPsMFAAndFullOAuth(t *testing.T) {
 	t.Parallel()
 
@@ -801,6 +838,85 @@ func TestApplicationReadRemovesMissingApplicationAndDeleteIgnores404(t *testing.
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestApplicationReadMapsRemoteApplication(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":           "app-123",
+			"name":         "remote-app",
+			"type":         "WEB",
+			"description":  "from api",
+			"clientId":     "client-123",
+			"clientSecret": "********",
+			"settings": map[string]interface{}{
+				"oauth": map[string]interface{}{
+					"redirectUris": []interface{}{"https://app.example.test/callback"},
+				},
+			},
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := applicationState(t, schemaResp.Schema, ApplicationModel{
+		ID:           types.StringValue("app-123"),
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("old-app"),
+		Type:         types.StringValue("WEB"),
+		ClientID:     types.StringValue("client-123"),
+		ClientSecret: types.StringValue("clear-secret"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState ApplicationModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if readState.Name.ValueString() != "remote-app" || readState.Description.ValueString() != "from api" {
+		t.Fatalf("read state fields = %#v", readState)
+	}
+	if readState.ClientSecret.ValueString() != "clear-secret" {
+		t.Fatalf("client_secret = %q, want preserved clear secret", readState.ClientSecret.ValueString())
+	}
+	if readState.OAuthSettings == nil || len(readState.OAuthSettings.RedirectURIs) != 1 {
+		t.Fatalf("oauth settings = %#v", readState.OAuthSettings)
+	}
+}
+
+func TestApplicationCreateReportsInvalidCreateBodyConfiguration(t *testing.T) {
+	resourceUnderTest := &ApplicationResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app"),
+		Type:         types.StringValue("WEB"),
+		SettingsJSON: types.StringValue(`{"oauth":{"redirectUris":"https://app.example.test/callback"}}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid application configuration diagnostics")
 	}
 }
 

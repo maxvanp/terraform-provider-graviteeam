@@ -203,6 +203,25 @@ func TestProtectedResourceBuildUpdateBodyRejectsInvalidSettingsJSON(t *testing.T
 	}
 }
 
+func TestProtectedResourceCreateReportsInvalidSettingsJSON(t *testing.T) {
+	resourceUnderTest := &ProtectedResourceResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := protectedResourcePlan(t, schemaResp.Schema, ProtectedResourceModel{
+		DomainID:            types.StringValue("domain-123"),
+		Name:                types.StringValue("mcp"),
+		Type:                types.StringValue("MCP_SERVER"),
+		ResourceIdentifiers: []types.String{types.StringValue("https://api.example.test/mcp")},
+		SettingsJSON:        types.StringValue(`{"enabled":`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid settings diagnostics")
+	}
+}
+
 func TestProtectedResourceReadIntoModelMapsAPIFields(t *testing.T) {
 	t.Parallel()
 

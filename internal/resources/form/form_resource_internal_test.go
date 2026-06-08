@@ -346,6 +346,41 @@ func TestFormReadRemovesMissingForm(t *testing.T) {
 	}
 }
 
+func TestFormReadReportsRemoteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		http.Error(w, "forms failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := formState(t, schemaResp.Schema, FormModel{
+		ID:       types.StringValue("form-123"),
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+}
+
 func TestFormDeleteIgnoresMissingForm(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

@@ -118,6 +118,31 @@ func TestBuildUpdateBodyClearsRemovedScopeFields(t *testing.T) {
 	}
 }
 
+func TestBuildUpdateBodySetsScopeOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	plan := ScopeModel{
+		Name:          types.StringValue("updated"),
+		Description:   types.StringValue("new description"),
+		Discovery:     types.BoolValue(true),
+		ExpiresIn:     types.Int64Value(7200),
+		IconURI:       types.StringValue("https://example.test/new-icon.png"),
+		Parameterized: types.BoolValue(false),
+	}
+
+	body := (&ScopeResource{}).buildUpdateBody(plan, ScopeModel{})
+
+	if body["description"] != "new description" {
+		t.Fatalf("description = %#v", body["description"])
+	}
+	if body["expiresIn"] != int64(7200) {
+		t.Fatalf("expiresIn = %#v", body["expiresIn"])
+	}
+	if body["iconUri"] != "https://example.test/new-icon.png" {
+		t.Fatalf("iconUri = %#v", body["iconUri"])
+	}
+}
+
 func TestReadIntoModelMapsScopeResponse(t *testing.T) {
 	model := ScopeModel{}
 

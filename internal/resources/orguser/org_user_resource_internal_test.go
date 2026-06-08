@@ -587,6 +587,65 @@ func TestOrgUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
 	}
 }
 
+func TestOrgUserReadMapsRemoteUser(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":                 "org-user-123",
+			"username":           "alice",
+			"email":              "alice@example.com",
+			"firstName":          "Alice",
+			"lastName":           "Liddell",
+			"forceResetPassword": true,
+			"enabled":            false,
+			"preRegistration":    true,
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgUserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgUserState(t, schemaResp.Schema, OrgUserModel{
+		ID:            types.StringValue("org-user-123"),
+		Username:      types.StringValue("old"),
+		Password:      types.StringValue("initial-secret"),
+		ResetPassword: types.StringValue("rotated-secret"),
+		ResetTrigger:  types.StringValue("rotation-1"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState OrgUserModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if readState.Username.ValueString() != "alice" || readState.Email.ValueString() != "alice@example.com" {
+		t.Fatalf("read state = %#v", readState)
+	}
+	if !readState.ForceResetPassword.ValueBool() || readState.Enabled.ValueBool() || !readState.PreRegistration.ValueBool() {
+		t.Fatalf("boolean fields = %#v", readState)
+	}
+	if readState.Password.ValueString() != "initial-secret" ||
+		readState.ResetPassword.ValueString() != "rotated-secret" ||
+		readState.ResetTrigger.ValueString() != "rotation-1" {
+		t.Fatalf("sensitive/action fields not preserved: %#v", readState)
+	}
+}
+
 func TestOrgUserCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int

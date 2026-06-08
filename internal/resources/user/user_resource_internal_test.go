@@ -614,6 +614,68 @@ func TestUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
 	}
 }
 
+func TestUserReadMapsRemoteUser(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":                 "user-123",
+			"username":           "alice",
+			"email":              "alice@example.com",
+			"firstName":          "Alice",
+			"lastName":           "Liddell",
+			"displayName":        "Alice Liddell",
+			"forceResetPassword": true,
+			"enabled":            true,
+			"accountNonLocked":   false,
+			"preRegistration":    false,
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := userState(t, schemaResp.Schema, UserModel{
+		ID:                  types.StringValue("user-123"),
+		DomainID:            types.StringValue("domain-123"),
+		Username:            types.StringValue("old"),
+		ResetPassword:       types.StringValue("secret"),
+		ResetTrigger:        types.StringValue("rotation-1"),
+		RegistrationTrigger: types.StringValue("registration-1"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState UserModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if readState.Username.ValueString() != "alice" || readState.DisplayName.ValueString() != "Alice Liddell" {
+		t.Fatalf("read state = %#v", readState)
+	}
+	if !readState.Locked.ValueBool() || !readState.ForceResetPassword.ValueBool() || readState.PreRegistration.ValueBool() {
+		t.Fatalf("boolean fields = %#v", readState)
+	}
+	if readState.ResetPassword.ValueString() != "secret" ||
+		readState.ResetTrigger.ValueString() != "rotation-1" ||
+		readState.RegistrationTrigger.ValueString() != "registration-1" {
+		t.Fatalf("action-only fields not preserved: %#v", readState)
+	}
+}
+
 func TestUserCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int
