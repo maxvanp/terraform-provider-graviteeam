@@ -156,7 +156,7 @@ func (r *DeviceIdentifierResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	err := r.client.DeleteDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting device identifier", err.Error())
 	}
 }

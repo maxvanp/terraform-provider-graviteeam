@@ -78,6 +78,24 @@ func TestServiceResourceConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestServiceResourceConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ServiceResourceResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
@@ -392,6 +410,41 @@ func TestServiceResourceReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestServiceResourceDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/resources/resource-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ServiceResourceResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := serviceResourceState(t, schemaResp.Schema, ServiceResourceModel{
+		ID:            types.StringValue("resource-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("SMTP Server"),
+		Type:          types.StringValue("smtp-am-resource"),
+		Configuration: types.StringValue(`{"password":"real-secret"}`),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestServiceResourceImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&ServiceResourceResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -400,6 +453,36 @@ func TestServiceResourceImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestServiceResourceImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewServiceResourceResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: serviceResourceState(t, schemaResp.Schema, ServiceResourceModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("SMTP Server"),
+		Type:          types.StringValue("smtp-am-resource"),
+		Configuration: types.StringValue(`{"password":"real-secret"}`),
+	})}
+
+	(&ServiceResourceResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/resource-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported ServiceResourceModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "resource-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

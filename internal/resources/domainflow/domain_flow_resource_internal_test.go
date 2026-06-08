@@ -79,6 +79,24 @@ func TestDomainFlowConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestDomainFlowConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainFlowResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestDecodeFlowsParsesCompleteFlowList(t *testing.T) {
 	t.Parallel()
 

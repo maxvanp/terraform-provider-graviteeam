@@ -157,7 +157,7 @@ func (r *ServiceResourceResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	err := r.client.DeleteServiceResource(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting service resource", err.Error())
 	}
 }

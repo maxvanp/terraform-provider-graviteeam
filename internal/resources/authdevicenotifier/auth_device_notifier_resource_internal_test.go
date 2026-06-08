@@ -75,6 +75,24 @@ func TestAuthDeviceNotifierConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestAuthDeviceNotifierConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AuthDeviceNotifierResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
@@ -398,6 +416,41 @@ func TestAuthDeviceNotifierReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestAuthDeviceNotifierDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/auth-device-notifiers/notifier-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &AuthDeviceNotifierResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := authDeviceNotifierState(t, schemaResp.Schema, AuthDeviceNotifierModel{
+		ID:            types.StringValue("notifier-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("HTTP Notifier"),
+		Type:          types.StringValue("http-am-authdevice-notifier"),
+		Configuration: types.StringValue(`{"headerValue":"real-secret"}`),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestAuthDeviceNotifierImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&AuthDeviceNotifierResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -406,6 +459,36 @@ func TestAuthDeviceNotifierImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestAuthDeviceNotifierImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewAuthDeviceNotifierResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: authDeviceNotifierState(t, schemaResp.Schema, AuthDeviceNotifierModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("HTTP Notifier"),
+		Type:          types.StringValue("http-am-authdevice-notifier"),
+		Configuration: types.StringValue(`{"headerValue":"real-secret"}`),
+	})}
+
+	(&AuthDeviceNotifierResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/notifier-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported AuthDeviceNotifierModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "notifier-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 
