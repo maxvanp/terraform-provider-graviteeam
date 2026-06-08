@@ -153,16 +153,10 @@ func formatJSONResult(raw []byte) (string, error) {
 	}
 	var parsed interface{}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		formatted, marshalErr := json.Marshal(string(raw))
-		if marshalErr != nil {
-			return "", marshalErr
-		}
+		formatted, _ := json.Marshal(string(raw))
 		return string(formatted), nil
 	}
-	formatted, err := json.MarshalIndent(parsed, "", "  ")
-	if err != nil {
-		return "", err
-	}
+	formatted, _ := json.MarshalIndent(parsed, "", "  ")
 	return string(formatted), nil
 }
 
