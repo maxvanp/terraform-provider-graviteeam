@@ -1031,6 +1031,55 @@ func TestClientResourceMethodsReportInvalidJSONResponses(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "create form",
+			call: func(c *Client) error {
+				_, err := c.CreateForm(context.Background(), "domain-123", "", map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "update form",
+			call: func(c *Client) error {
+				_, err := c.UpdateForm(context.Background(), "domain-123", "", "form-123", map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "create email",
+			call: func(c *Client) error {
+				_, err := c.CreateEmail(context.Background(), "domain-123", "", map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "update email",
+			call: func(c *Client) error {
+				_, err := c.UpdateEmail(context.Background(), "domain-123", "", "email-123", map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "get form",
+			call: func(c *Client) error {
+				_, err := c.GetForm(context.Background(), "domain-123", "", "LOGIN")
+				return err
+			},
+		},
+		{
+			name: "get email",
+			call: func(c *Client) error {
+				_, err := c.GetEmail(context.Background(), "domain-123", "", "LOGIN")
+				return err
+			},
+		},
+		{
+			name: "get group members",
+			call: func(c *Client) error {
+				_, err := c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1069,9 +1118,21 @@ func TestClientRawRequestHelpersRejectInvalidBaseURL(t *testing.T) {
 
 func TestMembershipUpsertsHandleEmptyResponses(t *testing.T) {
 	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("application members method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("domain members method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("protected resource members method = %s, want POST", r.Method)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -1085,6 +1146,14 @@ func TestMembershipUpsertsHandleEmptyResponses(t *testing.T) {
 	defer server.Close()
 
 	c := newTestClient(server)
+	appMember, err := c.AddOrUpdateApplicationMember(context.Background(), "domain-123", "app-123", map[string]interface{}{"memberId": "user-123"})
+	if err != nil {
+		t.Fatalf("add application member: %v", err)
+	}
+	if len(appMember) != 0 {
+		t.Fatalf("application member = %#v, want empty map", appMember)
+	}
+
 	domainMember, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-123"})
 	if err != nil {
 		t.Fatalf("add domain member: %v", err)
@@ -1093,12 +1162,80 @@ func TestMembershipUpsertsHandleEmptyResponses(t *testing.T) {
 		t.Fatalf("domain member = %#v, want empty map", domainMember)
 	}
 
+	protectedResourceMember, err := c.AddOrUpdateProtectedResourceMember(context.Background(), "domain-123", "resource-123", map[string]interface{}{"memberId": "user-123"})
+	if err != nil {
+		t.Fatalf("add protected resource member: %v", err)
+	}
+	if len(protectedResourceMember) != 0 {
+		t.Fatalf("protected resource member = %#v, want empty map", protectedResourceMember)
+	}
+
 	orgMember, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"member": "user@example.com"})
 	if err != nil {
 		t.Fatalf("add organization member: %v", err)
 	}
 	if len(orgMember) != 0 {
 		t.Fatalf("organization member = %#v, want empty map", orgMember)
+	}
+}
+
+func TestMembershipListsHandleMissingCollectionFields(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("application members method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("protected resource members method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("organization group members method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"memberships": []interface{}{}})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("group members method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"memberships": []interface{}{}})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	appMembers, err := c.ListApplicationMembers(context.Background(), "domain-123", "app-123")
+	if err != nil {
+		t.Fatalf("list application members: %v", err)
+	}
+	if len(appMembers) != 0 {
+		t.Fatalf("application members = %#v, want empty", appMembers)
+	}
+	protectedResourceMembers, err := c.ListProtectedResourceMembers(context.Background(), "domain-123", "resource-123")
+	if err != nil {
+		t.Fatalf("list protected resource members: %v", err)
+	}
+	if len(protectedResourceMembers) != 0 {
+		t.Fatalf("protected resource members = %#v, want empty", protectedResourceMembers)
+	}
+	groupMembers, err := c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+	if err != nil {
+		t.Fatalf("get group members: %v", err)
+	}
+	if len(groupMembers) != 0 {
+		t.Fatalf("group members = %#v, want empty", groupMembers)
+	}
+	orgGroupMembers, err := c.GetOrgGroupMembers(context.Background(), "group-123")
+	if err != nil {
+		t.Fatalf("get organization group members: %v", err)
+	}
+	if len(orgGroupMembers) != 0 {
+		t.Fatalf("organization group members = %#v, want empty", orgGroupMembers)
 	}
 }
 
