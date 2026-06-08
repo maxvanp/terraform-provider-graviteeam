@@ -509,6 +509,19 @@ func TestOrgTagCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: orgTagPlan(t, schemaResp.Schema, OrgTagModel{
+			ID:          types.StringValue("tag-123"),
+			Name:        types.StringValue("Tenant"),
+			Description: types.StringValue("created"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

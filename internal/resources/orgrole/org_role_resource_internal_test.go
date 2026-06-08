@@ -677,6 +677,21 @@ func TestOrgRoleCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: orgRolePlan(t, schemaResp.Schema, OrgRoleModel{
+			ID:             types.StringValue("role-123"),
+			Name:           types.StringValue("Reader"),
+			Description:    types.StringValue("created"),
+			AssignableType: types.StringValue("ORGANIZATION"),
+			Permissions:    []types.String{types.StringValue("organization_member_read")},
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

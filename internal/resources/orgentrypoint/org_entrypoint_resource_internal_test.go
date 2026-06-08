@@ -566,6 +566,22 @@ func TestOrgEntrypointCreateReadUpdateAndDeleteReportInvalidStateData(t *testing
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: orgEntrypointPlan(t, schemaResp.Schema, OrgEntrypointModel{
+			ID:                types.StringValue("entrypoint-123"),
+			Name:              types.StringValue("Portal"),
+			Description:       types.StringNull(),
+			URL:               types.StringValue("https://login.example.test"),
+			Tags:              []types.String{types.StringValue("tag-1")},
+			DefaultEntrypoint: types.BoolValue(false),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

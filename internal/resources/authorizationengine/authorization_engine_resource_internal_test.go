@@ -507,6 +507,21 @@ func TestAuthorizationEngineCreateReadUpdateAndDeleteReportInvalidStateData(t *t
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: authorizationEnginePlan(t, schemaResp.Schema, AuthorizationEngineModel{
+			ID:            types.StringValue("engine-123"),
+			DomainID:      types.StringValue("domain-123"),
+			Name:          types.StringValue("OpenFGA"),
+			Type:          types.StringValue("openfga"),
+			Configuration: types.StringValue("{}"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

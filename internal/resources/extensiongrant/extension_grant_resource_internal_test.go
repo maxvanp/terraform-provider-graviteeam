@@ -614,6 +614,25 @@ func TestExtensionGrantCreateReadUpdateAndDeleteReportInvalidStateData(t *testin
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: extensionGrantPlan(t, schemaResp.Schema, ExtensionGrantModel{
+			ID:               types.StringValue("grant-123"),
+			DomainID:         types.StringValue("domain-123"),
+			Name:             types.StringValue("jwt bearer"),
+			Type:             types.StringValue("jwtbearer-am-extension-grant"),
+			GrantType:        types.StringValue("urn:ietf:params:oauth:grant-type:jwt-bearer"),
+			Configuration:    types.StringValue("{}"),
+			IdentityProvider: types.StringValue("idp-1"),
+			CreateUser:       types.BoolValue(true),
+			UserExists:       types.BoolValue(false),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
