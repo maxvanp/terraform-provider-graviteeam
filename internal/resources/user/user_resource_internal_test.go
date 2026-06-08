@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -556,6 +557,172 @@ func TestUserCRUDUsesMergedProfileUpdateAndSeparateActions(t *testing.T) {
 	}
 }
 
+func TestUserUpdateNoChangesOnlyRefreshesState(t *testing.T) {
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected user method %s", r.Method)
+		}
+		methods = append(methods, "read")
+		_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+			"username":           "alice",
+			"email":              "alice@example.com",
+			"firstName":          "Alice",
+			"lastName":           "Liddell",
+			"displayName":        "Alice Liddell",
+			"enabled":            true,
+			"accountNonLocked":   true,
+			"forceResetPassword": false,
+			"preRegistration":    true,
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	model := UserModel{
+		ID:                 types.StringValue("user-123"),
+		DomainID:           types.StringValue("domain-123"),
+		Username:           types.StringValue("alice"),
+		Email:              types.StringValue("alice@example.com"),
+		FirstName:          types.StringValue("Alice"),
+		LastName:           types.StringValue("Liddell"),
+		DisplayName:        types.StringValue("Alice Liddell"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		Locked:             types.BoolValue(false),
+		PreRegistration:    types.BoolValue(true),
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  userPlan(t, schemaResp.Schema, model),
+		State: userState(t, schemaResp.Schema, model),
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	if !reflect.DeepEqual(methods, []string{"read"}) {
+		t.Fatalf("methods = %#v, want final read only", methods)
+	}
+}
+
+func TestUserUpdateReportsProfileUpdateErrorAfterSuccessfulRead(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+				"username":           "alice",
+				"email":              "alice@example.com",
+				"enabled":            true,
+				"accountNonLocked":   true,
+				"forceResetPassword": false,
+				"preRegistration":    true,
+			}))
+		case http.MethodPut:
+			http.Error(w, "profile update failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("unexpected user method %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := baseUserModel()
+	plan.Email = types.StringValue("updated@example.com")
+	state := baseUserModel()
+	state.Email = types.StringValue("alice@example.com")
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  userPlan(t, schemaResp.Schema, plan),
+		State: userState(t, schemaResp.Schema, state),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected profile update diagnostics")
+	}
+}
+
+func TestUserUpdateLocksUserAndRefreshesState(t *testing.T) {
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/lock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("lock method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "lock")
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected user method %s", r.Method)
+		}
+		methods = append(methods, "read")
+		_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+			"username":           "alice",
+			"enabled":            true,
+			"accountNonLocked":   false,
+			"forceResetPassword": false,
+			"preRegistration":    true,
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := baseUserModel()
+	plan.Locked = types.BoolValue(true)
+	state := baseUserModel()
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  userPlan(t, schemaResp.Schema, plan),
+		State: userState(t, schemaResp.Schema, state),
+	}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	if !reflect.DeepEqual(methods, []string{"lock", "read"}) {
+		t.Fatalf("methods = %#v, want lock then read", methods)
+	}
+	var updated UserModel
+	if diags := updateResp.State.Get(context.Background(), &updated); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if !updated.Locked.ValueBool() {
+		t.Fatalf("locked = %#v, want true", updated.Locked)
+	}
+}
+
 func TestUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -1010,6 +1177,81 @@ func TestUserUpdateReportsActionErrors(t *testing.T) {
 				t.Fatal("expected update diagnostics")
 			}
 		})
+	}
+}
+
+func TestUserCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &UserResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                                tftypes.String,
+			"domain_id":                         tftypes.Number,
+			"username":                          tftypes.String,
+			"email":                             tftypes.String,
+			"first_name":                        tftypes.String,
+			"last_name":                         tftypes.String,
+			"display_name":                      tftypes.String,
+			"force_reset_password":              tftypes.Bool,
+			"enabled":                           tftypes.Bool,
+			"locked":                            tftypes.Bool,
+			"pre_registration":                  tftypes.Bool,
+			"reset_password":                    tftypes.String,
+			"reset_password_trigger":            tftypes.String,
+			"registration_confirmation_trigger": tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":                                tftypes.NewValue(tftypes.String, "user-123"),
+			"domain_id":                         tftypes.NewValue(tftypes.Number, 123),
+			"username":                          tftypes.NewValue(tftypes.String, "alice"),
+			"email":                             tftypes.NewValue(tftypes.String, nil),
+			"first_name":                        tftypes.NewValue(tftypes.String, nil),
+			"last_name":                         tftypes.NewValue(tftypes.String, nil),
+			"display_name":                      tftypes.NewValue(tftypes.String, nil),
+			"force_reset_password":              tftypes.NewValue(tftypes.Bool, false),
+			"enabled":                           tftypes.NewValue(tftypes.Bool, true),
+			"locked":                            tftypes.NewValue(tftypes.Bool, false),
+			"pre_registration":                  tftypes.NewValue(tftypes.Bool, true),
+			"reset_password":                    tftypes.NewValue(tftypes.String, nil),
+			"reset_password_trigger":            tftypes.NewValue(tftypes.String, nil),
+			"registration_confirmation_trigger": tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 
