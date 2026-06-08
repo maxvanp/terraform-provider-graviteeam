@@ -314,6 +314,30 @@ func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
 	}
 }
 
+func TestApplicationRedirectURIsForCreateAllowsMissingSettingsOAuthSection(t *testing.T) {
+	t.Parallel()
+
+	for name, settingsJSON := range map[string]types.String{
+		"missing_oauth":         types.StringValue(`{"advanced":{"skipConsent":true}}`),
+		"missing_redirect_uris": types.StringValue(`{"oauth":{"forcePKCE":true}}`),
+		"non_object_oauth":      types.StringValue(`{"oauth":[]}`),
+		"null_settings_json":    types.StringNull(),
+		"unknown_settings_json": types.StringUnknown(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := redirectURIsForCreate(ApplicationModel{SettingsJSON: settingsJSON})
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if got != nil {
+				t.Fatalf("redirect URIs = %#v, want nil", got)
+			}
+		})
+	}
+}
+
 func TestApplicationBuildCreateBodyRejectsInvalidSettingsRedirectURIs(t *testing.T) {
 	t.Parallel()
 
@@ -334,6 +358,22 @@ func TestApplicationBuildCreateBodyRejectsInvalidSettingsRedirectURIs(t *testing
 				t.Fatal("expected redirect URI diagnostics")
 			}
 		})
+	}
+}
+
+func TestApplicationMergeSettingsSectionHandlesEmptyAndMissingSections(t *testing.T) {
+	t.Parallel()
+
+	settings := map[string]interface{}{"oauth": map[string]interface{}{"forcePKCE": true}}
+	mergeSettingsSection(settings, "oauth", map[string]interface{}{})
+	if !reflect.DeepEqual(settings, map[string]interface{}{"oauth": map[string]interface{}{"forcePKCE": true}}) {
+		t.Fatalf("settings after empty overlay = %#v", settings)
+	}
+
+	overlay := map[string]interface{}{"forcePKCE": false}
+	mergeSettingsSection(settings, "mfa", overlay)
+	if !reflect.DeepEqual(settings["mfa"], overlay) {
+		t.Fatalf("missing section merge = %#v, want %#v", settings["mfa"], overlay)
 	}
 }
 
