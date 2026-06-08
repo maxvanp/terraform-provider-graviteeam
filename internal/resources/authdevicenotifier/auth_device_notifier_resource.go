@@ -109,6 +109,10 @@ func (r *AuthDeviceNotifierResource) Read(ctx context.Context, req resource.Read
 
 	result, err := r.client.GetAuthDeviceNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading auth device notifier", err.Error())
 		return
 	}

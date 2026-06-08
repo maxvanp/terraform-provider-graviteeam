@@ -393,6 +393,148 @@ func TestProtectedResourceSecretCRUDPreservesAndRenewsSecret(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceSecretReadRemovesMissingSecretAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{{"id": "unrelated", "name": "other-secret"}})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets/secret-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ProtectedResourceSecretResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := protectedResourceSecretState(t, schemaResp.Schema, ProtectedResourceSecretModel{
+		ID:                  types.StringValue("secret-123"),
+		DomainID:            types.StringValue("domain-123"),
+		ProtectedResourceID: types.StringValue("resource-123"),
+		Name:                types.StringValue("client-secret"),
+		Secret:              types.StringValue("preserved-secret"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing protected resource secret to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestProtectedResourceSecretReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			http.Error(w, "create failed", http.StatusInternalServerError)
+		case http.MethodGet:
+			http.Error(w, "read failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets/secret-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "delete failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets/secret-123/_renew", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		http.Error(w, "renew failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ProtectedResourceSecretResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := protectedResourceSecretPlan(t, schemaResp.Schema, ProtectedResourceSecretModel{
+		DomainID:            types.StringValue("domain-123"),
+		ProtectedResourceID: types.StringValue("resource-123"),
+		Name:                types.StringValue("client-secret"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := protectedResourceSecretState(t, schemaResp.Schema, ProtectedResourceSecretModel{
+		ID:                  types.StringValue("secret-123"),
+		DomainID:            types.StringValue("domain-123"),
+		ProtectedResourceID: types.StringValue("resource-123"),
+		Name:                types.StringValue("client-secret"),
+		Secret:              types.StringValue("preserved-secret"),
+		RenewTrigger:        types.StringValue("old"),
+	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	renewPlan := protectedResourceSecretPlan(t, schemaResp.Schema, ProtectedResourceSecretModel{
+		DomainID:            types.StringValue("domain-123"),
+		ProtectedResourceID: types.StringValue("resource-123"),
+		Name:                types.StringValue("client-secret"),
+		RenewTrigger:        types.StringValue("new"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: renewPlan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected renew diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestProtectedResourceSecretImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&ProtectedResourceSecretResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/resource",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func protectedResourceSecretPlan(t *testing.T, schema resourceschema.Schema, model ProtectedResourceSecretModel) tfsdk.Plan {
 	t.Helper()
 
@@ -401,6 +543,16 @@ func protectedResourceSecretPlan(t *testing.T, schema resourceschema.Schema, mod
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func protectedResourceSecretState(t *testing.T, schema resourceschema.Schema, model ProtectedResourceSecretModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed, sensitive bool) {
