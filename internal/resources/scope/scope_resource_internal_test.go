@@ -183,6 +183,40 @@ func TestReadIntoModelMapsScopeResponse(t *testing.T) {
 	}
 }
 
+func TestReadIntoModelHandlesEmptyAndIntegerOptionalScopeFields(t *testing.T) {
+	t.Parallel()
+
+	resource := &ScopeResource{}
+
+	zeroModel := ScopeModel{
+		ExpiresIn: types.Int64Null(),
+	}
+	resource.readIntoModel(&zeroModel, map[string]interface{}{
+		"description": "",
+		"expiresIn":   int64(0),
+		"iconUri":     "",
+	})
+	if !zeroModel.Description.IsNull() || !zeroModel.ExpiresIn.IsNull() || !zeroModel.IconURI.IsNull() {
+		t.Fatalf("zero model = %#v, want null optional fields", zeroModel)
+	}
+
+	integerModel := ScopeModel{}
+	resource.readIntoModel(&integerModel, map[string]interface{}{
+		"expiresIn": int64(7200),
+	})
+	if integerModel.ExpiresIn.ValueInt64() != 7200 {
+		t.Fatalf("expiresIn = %#v, want 7200", integerModel.ExpiresIn)
+	}
+
+	missingModel := ScopeModel{
+		ExpiresIn: types.Int64Value(3600),
+	}
+	resource.readIntoModel(&missingModel, map[string]interface{}{})
+	if !missingModel.ExpiresIn.IsNull() {
+		t.Fatalf("missing expiresIn = %#v, want null", missingModel.ExpiresIn)
+	}
+}
+
 func TestScopeCRUDClearsRemovedOptionalFields(t *testing.T) {
 	var bodies []map[string]interface{}
 	var methods []string
