@@ -761,6 +761,211 @@ func TestOrgUserUpdateRequiresResetPasswordWhenTriggerChanges(t *testing.T) {
 	}
 }
 
+func TestOrgUserUpdateReportsActionErrors(t *testing.T) {
+	tests := map[string]struct {
+		preReadStatus int
+		updateStatus  int
+		statusStatus  int
+		resetStatus   int
+		finalReadFail bool
+		plan          func() OrgUserModel
+		state         func() OrgUserModel
+	}{
+		"profile_pre_read": {
+			preReadStatus: http.StatusInternalServerError,
+			plan: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.Email = types.StringValue("alice-updated@example.test")
+				return model
+			},
+			state: baseOrgUserModel,
+		},
+		"profile_update": {
+			updateStatus: http.StatusInternalServerError,
+			plan: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.Email = types.StringValue("alice-updated@example.test")
+				return model
+			},
+			state: baseOrgUserModel,
+		},
+		"status": {
+			statusStatus: http.StatusInternalServerError,
+			plan: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.Enabled = types.BoolValue(false)
+				return model
+			},
+			state: baseOrgUserModel,
+		},
+		"reset_password": {
+			resetStatus: http.StatusInternalServerError,
+			plan: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.ResetPassword = types.StringValue("rotated-secret")
+				model.ResetTrigger = types.StringValue("rotation-2")
+				return model
+			},
+			state: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.ResetTrigger = types.StringValue("rotation-1")
+				return model
+			},
+		},
+		"final_read": {
+			finalReadFail: true,
+			plan: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.ResetPassword = types.StringValue("rotated-secret")
+				model.ResetTrigger = types.StringValue("rotation-2")
+				return model
+			},
+			state: func() OrgUserModel {
+				model := baseOrgUserModel()
+				model.ResetTrigger = types.StringValue("rotation-1")
+				return model
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			getCount := 0
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+				switch r.Method {
+				case http.MethodGet:
+					getCount++
+					if tc.preReadStatus != 0 && getCount == 1 {
+						http.Error(w, "pre-read failed", tc.preReadStatus)
+						return
+					}
+					if tc.finalReadFail {
+						http.Error(w, "final read failed", http.StatusInternalServerError)
+						return
+					}
+					_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+						"username":           "alice",
+						"email":              "alice@example.test",
+						"enabled":            true,
+						"forceResetPassword": false,
+						"preRegistration":    true,
+					}))
+				case http.MethodPut:
+					if tc.updateStatus != 0 {
+						http.Error(w, "update failed", tc.updateStatus)
+						return
+					}
+					_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+						"username":           "alice",
+						"enabled":            true,
+						"forceResetPassword": false,
+						"preRegistration":    true,
+					}))
+				default:
+					t.Fatalf("item method = %s", r.Method)
+				}
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/status", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("status method = %s, want PUT", r.Method)
+				}
+				if tc.statusStatus != 0 {
+					http.Error(w, "status failed", tc.statusStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+					"username":           "alice",
+					"enabled":            false,
+					"forceResetPassword": false,
+					"preRegistration":    true,
+				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/resetPassword", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Fatalf("reset method = %s, want POST", r.Method)
+				}
+				if tc.resetStatus != 0 {
+					http.Error(w, "reset failed", tc.resetStatus)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &OrgUserResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+				Plan:  orgUserPlan(t, schemaResp.Schema, tc.plan()),
+				State: orgUserState(t, schemaResp.Schema, tc.state()),
+			}, updateResp)
+			if !updateResp.Diagnostics.HasError() {
+				t.Fatal("expected update diagnostics")
+			}
+		})
+	}
+}
+
+func TestOrgUserImportStateSetsID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	(&OrgUserResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgUserState(t, schemaResp.Schema, OrgUserModel{
+		ID:                 types.StringValue("old-user"),
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		Email:              types.StringNull(),
+		FirstName:          types.StringNull(),
+		LastName:           types.StringNull(),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+		ResetPassword:      types.StringNull(),
+		ResetTrigger:       types.StringNull(),
+	})}
+
+	(&OrgUserResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "org-user-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state OrgUserModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.ID.ValueString(), "org-user-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
+func baseOrgUserModel() OrgUserModel {
+	return OrgUserModel{
+		ID:                 types.StringValue("org-user-123"),
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		Email:              types.StringValue("alice@example.test"),
+		FirstName:          types.StringNull(),
+		LastName:           types.StringNull(),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+		ResetPassword:      types.StringNull(),
+		ResetTrigger:       types.StringNull(),
+	}
+}
+
 func orgUserResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,
