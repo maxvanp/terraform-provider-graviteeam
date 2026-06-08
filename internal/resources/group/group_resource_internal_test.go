@@ -427,6 +427,60 @@ func TestGroupReadIgnoresRemoteRelationshipsWhenStateDoesNotManageThem(t *testin
 	}
 }
 
+func TestGroupUpdatePreservesPlannedRelationshipsWhenAPIOmitsThem(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        "group-updated",
+			"description": "updated",
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := groupPlan(t, schemaResp.Schema, GroupModel{
+		DomainID:    types.StringValue("domain-123"),
+		Name:        types.StringValue("group-updated"),
+		Description: types.StringValue("updated"),
+		Members:     []types.String{types.StringValue("user-1")},
+		Roles:       []types.String{types.StringValue("role-1")},
+	})
+	state := groupState(t, schemaResp.Schema, GroupModel{
+		ID:       types.StringValue("group-123"),
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("group-old"),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updated GroupModel
+	if diags := updateResp.State.Get(context.Background(), &updated); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if got, want := stringValues(updated.Members), []string{"user-1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("members = %#v, want %#v", got, want)
+	}
+	if got, want := stringValues(updated.Roles), []string{"role-1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("roles = %#v, want %#v", got, want)
+	}
+}
+
 func TestGroupReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

@@ -491,6 +491,58 @@ func TestOrgGroupReadIgnoresRemoteRelationshipsWhenStateDoesNotManageThem(t *tes
 	}
 }
 
+func TestOrgGroupUpdatePreservesPlannedRelationshipsWhenAPIOmitsThem(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        "admins-updated",
+			"description": "updated",
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgGroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := orgGroupPlan(t, schemaResp.Schema, OrgGroupModel{
+		Name:        types.StringValue("admins-updated"),
+		Description: types.StringValue("updated"),
+		Members:     []types.String{types.StringValue("user-1")},
+		Roles:       []types.String{types.StringValue("role-1")},
+	})
+	state := orgGroupState(t, schemaResp.Schema, OrgGroupModel{
+		ID:   types.StringValue("group-123"),
+		Name: types.StringValue("admins"),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+	var updated OrgGroupModel
+	if diags := updateResp.State.Get(context.Background(), &updated); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if got, want := stringValues(updated.Members), []string{"user-1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("members = %#v, want %#v", got, want)
+	}
+	if got, want := stringValues(updated.Roles), []string{"role-1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("roles = %#v, want %#v", got, want)
+	}
+}
+
 func TestOrgGroupReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
