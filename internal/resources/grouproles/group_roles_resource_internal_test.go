@@ -245,6 +245,195 @@ func TestGroupRolesCRUDReconcilesOnlyRoleDiff(t *testing.T) {
 	}
 }
 
+func TestGroupRolesReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{"missing group", http.StatusNotFound, true},
+		{"server error", http.StatusInternalServerError, false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &GroupRolesResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := groupRolesState(t, schemaResp.Schema, GroupRolesModel{
+				DomainID: types.StringValue("domain-123"),
+				GroupID:  types.StringValue("group-123"),
+				Roles:    []types.String{types.StringValue("role-a")},
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing group roles to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestGroupRolesReportsCreateUpdateAndDeleteErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		failingMethod string
+		failingRole   string
+		run           func(*GroupRolesResource, resourceschema.Schema)
+	}{
+		{
+			name:          "create set error",
+			failingMethod: http.MethodPost,
+			run: func(resourceUnderTest *GroupRolesResource, schema resourceschema.Schema) {
+				plan := groupRolesPlan(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    []types.String{types.StringValue("role-a")},
+				})
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected create diagnostics")
+				}
+			},
+		},
+		{
+			name:          "update remove error",
+			failingMethod: http.MethodDelete,
+			failingRole:   "role-a",
+			run: func(resourceUnderTest *GroupRolesResource, schema resourceschema.Schema) {
+				plan := groupRolesPlan(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    []types.String{types.StringValue("role-b")},
+				})
+				state := groupRolesState(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    []types.String{types.StringValue("role-a")},
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:          "update add error",
+			failingMethod: http.MethodPost,
+			run: func(resourceUnderTest *GroupRolesResource, schema resourceschema.Schema) {
+				plan := groupRolesPlan(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    []types.String{types.StringValue("role-b")},
+				})
+				state := groupRolesState(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    nil,
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:          "delete remove error",
+			failingMethod: http.MethodDelete,
+			failingRole:   "role-a",
+			run: func(resourceUnderTest *GroupRolesResource, schema resourceschema.Schema) {
+				state := groupRolesState(t, schema, GroupRolesModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Roles:    []types.String{types.StringValue("role-a")},
+				})
+				resp := &resource.DeleteResponse{}
+				resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected delete diagnostics")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tt.failingMethod && tt.failingRole == "" {
+					http.Error(w, "set failed", http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles/", func(w http.ResponseWriter, r *http.Request) {
+				roleID := strings.TrimPrefix(r.URL.Path, "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/roles/")
+				if r.Method == tt.failingMethod && roleID == tt.failingRole {
+					http.Error(w, "remove failed", http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &GroupRolesResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			tt.run(resourceUnderTest, schemaResp.Schema)
+		})
+	}
+}
+
+func TestGroupRolesImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&GroupRolesResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/group/extra",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func groupRolesPlan(t *testing.T, schema resourceschema.Schema, model GroupRolesModel) tfsdk.Plan {
 	t.Helper()
 
@@ -253,6 +442,16 @@ func groupRolesPlan(t *testing.T, schema resourceschema.Schema, model GroupRoles
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func groupRolesState(t *testing.T, schema resourceschema.Schema, model GroupRolesModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string) {
