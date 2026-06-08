@@ -13,6 +13,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -483,6 +484,39 @@ func TestOrgSettingsReadAndUpdateReportReadErrors(t *testing.T) {
 	}
 }
 
+func TestOrgSettingsStopsOnInvalidPlanOrState(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgSettingsResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := orgSettingsInvalidRaw()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+}
+
 func TestOrgSettingsImportStateSetsSettingsID(t *testing.T) {
 	t.Parallel()
 
@@ -527,6 +561,19 @@ func orgSettingsState(t *testing.T, schema resourceschema.Schema, model OrgSetti
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func orgSettingsInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":         tftypes.Number,
+			"identities": tftypes.List{ElementType: tftypes.String},
+		}},
+		map[string]tftypes.Value{
+			"id":         tftypes.NewValue(tftypes.Number, 123),
+			"identities": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		},
+	)
 }
 
 func listStrings(t *testing.T, list types.List) []string {
