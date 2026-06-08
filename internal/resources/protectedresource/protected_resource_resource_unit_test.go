@@ -692,6 +692,65 @@ func TestProtectedResourceCreateReadUpdateAndDeleteReportInvalidStateData(t *tes
 	}
 }
 
+func TestProtectedResourceUpdateReportsInvalidStateAfterValidPlan(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ProtectedResourceResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	stringSetType := tftypes.Set{ElementType: tftypes.String}
+	featureType := tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"key":         tftypes.String,
+		"type":        tftypes.String,
+		"description": tftypes.String,
+		"scopes":      stringSetType,
+	}}}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                   tftypes.String,
+			"domain_id":            tftypes.Number,
+			"name":                 tftypes.String,
+			"description":          tftypes.String,
+			"type":                 tftypes.String,
+			"resource_identifiers": stringSetType,
+			"settings_json":        tftypes.String,
+			"client_id":            tftypes.String,
+			"client_secret":        tftypes.String,
+			"feature":              featureType,
+		}},
+		map[string]tftypes.Value{
+			"id":                   tftypes.NewValue(tftypes.String, "resource-123"),
+			"domain_id":            tftypes.NewValue(tftypes.Number, 123),
+			"name":                 tftypes.NewValue(tftypes.String, "mcp"),
+			"description":          tftypes.NewValue(tftypes.String, nil),
+			"type":                 tftypes.NewValue(tftypes.String, "MCP_SERVER"),
+			"resource_identifiers": tftypes.NewValue(stringSetType, []tftypes.Value{tftypes.NewValue(tftypes.String, "https://api.example.test/mcp")}),
+			"settings_json":        tftypes.NewValue(tftypes.String, nil),
+			"client_id":            tftypes.NewValue(tftypes.String, "client-123"),
+			"client_secret":        tftypes.NewValue(tftypes.String, "secret-123"),
+			"feature":              tftypes.NewValue(featureType, nil),
+		},
+	)
+	plan := protectedResourcePlan(t, schemaResp.Schema, ProtectedResourceModel{
+		ID:                  types.StringValue("resource-123"),
+		DomainID:            types.StringValue("domain-123"),
+		Name:                types.StringValue("mcp"),
+		Type:                types.StringValue("MCP_SERVER"),
+		ResourceIdentifiers: []types.String{types.StringValue("https://api.example.test/mcp")},
+		ClientID:            types.StringValue("client-123"),
+		ClientSecret:        types.StringValue("secret-123"),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  plan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
 func TestProtectedResourceDeleteIgnoresMissingResource(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

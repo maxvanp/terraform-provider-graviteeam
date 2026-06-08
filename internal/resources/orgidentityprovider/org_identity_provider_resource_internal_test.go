@@ -612,6 +612,66 @@ func TestOrgIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
 	}
 }
 
+func TestOrgIdentityProviderUpdateReportsInvalidPlanAndStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgIdentityProviderResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	listType := tftypes.List{ElementType: tftypes.String}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":               tftypes.Number,
+			"name":             tftypes.String,
+			"type":             tftypes.String,
+			"configuration":    tftypes.String,
+			"mappers":          tftypes.Map{ElementType: tftypes.String},
+			"domain_whitelist": listType,
+			"external":         tftypes.Bool,
+			"group_mapper":     tftypes.Map{ElementType: listType},
+			"role_mapper":      tftypes.Map{ElementType: listType},
+		}},
+		map[string]tftypes.Value{
+			"id":               tftypes.NewValue(tftypes.Number, 123),
+			"name":             tftypes.NewValue(tftypes.String, "org-inline"),
+			"type":             tftypes.NewValue(tftypes.String, "inline-am-idp"),
+			"configuration":    tftypes.NewValue(tftypes.String, `{"password":"plain"}`),
+			"mappers":          tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
+			"domain_whitelist": tftypes.NewValue(listType, nil),
+			"external":         tftypes.NewValue(tftypes.Bool, false),
+			"group_mapper":     tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+			"role_mapper":      tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+		},
+	)
+	valid := OrgIdentityProviderModel{
+		ID:            types.StringValue("org-idp-123"),
+		Name:          types.StringValue("org-inline"),
+		Type:          types.StringValue("inline-am-idp"),
+		Configuration: types.StringValue(`{"password":"plain"}`),
+		External:      types.BoolValue(false),
+		GroupMapper:   types.MapNull(types.ListType{ElemType: types.StringType}),
+		RoleMapper:    types.MapNull(types.ListType{ElemType: types.StringType}),
+	}
+
+	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: orgIdentityProviderState(t, schemaResp.Schema, valid),
+	}, invalidPlanResp)
+	if !invalidPlanResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  orgIdentityProviderPlan(t, schemaResp.Schema, valid),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
 func TestOrgIdentityProviderCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int

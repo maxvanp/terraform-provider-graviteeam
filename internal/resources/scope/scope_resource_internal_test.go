@@ -523,6 +523,64 @@ func TestScopeDeleteReportsInvalidStateData(t *testing.T) {
 	}
 }
 
+func TestScopeUpdateReportsInvalidPlanAndStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ScopeResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":            tftypes.String,
+			"domain_id":     tftypes.Number,
+			"key":           tftypes.String,
+			"name":          tftypes.String,
+			"description":   tftypes.String,
+			"discovery":     tftypes.Bool,
+			"expires_in":    tftypes.Number,
+			"icon_uri":      tftypes.String,
+			"parameterized": tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":            tftypes.NewValue(tftypes.String, "scope-123"),
+			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
+			"key":           tftypes.NewValue(tftypes.String, "claim_scope"),
+			"name":          tftypes.NewValue(tftypes.String, "Claim scope"),
+			"description":   tftypes.NewValue(tftypes.String, nil),
+			"discovery":     tftypes.NewValue(tftypes.Bool, true),
+			"expires_in":    tftypes.NewValue(tftypes.Number, nil),
+			"icon_uri":      tftypes.NewValue(tftypes.String, nil),
+			"parameterized": tftypes.NewValue(tftypes.Bool, false),
+		},
+	)
+	valid := ScopeModel{
+		ID:            types.StringValue("scope-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Key:           types.StringValue("claim_scope"),
+		Name:          types.StringValue("Claim scope"),
+		Discovery:     types.BoolValue(true),
+		Parameterized: types.BoolValue(false),
+	}
+
+	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: scopeState(t, schemaResp.Schema, valid),
+	}, invalidPlanResp)
+	if !invalidPlanResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  scopePlan(t, schemaResp.Schema, valid),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
 func TestScopeDeleteIgnores404(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
