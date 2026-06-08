@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -838,6 +839,76 @@ func TestApplicationReadRemovesMissingApplicationAndDeleteIgnores404(t *testing.
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestApplicationDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	stringList := tftypes.List{ElementType: tftypes.String}
+	identityProviderRuleType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"identity":       tftypes.String,
+		"selection_rule": tftypes.String,
+		"priority":       tftypes.Number,
+	}}
+	oauthSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"redirect_uris":                  stringList,
+		"post_logout_redirect_uris":      stringList,
+		"grant_types":                    stringList,
+		"response_types":                 stringList,
+		"scopes":                         stringList,
+		"access_token_validity_seconds":  tftypes.Number,
+		"refresh_token_validity_seconds": tftypes.Number,
+		"id_token_validity_seconds":      tftypes.Number,
+	}}
+	mfaSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"enrollment": tftypes.String,
+		"challenge":  tftypes.String,
+	}}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                     tftypes.String,
+			"domain_id":              tftypes.Number,
+			"name":                   tftypes.String,
+			"type":                   tftypes.String,
+			"description":            tftypes.String,
+			"client_id":              tftypes.String,
+			"client_secret":          tftypes.String,
+			"metadata_json":          tftypes.String,
+			"settings_json":          tftypes.String,
+			"identity_providers":     stringList,
+			"identity_provider_rule": tftypes.List{ElementType: identityProviderRuleType},
+			"factors":                stringList,
+			"oauth_settings":         oauthSettingsType,
+			"mfa_settings":           mfaSettingsType,
+		}},
+		map[string]tftypes.Value{
+			"id":                     tftypes.NewValue(tftypes.String, "app-123"),
+			"domain_id":              tftypes.NewValue(tftypes.Number, 123),
+			"name":                   tftypes.NewValue(tftypes.String, "app"),
+			"type":                   tftypes.NewValue(tftypes.String, "WEB"),
+			"description":            tftypes.NewValue(tftypes.String, "application"),
+			"client_id":              tftypes.NewValue(tftypes.String, "client-123"),
+			"client_secret":          tftypes.NewValue(tftypes.String, "clear-secret"),
+			"metadata_json":          tftypes.NewValue(tftypes.String, nil),
+			"settings_json":          tftypes.NewValue(tftypes.String, nil),
+			"identity_providers":     tftypes.NewValue(stringList, nil),
+			"identity_provider_rule": tftypes.NewValue(tftypes.List{ElementType: identityProviderRuleType}, nil),
+			"factors":                tftypes.NewValue(stringList, nil),
+			"oauth_settings":         tftypes.NewValue(oauthSettingsType, nil),
+			"mfa_settings":           tftypes.NewValue(mfaSettingsType, nil),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

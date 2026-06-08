@@ -14,6 +14,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -404,6 +405,51 @@ func TestIdentityProviderReadRemovesMissingProviderAndDeleteIgnores404(t *testin
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &IdentityProviderResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	listType := tftypes.List{ElementType: tftypes.String}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                 tftypes.String,
+			"domain_id":          tftypes.Number,
+			"name":               tftypes.String,
+			"type":               tftypes.String,
+			"external":           tftypes.Bool,
+			"configuration":      tftypes.String,
+			"mappers":            tftypes.Map{ElementType: tftypes.String},
+			"domain_whitelist":   listType,
+			"password_policy_id": tftypes.String,
+			"group_mapper":       tftypes.Map{ElementType: listType},
+			"role_mapper":        tftypes.Map{ElementType: listType},
+		}},
+		map[string]tftypes.Value{
+			"id":                 tftypes.NewValue(tftypes.String, "idp-123"),
+			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
+			"name":               tftypes.NewValue(tftypes.String, "inline"),
+			"type":               tftypes.NewValue(tftypes.String, "inline-am-idp"),
+			"external":           tftypes.NewValue(tftypes.Bool, false),
+			"configuration":      tftypes.NewValue(tftypes.String, `{"users":[]}`),
+			"mappers":            tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
+			"domain_whitelist":   tftypes.NewValue(listType, nil),
+			"password_policy_id": tftypes.NewValue(tftypes.String, nil),
+			"group_mapper":       tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+			"role_mapper":        tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 
