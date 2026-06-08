@@ -730,6 +730,307 @@ func TestClientResourceMethodsReportInvalidJSONResponses(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "list alert triggers",
+			call: func(c *Client) error {
+				_, err := c.ListAlertTriggers(context.Background(), "domain-123")
+				return err
+			},
+		},
+		{
+			name: "patch alert triggers",
+			call: func(c *Client) error {
+				_, err := c.PatchAlertTriggers(context.Background(), "domain-123", []map[string]interface{}{{"id": "trigger-123"}})
+				return err
+			},
+		},
+		{
+			name: "list audits",
+			call: func(c *Client) error {
+				_, err := c.ListAudits(context.Background(), "domain-123", 1, 10)
+				return err
+			},
+		},
+		{
+			name: "list flows",
+			call: func(c *Client) error {
+				_, err := c.ListFlows(context.Background(), "domain-123")
+				return err
+			},
+		},
+		{
+			name: "update domain flows",
+			call: func(c *Client) error {
+				_, err := c.UpdateDomainFlows(context.Background(), "domain-123", []interface{}{map[string]interface{}{"id": "flow-123"}})
+				return err
+			},
+		},
+		{
+			name: "create org entrypoint",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgEntrypoint(context.Background(), map[string]interface{}{"name": "entrypoint"})
+				return err
+			},
+		},
+		{
+			name: "get org entrypoint",
+			call: func(c *Client) error {
+				_, err := c.GetOrgEntrypoint(context.Background(), "entrypoint-123")
+				return err
+			},
+		},
+		{
+			name: "update org entrypoint",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgEntrypoint(context.Background(), "entrypoint-123", map[string]interface{}{"name": "entrypoint"})
+				return err
+			},
+		},
+		{
+			name: "create org identity provider",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgIdentityProvider(context.Background(), map[string]interface{}{"name": "idp"})
+				return err
+			},
+		},
+		{
+			name: "get org identity provider",
+			call: func(c *Client) error {
+				_, err := c.GetOrgIdentityProvider(context.Background(), "idp-123")
+				return err
+			},
+		},
+		{
+			name: "update org identity provider",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgIdentityProvider(context.Background(), "idp-123", map[string]interface{}{"name": "idp"})
+				return err
+			},
+		},
+		{
+			name: "create org role",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgRole(context.Background(), map[string]interface{}{"name": "role"})
+				return err
+			},
+		},
+		{
+			name: "get org role",
+			call: func(c *Client) error {
+				_, err := c.GetOrgRole(context.Background(), "role-123")
+				return err
+			},
+		},
+		{
+			name: "update org role",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgRole(context.Background(), "role-123", map[string]interface{}{"name": "role"})
+				return err
+			},
+		},
+		{
+			name: "create org group",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgGroup(context.Background(), map[string]interface{}{"name": "group"})
+				return err
+			},
+		},
+		{
+			name: "get org group",
+			call: func(c *Client) error {
+				_, err := c.GetOrgGroup(context.Background(), "group-123")
+				return err
+			},
+		},
+		{
+			name: "update org group",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgGroup(context.Background(), "group-123", map[string]interface{}{"name": "group"})
+				return err
+			},
+		},
+		{
+			name: "create org reporter",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgReporter(context.Background(), map[string]interface{}{"name": "reporter"})
+				return err
+			},
+		},
+		{
+			name: "get org reporter",
+			call: func(c *Client) error {
+				_, err := c.GetOrgReporter(context.Background(), "reporter-123")
+				return err
+			},
+		},
+		{
+			name: "update org reporter",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgReporter(context.Background(), "reporter-123", map[string]interface{}{"name": "reporter"})
+				return err
+			},
+		},
+		{
+			name: "get org form",
+			call: func(c *Client) error {
+				_, err := c.GetOrgForm(context.Background(), "LOGIN")
+				return err
+			},
+		},
+		{
+			name: "create org form",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgForm(context.Background(), map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "update org form",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgForm(context.Background(), "form-123", map[string]interface{}{"template": "LOGIN"})
+				return err
+			},
+		},
+		{
+			name: "create org user",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgUser(context.Background(), map[string]interface{}{"username": "user"})
+				return err
+			},
+		},
+		{
+			name: "get org user",
+			call: func(c *Client) error {
+				_, err := c.GetOrgUser(context.Background(), "user-123")
+				return err
+			},
+		},
+		{
+			name: "update org user",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgUser(context.Background(), "user-123", map[string]interface{}{"username": "user"})
+				return err
+			},
+		},
+		{
+			name: "update org user status",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgUserStatus(context.Background(), "user-123", true)
+				return err
+			},
+		},
+		{
+			name: "update org username",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgUsername(context.Background(), "user-123", "user")
+				return err
+			},
+		},
+		{
+			name: "list org user tokens",
+			call: func(c *Client) error {
+				_, err := c.ListOrgUserTokens(context.Background(), "user-123")
+				return err
+			},
+		},
+		{
+			name: "create org user token",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgUserToken(context.Background(), "user-123", map[string]interface{}{"name": "token"})
+				return err
+			},
+		},
+		{
+			name: "list org members",
+			call: func(c *Client) error {
+				_, err := c.ListOrgMembers(context.Background())
+				return err
+			},
+		},
+		{
+			name: "add org member",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"id": "member-123"})
+				return err
+			},
+		},
+		{
+			name: "create org tag",
+			call: func(c *Client) error {
+				_, err := c.CreateOrgTag(context.Background(), map[string]interface{}{"name": "tag"})
+				return err
+			},
+		},
+		{
+			name: "get org tag",
+			call: func(c *Client) error {
+				_, err := c.GetOrgTag(context.Background(), "tag-123")
+				return err
+			},
+		},
+		{
+			name: "update org tag",
+			call: func(c *Client) error {
+				_, err := c.UpdateOrgTag(context.Background(), "tag-123", map[string]interface{}{"name": "tag"})
+				return err
+			},
+		},
+		{
+			name: "get org settings",
+			call: func(c *Client) error {
+				_, err := c.GetOrgSettings(context.Background())
+				return err
+			},
+		},
+		{
+			name: "patch org settings",
+			call: func(c *Client) error {
+				_, err := c.PatchOrgSettings(context.Background(), map[string]interface{}{"name": "org"})
+				return err
+			},
+		},
+		{
+			name: "get application flows",
+			call: func(c *Client) error {
+				_, err := c.GetApplicationFlows(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name: "update application flows",
+			call: func(c *Client) error {
+				_, err := c.UpdateApplicationFlows(context.Background(), "domain-123", "app-123", []interface{}{map[string]interface{}{"id": "flow-123"}})
+				return err
+			},
+		},
+		{
+			name: "get group roles",
+			call: func(c *Client) error {
+				_, err := c.GetGroupRoles(context.Background(), "domain-123", "group-123")
+				return err
+			},
+		},
+		{
+			name: "set group roles",
+			call: func(c *Client) error {
+				_, err := c.SetGroupRoles(context.Background(), "domain-123", "group-123", []string{"role-123"})
+				return err
+			},
+		},
+		{
+			name: "get user roles",
+			call: func(c *Client) error {
+				_, err := c.GetUserRoles(context.Background(), "domain-123", "user-123")
+				return err
+			},
+		},
+		{
+			name: "set user roles",
+			call: func(c *Client) error {
+				_, err := c.SetUserRoles(context.Background(), "domain-123", "user-123", []string{"role-123"})
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -747,6 +1048,93 @@ func TestClientResourceMethodsReportInvalidJSONResponses(t *testing.T) {
 				t.Fatal("expected invalid JSON error")
 			}
 		})
+	}
+}
+
+func TestClientRawRequestHelpersRejectInvalidBaseURL(t *testing.T) {
+	c := &Client{
+		BaseURL:        "http://[::1",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient:     http.DefaultClient,
+	}
+
+	if _, err := c.DoManagementRequest(context.Background(), http.MethodGet, "/management/raw", nil); err == nil {
+		t.Fatal("expected management request URL error")
+	}
+	if _, err := c.DoOrgRequest(context.Background(), http.MethodGet, "/members", nil); err == nil {
+		t.Fatal("expected organization request URL error")
+	}
+}
+
+func TestMembershipUpsertsHandleEmptyResponses(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("domain members method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("organization members method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	domainMember, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-123"})
+	if err != nil {
+		t.Fatalf("add domain member: %v", err)
+	}
+	if len(domainMember) != 0 {
+		t.Fatalf("domain member = %#v, want empty map", domainMember)
+	}
+
+	orgMember, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"member": "user@example.com"})
+	if err != nil {
+		t.Fatalf("add organization member: %v", err)
+	}
+	if len(orgMember) != 0 {
+		t.Fatalf("organization member = %#v, want empty map", orgMember)
+	}
+}
+
+func TestDomainMemberUpsertReturnsJSONResponse(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "membership-123"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	member, err := newTestClient(server).AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-123"})
+	if err != nil {
+		t.Fatalf("add domain member: %v", err)
+	}
+	if member["id"] != "membership-123" {
+		t.Fatalf("member = %#v", member)
+	}
+}
+
+func TestListEntrypointsReportsHTTPError(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/entrypoints", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		http.Error(w, "entrypoints failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	if _, err := newTestClient(server).ListEntrypoints(context.Background(), "domain-123"); err == nil {
+		t.Fatal("expected list entrypoints error")
 	}
 }
 
