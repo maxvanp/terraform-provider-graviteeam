@@ -680,6 +680,41 @@ func TestUserUpdateReportsProfileUpdateErrorAfterSuccessfulRead(t *testing.T) {
 	}
 }
 
+func TestUserUpdateReportsProfileReadError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected user method %s", r.Method)
+		}
+		http.Error(w, "profile read failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := baseUserModel()
+	plan.Email = types.StringValue("updated@example.com")
+	state := baseUserModel()
+	state.Email = types.StringValue("alice@example.com")
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  userPlan(t, schemaResp.Schema, plan),
+		State: userState(t, schemaResp.Schema, state),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected profile read diagnostics")
+	}
+}
+
 func TestUserUpdateLocksUserAndRefreshesState(t *testing.T) {
 	var methods []string
 
@@ -737,6 +772,87 @@ func TestUserUpdateLocksUserAndRefreshesState(t *testing.T) {
 	}
 	if !updated.Locked.ValueBool() {
 		t.Fatalf("locked = %#v, want true", updated.Locked)
+	}
+}
+
+func TestUserCreateReportsReadAfterLockError(t *testing.T) {
+	readCount := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+			"username":           "alice",
+			"enabled":            true,
+			"accountNonLocked":   true,
+			"forceResetPassword": false,
+			"preRegistration":    true,
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			readCount++
+			if readCount == 2 {
+				http.Error(w, "read after lock failed", http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+				"username":              "alice",
+				"enabled":               true,
+				"accountNonLocked":      true,
+				"forceResetPassword":    false,
+				"preRegistration":       true,
+				"accountNonExpired":     true,
+				"credentialsNonExpired": true,
+				"registrationCompleted": true,
+			}))
+		case http.MethodPut:
+			_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+				"username":           "alice",
+				"displayName":        "Alice Liddell",
+				"enabled":            true,
+				"accountNonLocked":   true,
+				"forceResetPassword": false,
+				"preRegistration":    true,
+			}))
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/lock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("lock method = %s, want POST", r.Method)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	createPlan := userPlan(t, schemaResp.Schema, UserModel{
+		DomainID:           types.StringValue("domain-123"),
+		Username:           types.StringValue("alice"),
+		DisplayName:        types.StringValue("Alice Liddell"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		Locked:             types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: createPlan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected read after lock diagnostics")
 	}
 }
 
@@ -864,6 +980,7 @@ func TestUserCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int
 		itemStatus   int
+		putStatus    int
 		statusStatus int
 		lockStatus   int
 		action       func(context.Context, *UserResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
@@ -878,6 +995,14 @@ func TestUserCRUDReportsRemoteErrors(t *testing.T) {
 		},
 		"post_create_read": {
 			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *UserResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"post_create_update": {
+			putStatus: http.StatusInternalServerError,
 			action: func(ctx context.Context, r *UserResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
 				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
@@ -955,7 +1080,19 @@ func TestUserCRUDReportsRemoteErrors(t *testing.T) {
 					return
 				}
 				switch r.Method {
-				case http.MethodGet, http.MethodPut:
+				case http.MethodGet:
+					_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+						"username":           "alice",
+						"enabled":            true,
+						"accountNonLocked":   true,
+						"forceResetPassword": false,
+						"preRegistration":    true,
+					}))
+				case http.MethodPut:
+					if tc.putStatus != 0 {
+						http.Error(w, "remote error", tc.putStatus)
+						return
+					}
 					_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
 						"username":           "alice",
 						"enabled":            true,
@@ -1069,6 +1206,7 @@ func TestUserUpdateRequiresResetPasswordWhenTriggerChanges(t *testing.T) {
 
 func TestUserUpdateReportsActionErrors(t *testing.T) {
 	tests := map[string]struct {
+		lockStatus         int
 		unlockStatus       int
 		resetStatus        int
 		registrationStatus int
@@ -1076,6 +1214,19 @@ func TestUserUpdateReportsActionErrors(t *testing.T) {
 		plan               func() UserModel
 		state              func() UserModel
 	}{
+		"lock": {
+			lockStatus: http.StatusInternalServerError,
+			plan: func() UserModel {
+				model := baseUserModel()
+				model.Locked = types.BoolValue(true)
+				return model
+			},
+			state: func() UserModel {
+				model := baseUserModel()
+				model.Locked = types.BoolValue(false)
+				return model
+			},
+		},
 		"unlock": {
 			unlockStatus: http.StatusInternalServerError,
 			plan: func() UserModel {
@@ -1154,6 +1305,13 @@ func TestUserUpdateReportsActionErrors(t *testing.T) {
 					"forceResetPassword": false,
 					"preRegistration":    true,
 				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/lock", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.lockStatus != 0 {
+					http.Error(w, "remote error", tc.lockStatus)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
 			})
 			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/unlock", func(w http.ResponseWriter, _ *http.Request) {
 				if tc.unlockStatus != 0 {
