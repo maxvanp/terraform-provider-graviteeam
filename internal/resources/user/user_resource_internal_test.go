@@ -1203,40 +1203,7 @@ func TestUserCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 	resourceUnderTest := &UserResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":                                tftypes.String,
-			"domain_id":                         tftypes.Number,
-			"username":                          tftypes.String,
-			"email":                             tftypes.String,
-			"first_name":                        tftypes.String,
-			"last_name":                         tftypes.String,
-			"display_name":                      tftypes.String,
-			"force_reset_password":              tftypes.Bool,
-			"enabled":                           tftypes.Bool,
-			"locked":                            tftypes.Bool,
-			"pre_registration":                  tftypes.Bool,
-			"reset_password":                    tftypes.String,
-			"reset_password_trigger":            tftypes.String,
-			"registration_confirmation_trigger": tftypes.String,
-		}},
-		map[string]tftypes.Value{
-			"id":                                tftypes.NewValue(tftypes.String, "user-123"),
-			"domain_id":                         tftypes.NewValue(tftypes.Number, 123),
-			"username":                          tftypes.NewValue(tftypes.String, "alice"),
-			"email":                             tftypes.NewValue(tftypes.String, nil),
-			"first_name":                        tftypes.NewValue(tftypes.String, nil),
-			"last_name":                         tftypes.NewValue(tftypes.String, nil),
-			"display_name":                      tftypes.NewValue(tftypes.String, nil),
-			"force_reset_password":              tftypes.NewValue(tftypes.Bool, false),
-			"enabled":                           tftypes.NewValue(tftypes.Bool, true),
-			"locked":                            tftypes.NewValue(tftypes.Bool, false),
-			"pre_registration":                  tftypes.NewValue(tftypes.Bool, true),
-			"reset_password":                    tftypes.NewValue(tftypes.String, nil),
-			"reset_password_trigger":            tftypes.NewValue(tftypes.String, nil),
-			"registration_confirmation_trigger": tftypes.NewValue(tftypes.String, nil),
-		},
-	)
+	raw := userInvalidRaw()
 
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
@@ -1257,10 +1224,19 @@ func TestUserCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
 		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: userState(t, schemaResp.Schema, baseUserModel()),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  userPlan(t, schemaResp.Schema, baseUserModel()),
 		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
 	}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected update diagnostics")
+		t.Fatal("expected invalid update state diagnostics")
 	}
 
 	deleteResp := &resource.DeleteResponse{}
@@ -1361,4 +1337,41 @@ func userPlan(t *testing.T, schema resourceschema.Schema, model UserModel) tfsdk
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func userInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                                tftypes.String,
+			"domain_id":                         tftypes.Number,
+			"username":                          tftypes.String,
+			"email":                             tftypes.String,
+			"first_name":                        tftypes.String,
+			"last_name":                         tftypes.String,
+			"display_name":                      tftypes.String,
+			"force_reset_password":              tftypes.Bool,
+			"enabled":                           tftypes.Bool,
+			"locked":                            tftypes.Bool,
+			"pre_registration":                  tftypes.Bool,
+			"reset_password":                    tftypes.String,
+			"reset_password_trigger":            tftypes.String,
+			"registration_confirmation_trigger": tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":                                tftypes.NewValue(tftypes.String, "user-123"),
+			"domain_id":                         tftypes.NewValue(tftypes.Number, 123),
+			"username":                          tftypes.NewValue(tftypes.String, "alice"),
+			"email":                             tftypes.NewValue(tftypes.String, nil),
+			"first_name":                        tftypes.NewValue(tftypes.String, nil),
+			"last_name":                         tftypes.NewValue(tftypes.String, nil),
+			"display_name":                      tftypes.NewValue(tftypes.String, nil),
+			"force_reset_password":              tftypes.NewValue(tftypes.Bool, false),
+			"enabled":                           tftypes.NewValue(tftypes.Bool, true),
+			"locked":                            tftypes.NewValue(tftypes.Bool, false),
+			"pre_registration":                  tftypes.NewValue(tftypes.Bool, true),
+			"reset_password":                    tftypes.NewValue(tftypes.String, nil),
+			"reset_password_trigger":            tftypes.NewValue(tftypes.String, nil),
+			"registration_confirmation_trigger": tftypes.NewValue(tftypes.String, nil),
+		},
+	)
 }
