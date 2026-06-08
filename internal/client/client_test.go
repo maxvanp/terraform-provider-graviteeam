@@ -3,9 +3,12 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,6 +31,22 @@ func testMux() *http.ServeMux {
 		})
 	})
 	return mux
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type errorReadCloser struct{}
+
+func (errorReadCloser) Read(_ []byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+func (errorReadCloser) Close() error {
+	return nil
 }
 
 func TestCreateDomain_Success(t *testing.T) {
@@ -1927,6 +1946,199 @@ func TestClientRequestHelpersRejectUnmarshalableBodies(t *testing.T) {
 	}
 	if _, err := c.DoOrgRequest(context.Background(), http.MethodPost, "/members", body); err == nil {
 		t.Fatal("expected organization request body marshal error")
+	}
+}
+
+func TestClientRawRequestHelpersReportTransportAndReadErrors(t *testing.T) {
+	t.Parallel()
+
+	transportErr := errors.New("transport failed")
+	transportClient := &Client{
+		BaseURL:        "http://example.test",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			return nil, transportErr
+		})},
+	}
+	if _, err := transportClient.DoRequest(context.Background(), http.MethodGet, "/domains", nil); err == nil {
+		t.Fatal("expected domain transport error")
+	}
+	if _, err := transportClient.DoManagementRequest(context.Background(), http.MethodGet, "/management/raw", nil); err == nil {
+		t.Fatal("expected management transport error")
+	}
+	if _, err := transportClient.DoOrgRequest(context.Background(), http.MethodGet, "/members", nil); err == nil {
+		t.Fatal("expected organization transport error")
+	}
+
+	readClient := &Client{
+		BaseURL:        "http://example.test",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       errorReadCloser{},
+			}, nil
+		})},
+	}
+	if _, err := readClient.DoRequest(context.Background(), http.MethodGet, "/domains", nil); err == nil {
+		t.Fatal("expected domain response read error")
+	}
+	if _, err := readClient.DoManagementRequest(context.Background(), http.MethodGet, "/management/raw", nil); err == nil {
+		t.Fatal("expected management response read error")
+	}
+	if _, err := readClient.DoOrgRequest(context.Background(), http.MethodGet, "/members", nil); err == nil {
+		t.Fatal("expected organization response read error")
+	}
+}
+
+func TestClientManagementAndOrgRequestsReportAPIStatusErrors(t *testing.T) {
+	t.Parallel()
+
+	errorClient := &Client{
+		BaseURL:        "http://example.test",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient: &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(strings.NewReader("remote failed")),
+			}, nil
+		})},
+	}
+	if _, err := errorClient.DoManagementRequest(context.Background(), http.MethodGet, "/management/raw", nil); err == nil {
+		t.Fatal("expected management API status error")
+	}
+	if _, err := errorClient.DoOrgRequest(context.Background(), http.MethodGet, "/members", nil); err == nil {
+		t.Fatal("expected organization API status error")
+	}
+}
+
+func TestClientWrappersPropagateRequestCreationErrors(t *testing.T) {
+	t.Parallel()
+
+	c := &Client{
+		BaseURL:        "http://[::1",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient:     http.DefaultClient,
+	}
+	tests := map[string]func() error{
+		"list domain members": func() error {
+			_, err := c.ListDomainMembers(context.Background(), "domain-123")
+			return err
+		},
+		"get form": func() error {
+			_, err := c.GetForm(context.Background(), "domain-123", "", "LOGIN")
+			return err
+		},
+		"create form": func() error {
+			_, err := c.CreateForm(context.Background(), "domain-123", "", map[string]interface{}{"template": "LOGIN"})
+			return err
+		},
+		"update form": func() error {
+			_, err := c.UpdateForm(context.Background(), "domain-123", "", "form-123", map[string]interface{}{"template": "LOGIN"})
+			return err
+		},
+		"get email": func() error {
+			_, err := c.GetEmail(context.Background(), "domain-123", "", "LOGIN")
+			return err
+		},
+		"create email": func() error {
+			_, err := c.CreateEmail(context.Background(), "domain-123", "", map[string]interface{}{"template": "LOGIN"})
+			return err
+		},
+		"update email": func() error {
+			_, err := c.UpdateEmail(context.Background(), "domain-123", "", "email-123", map[string]interface{}{"template": "LOGIN"})
+			return err
+		},
+		"list audits": func() error {
+			_, err := c.ListAudits(context.Background(), "domain-123", 0, 10)
+			return err
+		},
+		"get analytics": func() error {
+			_, err := c.GetAnalytics(context.Background(), "domain-123", map[string]string{"from": "1"})
+			return err
+		},
+		"get org form": func() error {
+			_, err := c.GetOrgForm(context.Background(), "LOGIN")
+			return err
+		},
+		"list org members": func() error {
+			_, err := c.ListOrgMembers(context.Background())
+			return err
+		},
+		"get application flows": func() error {
+			_, err := c.GetApplicationFlows(context.Background(), "domain-123", "app-123")
+			return err
+		},
+		"update application flows": func() error {
+			_, err := c.UpdateApplicationFlows(context.Background(), "domain-123", "app-123", []interface{}{})
+			return err
+		},
+		"get group members": func() error {
+			_, err := c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+			return err
+		},
+		"get group roles": func() error {
+			_, err := c.GetGroupRoles(context.Background(), "domain-123", "group-123")
+			return err
+		},
+		"set group roles": func() error {
+			_, err := c.SetGroupRoles(context.Background(), "domain-123", "group-123", []string{"role-123"})
+			return err
+		},
+		"get user roles": func() error {
+			_, err := c.GetUserRoles(context.Background(), "domain-123", "user-123")
+			return err
+		},
+		"set user roles": func() error {
+			_, err := c.SetUserRoles(context.Background(), "domain-123", "user-123", []string{"role-123"})
+			return err
+		},
+	}
+
+	for name, call := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := call(); err == nil {
+				t.Fatal("expected request creation error")
+			}
+		})
+	}
+}
+
+func TestClientMemberListsReturnEmptyWhenMembershipsMissing(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("domain members method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write([]byte(`{}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("org members method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write([]byte(`{}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	domainMembers, err := c.ListDomainMembers(context.Background(), "domain-123")
+	if err != nil {
+		t.Fatalf("list domain members: %v", err)
+	}
+	if len(domainMembers) != 0 {
+		t.Fatalf("domain members = %#v, want empty", domainMembers)
+	}
+	orgMembers, err := c.ListOrgMembers(context.Background())
+	if err != nil {
+		t.Fatalf("list org members: %v", err)
+	}
+	if len(orgMembers) != 0 {
+		t.Fatalf("org members = %#v, want empty", orgMembers)
 	}
 }
 
