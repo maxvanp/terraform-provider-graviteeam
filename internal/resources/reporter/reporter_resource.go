@@ -128,6 +128,10 @@ func (r *ReporterResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading reporter", err.Error())
 		return
 	}

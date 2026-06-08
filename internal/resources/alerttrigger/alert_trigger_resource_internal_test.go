@@ -309,6 +309,222 @@ func TestAlertTriggerCRUDPatchesOnlyManagedTrigger(t *testing.T) {
 	}
 }
 
+func TestAlertTriggerReadRemovesMissingTriggerAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []map[string]interface{}
+		wantRemove bool
+	}{
+		{
+			name:       "missing domain",
+			statusCode: http.StatusNotFound,
+			wantRemove: true,
+		},
+		{
+			name:       "missing trigger",
+			statusCode: http.StatusOK,
+			body:       []map[string]interface{}{{"type": "RISK_ASSESSMENT", "enabled": true}},
+			wantRemove: true,
+		},
+		{
+			name:       "server error",
+			statusCode: http.StatusInternalServerError,
+			wantRemove: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/triggers", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				if tt.statusCode != http.StatusOK {
+					http.Error(w, "read failed", tt.statusCode)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(tt.body)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &AlertTriggerResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := alertTriggerState(t, schemaResp.Schema, AlertTriggerModel{
+				ID:               types.StringValue("domain-123/TOO_MANY_LOGIN_FAILURES"),
+				DomainID:         types.StringValue("domain-123"),
+				Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+				Enabled:          types.BoolValue(true),
+				AlertNotifierIDs: stringSet(t, []string{"notifier-1"}),
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing alert trigger to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestAlertTriggerReportsLifecycleErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []map[string]interface{}
+		run        func(*AlertTriggerResource, resourceschema.Schema)
+	}{
+		{
+			name:       "create patch error",
+			statusCode: http.StatusInternalServerError,
+			run: func(resourceUnderTest *AlertTriggerResource, schema resourceschema.Schema) {
+				plan := alertTriggerPlan(t, schema, AlertTriggerModel{
+					DomainID:         types.StringValue("domain-123"),
+					Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+					Enabled:          types.BoolValue(true),
+					AlertNotifierIDs: stringSet(t, []string{"notifier-1"}),
+				})
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected create diagnostics")
+				}
+			},
+		},
+		{
+			name:       "update missing trigger in response",
+			statusCode: http.StatusOK,
+			body:       []map[string]interface{}{{"type": "RISK_ASSESSMENT", "enabled": true}},
+			run: func(resourceUnderTest *AlertTriggerResource, schema resourceschema.Schema) {
+				plan := alertTriggerPlan(t, schema, AlertTriggerModel{
+					DomainID:         types.StringValue("domain-123"),
+					Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+					Enabled:          types.BoolValue(false),
+					AlertNotifierIDs: stringSet(t, []string{"notifier-2"}),
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:       "delete patch error",
+			statusCode: http.StatusInternalServerError,
+			run: func(resourceUnderTest *AlertTriggerResource, schema resourceschema.Schema) {
+				state := alertTriggerState(t, schema, AlertTriggerModel{
+					ID:               types.StringValue("domain-123/TOO_MANY_LOGIN_FAILURES"),
+					DomainID:         types.StringValue("domain-123"),
+					Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+					Enabled:          types.BoolValue(true),
+					AlertNotifierIDs: stringSet(t, []string{"notifier-1"}),
+				})
+				resp := &resource.DeleteResponse{}
+				resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected delete diagnostics")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/triggers", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPatch {
+					t.Fatalf("method = %s, want PATCH", r.Method)
+				}
+				if tt.statusCode != http.StatusOK {
+					http.Error(w, "patch failed", tt.statusCode)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(tt.body)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &AlertTriggerResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			tt.run(resourceUnderTest, schemaResp.Schema)
+		})
+	}
+}
+
+func TestAlertTriggerDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/alerts/triggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("method = %s, want PATCH", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &AlertTriggerResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := alertTriggerState(t, schemaResp.Schema, AlertTriggerModel{
+		ID:               types.StringValue("domain-123/TOO_MANY_LOGIN_FAILURES"),
+		DomainID:         types.StringValue("domain-123"),
+		Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+		Enabled:          types.BoolValue(true),
+		AlertNotifierIDs: stringSet(t, []string{"notifier-1"}),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestAlertTriggerImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&AlertTriggerResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func alertTriggerPlan(t *testing.T, schema resourceschema.Schema, model AlertTriggerModel) tfsdk.Plan {
 	t.Helper()
 
@@ -317,6 +533,16 @@ func alertTriggerPlan(t *testing.T, schema resourceschema.Schema, model AlertTri
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func alertTriggerState(t *testing.T, schema resourceschema.Schema, model AlertTriggerModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func stringSet(t *testing.T, values []string) types.Set {
