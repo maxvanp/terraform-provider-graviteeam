@@ -584,10 +584,14 @@ func TestApplicationReadIntoModelMapsIdentityProviderRules(t *testing.T) {
 			map[string]interface{}{
 				"identity": "idp-b",
 			},
+			map[string]interface{}{
+				"identity": "idp-c",
+				"priority": int64(7),
+			},
 		},
 	})
 
-	if len(model.IdentityProviderRules) != 2 {
+	if len(model.IdentityProviderRules) != 3 {
 		t.Fatalf("rules = %#v", model.IdentityProviderRules)
 	}
 	if model.IdentityProviderRules[0].Identity.ValueString() != "idp-a" ||
@@ -600,8 +604,36 @@ func TestApplicationReadIntoModelMapsIdentityProviderRules(t *testing.T) {
 		model.IdentityProviderRules[1].Priority.ValueInt64() != 1 {
 		t.Fatalf("second rule = %#v", model.IdentityProviderRules[1])
 	}
+	if model.IdentityProviderRules[2].Identity.ValueString() != "idp-c" ||
+		model.IdentityProviderRules[2].Priority.ValueInt64() != 7 {
+		t.Fatalf("third rule = %#v", model.IdentityProviderRules[2])
+	}
 	if model.IdentityProviders != nil {
 		t.Fatalf("simple identity providers should be cleared, got %#v", model.IdentityProviders)
+	}
+}
+
+func TestApplicationReadIntoModelDefaultsUnexpectedIdentityProviderRulePriority(t *testing.T) {
+	t.Parallel()
+
+	resource := &ApplicationResource{}
+	model := &ApplicationModel{
+		IdentityProviderRules: []IdentityProviderRuleModel{
+			{Identity: types.StringValue("planned"), Priority: types.Int64Value(99)},
+		},
+	}
+
+	resource.readIntoModel(model, map[string]interface{}{
+		"identityProviders": []interface{}{
+			map[string]interface{}{
+				"identity": "idp-a",
+				"priority": "not-a-number",
+			},
+		},
+	})
+
+	if model.IdentityProviderRules[0].Priority.ValueInt64() != 0 {
+		t.Fatalf("priority = %d, want fallback index", model.IdentityProviderRules[0].Priority.ValueInt64())
 	}
 }
 
@@ -905,67 +937,68 @@ func TestApplicationDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &ApplicationResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	stringList := tftypes.List{ElementType: tftypes.String}
-	identityProviderRuleType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"identity":       tftypes.String,
-		"selection_rule": tftypes.String,
-		"priority":       tftypes.Number,
-	}}
-	oauthSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"redirect_uris":                  stringList,
-		"post_logout_redirect_uris":      stringList,
-		"grant_types":                    stringList,
-		"response_types":                 stringList,
-		"scopes":                         stringList,
-		"access_token_validity_seconds":  tftypes.Number,
-		"refresh_token_validity_seconds": tftypes.Number,
-		"id_token_validity_seconds":      tftypes.Number,
-	}}
-	mfaSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"enrollment": tftypes.String,
-		"challenge":  tftypes.String,
-	}}
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":                     tftypes.String,
-			"domain_id":              tftypes.Number,
-			"name":                   tftypes.String,
-			"type":                   tftypes.String,
-			"description":            tftypes.String,
-			"client_id":              tftypes.String,
-			"client_secret":          tftypes.String,
-			"metadata_json":          tftypes.String,
-			"settings_json":          tftypes.String,
-			"identity_providers":     stringList,
-			"identity_provider_rule": tftypes.List{ElementType: identityProviderRuleType},
-			"factors":                stringList,
-			"oauth_settings":         oauthSettingsType,
-			"mfa_settings":           mfaSettingsType,
-		}},
-		map[string]tftypes.Value{
-			"id":                     tftypes.NewValue(tftypes.String, "app-123"),
-			"domain_id":              tftypes.NewValue(tftypes.Number, 123),
-			"name":                   tftypes.NewValue(tftypes.String, "app"),
-			"type":                   tftypes.NewValue(tftypes.String, "WEB"),
-			"description":            tftypes.NewValue(tftypes.String, "application"),
-			"client_id":              tftypes.NewValue(tftypes.String, "client-123"),
-			"client_secret":          tftypes.NewValue(tftypes.String, "clear-secret"),
-			"metadata_json":          tftypes.NewValue(tftypes.String, nil),
-			"settings_json":          tftypes.NewValue(tftypes.String, nil),
-			"identity_providers":     tftypes.NewValue(stringList, nil),
-			"identity_provider_rule": tftypes.NewValue(tftypes.List{ElementType: identityProviderRuleType}, nil),
-			"factors":                tftypes.NewValue(stringList, nil),
-			"oauth_settings":         tftypes.NewValue(oauthSettingsType, nil),
-			"mfa_settings":           tftypes.NewValue(mfaSettingsType, nil),
-		},
-	)
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
-		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidApplicationRaw()},
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestApplicationCRUDReportsInvalidRequestData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	validPlan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("app"),
+		Type:     types.StringValue("WEB"),
+	})
+	validState := applicationState(t, schemaResp.Schema, ApplicationModel{
+		ID:           types.StringValue("app-123"),
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app"),
+		Type:         types.StringValue("WEB"),
+		ClientID:     types.StringValue("client-123"),
+		ClientSecret: types.StringValue("clear-secret"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidApplicationRaw()},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create invalid plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidApplicationRaw()},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read invalid state diagnostics")
+	}
+
+	updatePlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidApplicationRaw()},
+		State: validState,
+	}, updatePlanResp)
+	if !updatePlanResp.Diagnostics.HasError() {
+		t.Fatal("expected update invalid plan diagnostics")
+	}
+
+	updateStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidApplicationRaw()},
+	}, updateStateResp)
+	if !updateStateResp.Diagnostics.HasError() {
+		t.Fatal("expected update invalid state diagnostics")
 	}
 }
 
@@ -1110,6 +1143,14 @@ func TestApplicationCRUDReportsRemoteErrors(t *testing.T) {
 		},
 		"post_create_read": {
 			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *ApplicationResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"post_create_update": {
+			putStatus: http.StatusInternalServerError,
 			action: func(ctx context.Context, r *ApplicationResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
 				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
@@ -1340,4 +1381,62 @@ func applicationPlan(t *testing.T, schema resourceschema.Schema, model Applicati
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func invalidApplicationRaw() tftypes.Value {
+	stringList := tftypes.List{ElementType: tftypes.String}
+	identityProviderRuleType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"identity":       tftypes.String,
+		"selection_rule": tftypes.String,
+		"priority":       tftypes.Number,
+	}}
+	oauthSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"redirect_uris":                  stringList,
+		"post_logout_redirect_uris":      stringList,
+		"grant_types":                    stringList,
+		"response_types":                 stringList,
+		"scopes":                         stringList,
+		"access_token_validity_seconds":  tftypes.Number,
+		"refresh_token_validity_seconds": tftypes.Number,
+		"id_token_validity_seconds":      tftypes.Number,
+	}}
+	mfaSettingsType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"enrollment": tftypes.String,
+		"challenge":  tftypes.String,
+	}}
+
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                     tftypes.String,
+			"domain_id":              tftypes.Number,
+			"name":                   tftypes.String,
+			"type":                   tftypes.String,
+			"description":            tftypes.String,
+			"client_id":              tftypes.String,
+			"client_secret":          tftypes.String,
+			"metadata_json":          tftypes.String,
+			"settings_json":          tftypes.String,
+			"identity_providers":     stringList,
+			"identity_provider_rule": tftypes.List{ElementType: identityProviderRuleType},
+			"factors":                stringList,
+			"oauth_settings":         oauthSettingsType,
+			"mfa_settings":           mfaSettingsType,
+		}},
+		map[string]tftypes.Value{
+			"id":                     tftypes.NewValue(tftypes.String, "app-123"),
+			"domain_id":              tftypes.NewValue(tftypes.Number, 123),
+			"name":                   tftypes.NewValue(tftypes.String, "app"),
+			"type":                   tftypes.NewValue(tftypes.String, "WEB"),
+			"description":            tftypes.NewValue(tftypes.String, "application"),
+			"client_id":              tftypes.NewValue(tftypes.String, "client-123"),
+			"client_secret":          tftypes.NewValue(tftypes.String, "clear-secret"),
+			"metadata_json":          tftypes.NewValue(tftypes.String, nil),
+			"settings_json":          tftypes.NewValue(tftypes.String, nil),
+			"identity_providers":     tftypes.NewValue(stringList, nil),
+			"identity_provider_rule": tftypes.NewValue(tftypes.List{ElementType: identityProviderRuleType}, nil),
+			"factors":                tftypes.NewValue(stringList, nil),
+			"oauth_settings":         tftypes.NewValue(oauthSettingsType, nil),
+			"mfa_settings":           tftypes.NewValue(mfaSettingsType, nil),
+		},
+	)
 }
