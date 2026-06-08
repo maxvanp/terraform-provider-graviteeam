@@ -87,6 +87,26 @@ func TestConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestGetBoolHandlesMissingMalformedAndBooleanValues(t *testing.T) {
+	t.Parallel()
+
+	values := map[string]interface{}{
+		"enabled":     true,
+		"disabled":    false,
+		"malformed":   "true",
+		"alsoInvalid": 1,
+	}
+
+	if !getBool(values, "enabled") {
+		t.Fatal("enabled should be true")
+	}
+	for _, key := range []string{"disabled", "missing", "malformed", "alsoInvalid"} {
+		if getBool(values, key) {
+			t.Fatalf("%s should be false", key)
+		}
+	}
+}
+
 func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 	t.Parallel()
 
@@ -544,6 +564,53 @@ func TestDomainCRUDReportsRemoteErrors(t *testing.T) {
 				t.Fatal("expected diagnostics")
 			}
 		})
+	}
+}
+
+func TestDomainUpdateReportsInvalidSettingsJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
+			"name":        "domain",
+			"dataPlaneId": "default",
+			"enabled":     true,
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+	plan := domainPlan(t, schemaResp.Schema, DomainModel{
+		ID:           types.StringValue("domain-123"),
+		Name:         types.StringValue("domain"),
+		Enabled:      types.BoolValue(true),
+		DataPlaneID:  types.StringValue("default"),
+		SettingsJSON: types.StringValue(`{`),
+	})
+	state := domainState(t, schemaResp.Schema, DomainModel{
+		ID:          types.StringValue("domain-123"),
+		Name:        types.StringValue("domain"),
+		Enabled:     types.BoolValue(true),
+		DataPlaneID: types.StringValue("default"),
+	})
+
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid settings_json diagnostics")
 	}
 }
 
