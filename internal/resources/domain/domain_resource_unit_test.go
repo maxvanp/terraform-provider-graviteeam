@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -420,6 +421,35 @@ func TestDomainCRUDUsesPatchMergeAndDerivesDefaultIDP(t *testing.T) {
 	}
 }
 
+func TestDomainReadIntoModelHandlesMinimalAPIResponse(t *testing.T) {
+	t.Parallel()
+
+	resource := &DomainResource{}
+	model := DomainModel{
+		DataPlaneID: types.StringNull(),
+	}
+
+	resource.readIntoModel(&model, map[string]interface{}{
+		"id":      "domain-123",
+		"name":    "domain",
+		"enabled": false,
+	})
+
+	if model.ID.ValueString() != "domain-123" ||
+		model.DefaultIdpID.ValueString() != "default-idp-domain-123" ||
+		model.Name.ValueString() != "domain" ||
+		model.Enabled.ValueBool() ||
+		model.DataPlaneID.ValueString() != "default" {
+		t.Fatalf("model = %#v", model)
+	}
+	if !model.Description.IsNull() {
+		t.Fatalf("description = %#v, want null", model.Description)
+	}
+	if model.OIDC != nil || model.LoginSettings != nil {
+		t.Fatalf("unexpected nested settings: oidc=%#v login=%#v", model.OIDC, model.LoginSettings)
+	}
+}
+
 func TestDomainReadRemovesMissingDomain(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -611,6 +641,82 @@ func TestDomainUpdateReportsInvalidSettingsJSON(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid settings_json diagnostics")
+	}
+}
+
+func TestDomainCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	oidcType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"allow_localhost_redirect_uri":        tftypes.Bool,
+		"allow_http_scheme_redirect_uri":      tftypes.Bool,
+		"allow_wildcard_redirect_uri":         tftypes.Bool,
+		"dynamic_client_registration_enabled": tftypes.Bool,
+	}}
+	loginType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"register_enabled":         tftypes.Bool,
+		"forgot_password_enabled":  tftypes.Bool,
+		"identifier_first_enabled": tftypes.Bool,
+	}}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"name":           tftypes.Number,
+			"description":    tftypes.String,
+			"enabled":        tftypes.Bool,
+			"data_plane_id":  tftypes.String,
+			"default_idp_id": tftypes.String,
+			"settings_json":  tftypes.String,
+			"oidc":           oidcType,
+			"login_settings": loginType,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "domain-123"),
+			"name":           tftypes.NewValue(tftypes.Number, 123),
+			"description":    tftypes.NewValue(tftypes.String, nil),
+			"enabled":        tftypes.NewValue(tftypes.Bool, true),
+			"data_plane_id":  tftypes.NewValue(tftypes.String, "default"),
+			"default_idp_id": tftypes.NewValue(tftypes.String, "default-idp-domain-123"),
+			"settings_json":  tftypes.NewValue(tftypes.String, nil),
+			"oidc":           tftypes.NewValue(oidcType, nil),
+			"login_settings": tftypes.NewValue(loginType, nil),
+		},
+	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 
