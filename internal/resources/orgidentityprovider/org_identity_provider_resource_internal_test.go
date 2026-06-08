@@ -338,6 +338,23 @@ func TestInvertConditionMapperToAPI(t *testing.T) {
 	})
 }
 
+func TestInvertConditionMapperToAPIIgnoresUnexpectedElementShape(t *testing.T) {
+	t.Parallel()
+
+	mapper, diags := types.MapValue(types.StringType, map[string]attr.Value{
+		"{true}": types.StringValue("org-group-id"),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics building mapper: %v", diags)
+	}
+
+	got := invertConditionMapperToAPI(mapper)
+
+	if len(got) != 0 {
+		t.Fatalf("mapper = %#v, want unexpected element skipped", got)
+	}
+}
+
 func TestReadAPIConditionMapper(t *testing.T) {
 	t.Parallel()
 
@@ -594,31 +611,7 @@ func TestOrgIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &OrgIdentityProviderResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	listType := tftypes.List{ElementType: tftypes.String}
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":               tftypes.Number,
-			"name":             tftypes.String,
-			"type":             tftypes.String,
-			"configuration":    tftypes.String,
-			"mappers":          tftypes.Map{ElementType: tftypes.String},
-			"domain_whitelist": listType,
-			"external":         tftypes.Bool,
-			"group_mapper":     tftypes.Map{ElementType: listType},
-			"role_mapper":      tftypes.Map{ElementType: listType},
-		}},
-		map[string]tftypes.Value{
-			"id":               tftypes.NewValue(tftypes.Number, 123),
-			"name":             tftypes.NewValue(tftypes.String, "org-inline"),
-			"type":             tftypes.NewValue(tftypes.String, "inline-am-idp"),
-			"configuration":    tftypes.NewValue(tftypes.String, `{"password":"plain"}`),
-			"mappers":          tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
-			"domain_whitelist": tftypes.NewValue(listType, nil),
-			"external":         tftypes.NewValue(tftypes.Bool, false),
-			"group_mapper":     tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-			"role_mapper":      tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-		},
-	)
+	raw := orgIdentityProviderInvalidRaw()
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
@@ -629,37 +622,38 @@ func TestOrgIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
 	}
 }
 
+func TestOrgIdentityProviderCreateAndReadReportInvalidData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgIdentityProviderResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := orgIdentityProviderInvalidRaw()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+}
+
 func TestOrgIdentityProviderUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	t.Parallel()
 
 	resourceUnderTest := &OrgIdentityProviderResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	listType := tftypes.List{ElementType: tftypes.String}
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":               tftypes.Number,
-			"name":             tftypes.String,
-			"type":             tftypes.String,
-			"configuration":    tftypes.String,
-			"mappers":          tftypes.Map{ElementType: tftypes.String},
-			"domain_whitelist": listType,
-			"external":         tftypes.Bool,
-			"group_mapper":     tftypes.Map{ElementType: listType},
-			"role_mapper":      tftypes.Map{ElementType: listType},
-		}},
-		map[string]tftypes.Value{
-			"id":               tftypes.NewValue(tftypes.Number, 123),
-			"name":             tftypes.NewValue(tftypes.String, "org-inline"),
-			"type":             tftypes.NewValue(tftypes.String, "inline-am-idp"),
-			"configuration":    tftypes.NewValue(tftypes.String, `{"password":"plain"}`),
-			"mappers":          tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
-			"domain_whitelist": tftypes.NewValue(listType, nil),
-			"external":         tftypes.NewValue(tftypes.Bool, false),
-			"group_mapper":     tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-			"role_mapper":      tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-		},
-	)
+	raw := orgIdentityProviderInvalidRaw()
 	valid := OrgIdentityProviderModel{
 		ID:            types.StringValue("org-idp-123"),
 		Name:          types.StringValue("org-inline"),
@@ -932,4 +926,32 @@ func assertListValue(t *testing.T, got attr.Value, want []string) {
 		values = append(values, value.ValueString())
 	}
 	assertStringSet(t, values, want)
+}
+
+func orgIdentityProviderInvalidRaw() tftypes.Value {
+	listType := tftypes.List{ElementType: tftypes.String}
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":               tftypes.Number,
+			"name":             tftypes.String,
+			"type":             tftypes.String,
+			"configuration":    tftypes.String,
+			"mappers":          tftypes.Map{ElementType: tftypes.String},
+			"domain_whitelist": listType,
+			"external":         tftypes.Bool,
+			"group_mapper":     tftypes.Map{ElementType: listType},
+			"role_mapper":      tftypes.Map{ElementType: listType},
+		}},
+		map[string]tftypes.Value{
+			"id":               tftypes.NewValue(tftypes.Number, 123),
+			"name":             tftypes.NewValue(tftypes.String, "org-inline"),
+			"type":             tftypes.NewValue(tftypes.String, "inline-am-idp"),
+			"configuration":    tftypes.NewValue(tftypes.String, `{"password":"plain"}`),
+			"mappers":          tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
+			"domain_whitelist": tftypes.NewValue(listType, nil),
+			"external":         tftypes.NewValue(tftypes.Bool, false),
+			"group_mapper":     tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+			"role_mapper":      tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+		},
+	)
 }
