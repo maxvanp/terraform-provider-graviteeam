@@ -343,6 +343,28 @@ func TestReadIntoModelClearsEmptyValues(t *testing.T) {
 	}
 }
 
+func TestReadIntoModelHandlesInt64LogoWidth(t *testing.T) {
+	t.Parallel()
+
+	resource := &ThemeResource{}
+	model := ThemeModel{}
+
+	resource.readIntoModel(&model, map[string]interface{}{
+		"logoWidth": int64(64),
+	})
+
+	if got, want := model.LogoWidth.ValueInt64(), int64(64); got != want {
+		t.Fatalf("logo width = %d, want %d", got, want)
+	}
+
+	resource.readIntoModel(&model, map[string]interface{}{
+		"logoWidth": int64(0),
+	})
+	if !model.LogoWidth.IsNull() {
+		t.Fatalf("zero logo width should be null, got %d", model.LogoWidth.ValueInt64())
+	}
+}
+
 func TestThemeCRUDMergesCurrentThemeOnUpdate(t *testing.T) {
 	var bodies []map[string]interface{}
 	var methods []string
@@ -600,32 +622,7 @@ func TestThemeDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &ThemeResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":                         tftypes.String,
-			"domain_id":                  tftypes.Number,
-			"logo_url":                   tftypes.String,
-			"logo_width":                 tftypes.Number,
-			"favicon_url":                tftypes.String,
-			"primary_button_color_hex":   tftypes.String,
-			"secondary_button_color_hex": tftypes.String,
-			"primary_text_color_hex":     tftypes.String,
-			"secondary_text_color_hex":   tftypes.String,
-			"css":                        tftypes.String,
-		}},
-		map[string]tftypes.Value{
-			"id":                         tftypes.NewValue(tftypes.String, "theme-123"),
-			"domain_id":                  tftypes.NewValue(tftypes.Number, 123),
-			"logo_url":                   tftypes.NewValue(tftypes.String, "https://example.test/logo.png"),
-			"logo_width":                 tftypes.NewValue(tftypes.Number, nil),
-			"favicon_url":                tftypes.NewValue(tftypes.String, nil),
-			"primary_button_color_hex":   tftypes.NewValue(tftypes.String, nil),
-			"secondary_button_color_hex": tftypes.NewValue(tftypes.String, nil),
-			"primary_text_color_hex":     tftypes.NewValue(tftypes.String, nil),
-			"secondary_text_color_hex":   tftypes.NewValue(tftypes.String, nil),
-			"css":                        tftypes.NewValue(tftypes.String, nil),
-		},
-	)
+	raw := themeInvalidRaw()
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
@@ -633,6 +630,52 @@ func TestThemeDeleteReportsInvalidStateData(t *testing.T) {
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestThemeStopsOnInvalidPlanOrState(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ThemeResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := themeInvalidRaw()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: themeState(t, schemaResp.Schema, ThemeModel{}),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: themePlan(t, schemaResp.Schema, ThemeModel{
+			DomainID: types.StringValue("domain-123"),
+			LogoURL:  types.StringValue("https://example.test/logo.png"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update state diagnostics")
 	}
 }
 
@@ -763,4 +806,33 @@ func themeState(t *testing.T, schema resourceschema.Schema, model ThemeModel) tf
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func themeInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                         tftypes.String,
+			"domain_id":                  tftypes.Number,
+			"logo_url":                   tftypes.String,
+			"logo_width":                 tftypes.Number,
+			"favicon_url":                tftypes.String,
+			"primary_button_color_hex":   tftypes.String,
+			"secondary_button_color_hex": tftypes.String,
+			"primary_text_color_hex":     tftypes.String,
+			"secondary_text_color_hex":   tftypes.String,
+			"css":                        tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":                         tftypes.NewValue(tftypes.String, "theme-123"),
+			"domain_id":                  tftypes.NewValue(tftypes.Number, 123),
+			"logo_url":                   tftypes.NewValue(tftypes.String, "https://example.test/logo.png"),
+			"logo_width":                 tftypes.NewValue(tftypes.Number, nil),
+			"favicon_url":                tftypes.NewValue(tftypes.String, nil),
+			"primary_button_color_hex":   tftypes.NewValue(tftypes.String, nil),
+			"secondary_button_color_hex": tftypes.NewValue(tftypes.String, nil),
+			"primary_text_color_hex":     tftypes.NewValue(tftypes.String, nil),
+			"secondary_text_color_hex":   tftypes.NewValue(tftypes.String, nil),
+			"css":                        tftypes.NewValue(tftypes.String, nil),
+		},
+	)
 }

@@ -466,20 +466,7 @@ func TestFactorDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &FactorResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":          tftypes.String,
-			"domain_id":   tftypes.Number,
-			"name":        tftypes.String,
-			"factor_type": tftypes.String,
-		}},
-		map[string]tftypes.Value{
-			"id":          tftypes.NewValue(tftypes.String, "factor-123"),
-			"domain_id":   tftypes.NewValue(tftypes.Number, 123),
-			"name":        tftypes.NewValue(tftypes.String, "Login TOTP"),
-			"factor_type": tftypes.NewValue(tftypes.String, "TOTP"),
-		},
-	)
+	raw := factorInvalidRaw()
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
@@ -487,6 +474,53 @@ func TestFactorDeleteReportsInvalidStateData(t *testing.T) {
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestFactorStopsOnInvalidPlanOrState(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &FactorResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := factorInvalidRaw()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: factorState(t, schemaResp.Schema, FactorModel{}),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: factorPlan(t, schemaResp.Schema, FactorModel{
+			DomainID:   types.StringValue("domain-123"),
+			Name:       types.StringValue("Login TOTP"),
+			FactorType: types.StringValue("TOTP"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update state diagnostics")
 	}
 }
 
@@ -579,4 +613,21 @@ func factorState(t *testing.T, schema resourceschema.Schema, model FactorModel) 
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func factorInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":          tftypes.String,
+			"domain_id":   tftypes.Number,
+			"name":        tftypes.String,
+			"factor_type": tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":          tftypes.NewValue(tftypes.String, "factor-123"),
+			"domain_id":   tftypes.NewValue(tftypes.Number, 123),
+			"name":        tftypes.NewValue(tftypes.String, "Login TOTP"),
+			"factor_type": tftypes.NewValue(tftypes.String, "TOTP"),
+		},
+	)
 }

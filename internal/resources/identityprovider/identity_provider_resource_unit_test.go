@@ -113,6 +113,21 @@ func TestInvertConditionMapperToAPI(t *testing.T) {
 	})
 }
 
+func TestInvertConditionMapperToAPIIgnoresUnexpectedElementShape(t *testing.T) {
+	mapper, diags := types.MapValue(types.StringType, map[string]attr.Value{
+		"{true}": types.StringValue("group-1"),
+	})
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics building mapper: %v", diags)
+	}
+
+	got := invertConditionMapperToAPI(mapper)
+
+	if len(got) != 0 {
+		t.Fatalf("mapper = %#v, want unexpected element skipped", got)
+	}
+}
+
 func TestReadAPIConditionMapper(t *testing.T) {
 	listType := types.ListType{ElemType: types.StringType}
 	got := readAPIConditionMapper(map[string]interface{}{
@@ -431,35 +446,7 @@ func TestIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &IdentityProviderResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	listType := tftypes.List{ElementType: tftypes.String}
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":                 tftypes.String,
-			"domain_id":          tftypes.Number,
-			"name":               tftypes.String,
-			"type":               tftypes.String,
-			"external":           tftypes.Bool,
-			"configuration":      tftypes.String,
-			"mappers":            tftypes.Map{ElementType: tftypes.String},
-			"domain_whitelist":   listType,
-			"password_policy_id": tftypes.String,
-			"group_mapper":       tftypes.Map{ElementType: listType},
-			"role_mapper":        tftypes.Map{ElementType: listType},
-		}},
-		map[string]tftypes.Value{
-			"id":                 tftypes.NewValue(tftypes.String, "idp-123"),
-			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
-			"name":               tftypes.NewValue(tftypes.String, "inline"),
-			"type":               tftypes.NewValue(tftypes.String, "inline-am-idp"),
-			"external":           tftypes.NewValue(tftypes.Bool, false),
-			"configuration":      tftypes.NewValue(tftypes.String, `{"users":[]}`),
-			"mappers":            tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
-			"domain_whitelist":   tftypes.NewValue(listType, nil),
-			"password_policy_id": tftypes.NewValue(tftypes.String, nil),
-			"group_mapper":       tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-			"role_mapper":        tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
-		},
-	)
+	raw := identityProviderInvalidRaw()
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
@@ -467,6 +454,61 @@ func TestIdentityProviderDeleteReportsInvalidStateData(t *testing.T) {
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestIdentityProviderStopsOnInvalidPlanOrState(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &IdentityProviderResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := identityProviderInvalidRaw()
+	listType := types.ListType{ElemType: types.StringType}
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: identityProviderState(t, schemaResp.Schema, IdentityProviderModel{
+			GroupMapper: types.MapNull(listType),
+			RoleMapper:  types.MapNull(listType),
+		}),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: identityProviderPlan(t, schemaResp.Schema, IdentityProviderModel{
+			DomainID:      types.StringValue("domain-123"),
+			Name:          types.StringValue("inline"),
+			Type:          types.StringValue("inline-am-idp"),
+			External:      types.BoolValue(false),
+			Configuration: types.StringValue(`{"users":[]}`),
+			GroupMapper:   types.MapNull(listType),
+			RoleMapper:    types.MapNull(listType),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update state diagnostics")
 	}
 }
 
@@ -677,6 +719,38 @@ func mustStringList(t *testing.T, values ...string) types.List {
 		t.Fatalf("unexpected diagnostics building list: %v", diags)
 	}
 	return list
+}
+
+func identityProviderInvalidRaw() tftypes.Value {
+	listType := tftypes.List{ElementType: tftypes.String}
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                 tftypes.String,
+			"domain_id":          tftypes.Number,
+			"name":               tftypes.String,
+			"type":               tftypes.String,
+			"external":           tftypes.Bool,
+			"configuration":      tftypes.String,
+			"mappers":            tftypes.Map{ElementType: tftypes.String},
+			"domain_whitelist":   listType,
+			"password_policy_id": tftypes.String,
+			"group_mapper":       tftypes.Map{ElementType: listType},
+			"role_mapper":        tftypes.Map{ElementType: listType},
+		}},
+		map[string]tftypes.Value{
+			"id":                 tftypes.NewValue(tftypes.String, "idp-123"),
+			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
+			"name":               tftypes.NewValue(tftypes.String, "inline"),
+			"type":               tftypes.NewValue(tftypes.String, "inline-am-idp"),
+			"external":           tftypes.NewValue(tftypes.Bool, false),
+			"configuration":      tftypes.NewValue(tftypes.String, `{"users":[]}`),
+			"mappers":            tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
+			"domain_whitelist":   tftypes.NewValue(listType, nil),
+			"password_policy_id": tftypes.NewValue(tftypes.String, nil),
+			"group_mapper":       tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+			"role_mapper":        tftypes.NewValue(tftypes.Map{ElementType: listType}, nil),
+		},
+	)
 }
 
 func assertStringSet(t *testing.T, got, want []string) {
