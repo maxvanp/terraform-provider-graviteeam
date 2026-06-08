@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -151,6 +152,37 @@ func TestReadIntoModelKeepsExistingFromNameWhenAPIOmitsEmptyValue(t *testing.T) 
 
 	if model.FromName.ValueString() != "Support" {
 		t.Fatalf("from_name = %q, want preserved Support", model.FromName.ValueString())
+	}
+}
+
+func TestEmailTemplateValidatorAcceptsKnownAndIgnoresUnknownValues(t *testing.T) {
+	t.Parallel()
+
+	for name, value := range map[string]types.String{
+		"valid":   types.StringValue("RESET_PASSWORD"),
+		"null":    types.StringNull(),
+		"unknown": types.StringUnknown(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var resp validator.StringResponse
+			emailTemplateValidator{}.ValidateString(context.Background(), validator.StringRequest{ConfigValue: value}, &resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("unexpected diagnostics: %#v", resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestEmailTemplateValidatorRejectsInvalidTemplate(t *testing.T) {
+	t.Parallel()
+
+	var resp validator.StringResponse
+	emailTemplateValidator{}.ValidateString(context.Background(), validator.StringRequest{ConfigValue: types.StringValue("NOT_A_TEMPLATE")}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for invalid template")
 	}
 }
 
@@ -458,6 +490,17 @@ func TestApplicationEmailUpdateAndDeleteReportRemoteErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestApplicationEmailImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&ApplicationEmailResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
 	}
 }
 
