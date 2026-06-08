@@ -318,6 +318,78 @@ func TestOrgUserTokenReadRemovesMissingTokenAndDeleteIgnores404(t *testing.T) {
 	}
 }
 
+func TestOrgUserTokenReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/user-123/tokens", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			http.Error(w, "create failed", http.StatusInternalServerError)
+		case http.MethodGet:
+			http.Error(w, "read failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("collection method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/user-123/tokens/token-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "delete failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgUserTokenResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := orgUserTokenPlan(t, schemaResp.Schema, OrgUserTokenModel{
+		UserID: types.StringValue("user-123"),
+		Name:   types.StringValue("automation-token"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := orgUserTokenState(t, schemaResp.Schema, OrgUserTokenModel{
+		ID:      types.StringValue("user-123/token-123"),
+		UserID:  types.StringValue("user-123"),
+		TokenID: types.StringValue("token-123"),
+		Name:    types.StringValue("automation-token"),
+		Token:   types.StringValue("secret-token-value"),
+	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestOrgUserTokenImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&OrgUserTokenResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func orgUserTokenPlan(t *testing.T, schema resourceschema.Schema, model OrgUserTokenModel) tfsdk.Plan {
 	t.Helper()
 
@@ -326,4 +398,14 @@ func orgUserTokenPlan(t *testing.T, schema resourceschema.Schema, model OrgUserT
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func orgUserTokenState(t *testing.T, schema resourceschema.Schema, model OrgUserTokenModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
