@@ -506,37 +506,37 @@ func TestScopeDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &ScopeResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":            tftypes.String,
-			"domain_id":     tftypes.Number,
-			"key":           tftypes.String,
-			"name":          tftypes.String,
-			"description":   tftypes.String,
-			"discovery":     tftypes.Bool,
-			"expires_in":    tftypes.Number,
-			"icon_uri":      tftypes.String,
-			"parameterized": tftypes.Bool,
-		}},
-		map[string]tftypes.Value{
-			"id":            tftypes.NewValue(tftypes.String, "scope-123"),
-			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
-			"key":           tftypes.NewValue(tftypes.String, "claim_scope"),
-			"name":          tftypes.NewValue(tftypes.String, "Claim scope"),
-			"description":   tftypes.NewValue(tftypes.String, nil),
-			"discovery":     tftypes.NewValue(tftypes.Bool, true),
-			"expires_in":    tftypes.NewValue(tftypes.Number, nil),
-			"icon_uri":      tftypes.NewValue(tftypes.String, nil),
-			"parameterized": tftypes.NewValue(tftypes.Bool, false),
-		},
-	)
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
-		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidScopeRaw()},
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestScopeCreateAndReadReportInvalidRequestData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ScopeResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidScopeRaw()},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidScopeRaw()},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
 	}
 }
 
@@ -546,30 +546,6 @@ func TestScopeUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	resourceUnderTest := &ScopeResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":            tftypes.String,
-			"domain_id":     tftypes.Number,
-			"key":           tftypes.String,
-			"name":          tftypes.String,
-			"description":   tftypes.String,
-			"discovery":     tftypes.Bool,
-			"expires_in":    tftypes.Number,
-			"icon_uri":      tftypes.String,
-			"parameterized": tftypes.Bool,
-		}},
-		map[string]tftypes.Value{
-			"id":            tftypes.NewValue(tftypes.String, "scope-123"),
-			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
-			"key":           tftypes.NewValue(tftypes.String, "claim_scope"),
-			"name":          tftypes.NewValue(tftypes.String, "Claim scope"),
-			"description":   tftypes.NewValue(tftypes.String, nil),
-			"discovery":     tftypes.NewValue(tftypes.Bool, true),
-			"expires_in":    tftypes.NewValue(tftypes.Number, nil),
-			"icon_uri":      tftypes.NewValue(tftypes.String, nil),
-			"parameterized": tftypes.NewValue(tftypes.Bool, false),
-		},
-	)
 	valid := ScopeModel{
 		ID:            types.StringValue("scope-123"),
 		DomainID:      types.StringValue("domain-123"),
@@ -581,7 +557,7 @@ func TestScopeUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 
 	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
-		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidScopeRaw()},
 		State: scopeState(t, schemaResp.Schema, valid),
 	}, invalidPlanResp)
 	if !invalidPlanResp.Diagnostics.HasError() {
@@ -591,7 +567,7 @@ func TestScopeUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
 		Plan:  scopePlan(t, schemaResp.Schema, valid),
-		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidScopeRaw()},
 	}, invalidStateResp)
 	if !invalidStateResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
@@ -694,4 +670,31 @@ func scopeState(t *testing.T, schema resourceschema.Schema, model ScopeModel) tf
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func invalidScopeRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":            tftypes.String,
+			"domain_id":     tftypes.Number,
+			"key":           tftypes.String,
+			"name":          tftypes.String,
+			"description":   tftypes.String,
+			"discovery":     tftypes.Bool,
+			"expires_in":    tftypes.Number,
+			"icon_uri":      tftypes.String,
+			"parameterized": tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":            tftypes.NewValue(tftypes.String, "scope-123"),
+			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
+			"key":           tftypes.NewValue(tftypes.String, "claim_scope"),
+			"name":          tftypes.NewValue(tftypes.String, "Claim scope"),
+			"description":   tftypes.NewValue(tftypes.String, nil),
+			"discovery":     tftypes.NewValue(tftypes.Bool, true),
+			"expires_in":    tftypes.NewValue(tftypes.Number, nil),
+			"icon_uri":      tftypes.NewValue(tftypes.String, nil),
+			"parameterized": tftypes.NewValue(tftypes.Bool, false),
+		},
+	)
 }

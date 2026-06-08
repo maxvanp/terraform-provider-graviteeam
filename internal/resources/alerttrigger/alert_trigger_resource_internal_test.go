@@ -196,6 +196,38 @@ func TestAlertTriggerCreateAndUpdateRejectInvalidType(t *testing.T) {
 	}
 }
 
+func TestAlertTriggerCreateReadAndUpdateReportInvalidRequestData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AlertTriggerResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidAlertTriggerRaw()},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidAlertTriggerRaw()},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidAlertTriggerRaw()},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid update plan diagnostics")
+	}
+}
+
 func TestReadIntoModelMapsAlertTriggerResponse(t *testing.T) {
 	model := AlertTriggerModel{
 		DomainID: types.StringValue("domain-id"),
@@ -573,26 +605,10 @@ func TestAlertTriggerDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &AlertTriggerResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":                 tftypes.String,
-			"domain_id":          tftypes.Number,
-			"type":               tftypes.String,
-			"enabled":            tftypes.Bool,
-			"alert_notifier_ids": tftypes.Set{ElementType: tftypes.String},
-		}},
-		map[string]tftypes.Value{
-			"id":                 tftypes.NewValue(tftypes.String, "domain-123/TOO_MANY_LOGIN_FAILURES"),
-			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
-			"type":               tftypes.NewValue(tftypes.String, "TOO_MANY_LOGIN_FAILURES"),
-			"enabled":            tftypes.NewValue(tftypes.Bool, true),
-			"alert_notifier_ids": tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "notifier-1")}),
-		},
-	)
 
 	resp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
-		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidAlertTriggerRaw()},
 	}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
@@ -675,4 +691,23 @@ func stringSet(t *testing.T, values []string) types.Set {
 		t.Fatalf("set value diagnostics: %#v", diags)
 	}
 	return setValue
+}
+
+func invalidAlertTriggerRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                 tftypes.String,
+			"domain_id":          tftypes.Number,
+			"type":               tftypes.String,
+			"enabled":            tftypes.Bool,
+			"alert_notifier_ids": tftypes.Set{ElementType: tftypes.String},
+		}},
+		map[string]tftypes.Value{
+			"id":                 tftypes.NewValue(tftypes.String, "domain-123/TOO_MANY_LOGIN_FAILURES"),
+			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
+			"type":               tftypes.NewValue(tftypes.String, "TOO_MANY_LOGIN_FAILURES"),
+			"enabled":            tftypes.NewValue(tftypes.Bool, true),
+			"alert_notifier_ids": tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "notifier-1")}),
+		},
+	)
 }
