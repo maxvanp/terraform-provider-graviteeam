@@ -200,6 +200,16 @@ func TestEmailTemplateValidator(t *testing.T) {
 
 	v := emailTemplateValidator{}
 
+	for _, value := range []types.String{types.StringNull(), types.StringUnknown()} {
+		resp := validator.StringResponse{}
+		v.ValidateString(context.Background(), validator.StringRequest{
+			ConfigValue: value,
+		}, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("null/unknown template diagnostics: %v", resp.Diagnostics)
+		}
+	}
+
 	validResp := validator.StringResponse{}
 	v.ValidateString(context.Background(), validator.StringRequest{
 		ConfigValue: types.StringValue("RESET_PASSWORD"),

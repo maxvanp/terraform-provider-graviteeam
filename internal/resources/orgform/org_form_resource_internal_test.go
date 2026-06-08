@@ -169,6 +169,16 @@ func TestReadIntoModelMapsOrgForm(t *testing.T) {
 func TestTemplateValidatorAcceptsKnownTemplatesCaseInsensitively(t *testing.T) {
 	t.Parallel()
 
+	for _, value := range []types.String{types.StringNull(), types.StringUnknown()} {
+		resp := validator.StringResponse{}
+		templateValidator{}.ValidateString(context.Background(), validator.StringRequest{
+			ConfigValue: value,
+		}, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("null/unknown template diagnostics: %v", resp.Diagnostics)
+		}
+	}
+
 	resp := validator.StringResponse{}
 	templateValidator{}.ValidateString(context.Background(), validator.StringRequest{
 		ConfigValue: types.StringValue("login"),

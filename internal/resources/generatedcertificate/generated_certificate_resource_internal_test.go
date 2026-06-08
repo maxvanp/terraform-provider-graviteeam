@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -126,6 +127,45 @@ func TestGeneratedCertificateUpdateIsNoOp(t *testing.T) {
 	}
 	if got, want := updated.ID.ValueString(), "cert-123"; got != want {
 		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
+func TestGeneratedCertificateCreateAndUpdateReportInvalidStateData(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewGeneratedCertificateResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":               tftypes.String,
+			"domain_id":        tftypes.Number,
+			"rotation_trigger": tftypes.String,
+			"name":             tftypes.String,
+			"type":             tftypes.String,
+			"metadata":         tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":               tftypes.NewValue(tftypes.String, nil),
+			"domain_id":        tftypes.NewValue(tftypes.Number, 123),
+			"rotation_trigger": tftypes.NewValue(tftypes.String, "rotate"),
+			"name":             tftypes.NewValue(tftypes.String, nil),
+			"type":             tftypes.NewValue(tftypes.String, nil),
+			"metadata":         tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	createResp := resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	NewGeneratedCertificateResource().Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, &createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	NewGeneratedCertificateResource().Update(context.Background(), resource.UpdateRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, &updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
 	}
 }
 
