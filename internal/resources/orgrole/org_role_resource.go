@@ -146,6 +146,10 @@ func (r *OrgRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgRole(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization role", err.Error())
 		return
 	}
