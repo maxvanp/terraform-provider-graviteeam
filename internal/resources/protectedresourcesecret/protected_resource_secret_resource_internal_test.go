@@ -59,6 +59,40 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ProtectedResourceSecretResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ProtectedResourceSecretResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
