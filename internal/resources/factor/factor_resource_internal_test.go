@@ -65,6 +65,17 @@ func TestFactorConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestFactorConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&FactorResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()
 
@@ -182,6 +193,25 @@ func TestFactorTypeValidatorRejectsUnknownValue(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected unknown factor type to be rejected")
+	}
+}
+
+func TestFactorTypeValidatorDescriptionsAndSkipsUnknownConfig(t *testing.T) {
+	t.Parallel()
+
+	factorValidator := factorTypeValidator{}
+	if factorValidator.Description(context.Background()) == "" {
+		t.Fatal("expected non-empty description")
+	}
+	if factorValidator.MarkdownDescription(context.Background()) == "" {
+		t.Fatal("expected non-empty markdown description")
+	}
+	for _, value := range []types.String{types.StringNull(), types.StringUnknown()} {
+		var resp validator.StringResponse
+		factorValidator.ValidateString(context.Background(), validator.StringRequest{ConfigValue: value}, &resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("unexpected diagnostics for %v: %#v", value, resp.Diagnostics)
+		}
 	}
 }
 
@@ -412,6 +442,37 @@ func TestFactorReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestFactorCreateAndUpdateRejectUnknownFactorType(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &FactorResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := factorPlan(t, schemaResp.Schema, FactorModel{
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login Push"),
+		FactorType: types.StringValue("PUSH"),
+	})
+	state := factorState(t, schemaResp.Schema, FactorModel{
+		ID:         types.StringValue("factor-123"),
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login Push"),
+		FactorType: types.StringValue("PUSH"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+}
+
 func TestFactorImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&FactorResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -420,6 +481,35 @@ func TestFactorImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestFactorImportSetsDomainAndFactorIDs(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewFactorResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := factorState(t, schemaResp.Schema, FactorModel{
+		ID:         types.StringValue("placeholder"),
+		DomainID:   types.StringValue("placeholder-domain"),
+		Name:       types.StringValue("Login TOTP"),
+		FactorType: types.StringValue("TOTP"),
+	})
+	importResp := &resource.ImportStateResponse{State: state}
+
+	NewFactorResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/factor-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported FactorModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if imported.DomainID.ValueString() != "domain-123" || imported.ID.ValueString() != "factor-123" {
+		t.Fatalf("imported = %#v", imported)
 	}
 }
 

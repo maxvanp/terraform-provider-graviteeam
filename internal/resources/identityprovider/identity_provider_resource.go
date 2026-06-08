@@ -172,6 +172,10 @@ func (r *IdentityProviderResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetIdentityProvider(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading identity provider", err.Error())
 		return
 	}
@@ -225,6 +229,9 @@ func (r *IdentityProviderResource) Delete(ctx context.Context, req resource.Dele
 
 	err := r.client.DeleteIdentityProvider(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting identity provider", err.Error())
 	}
 }
