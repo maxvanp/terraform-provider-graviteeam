@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -613,6 +614,58 @@ func TestEmailTemplateDeleteIgnores404(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestEmailTemplateUpdateReportsInvalidPlanAndStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &EmailTemplateResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"domain_id":      tftypes.Number,
+			"application_id": tftypes.String,
+			"template":       tftypes.String,
+			"enabled":        tftypes.Bool,
+			"from":           tftypes.String,
+			"from_name":      tftypes.String,
+			"subject":        tftypes.String,
+			"content":        tftypes.String,
+			"expires_after":  tftypes.Number,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "email-123"),
+			"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+			"application_id": tftypes.NewValue(tftypes.String, nil),
+			"template":       tftypes.NewValue(tftypes.String, "RESET_PASSWORD"),
+			"enabled":        tftypes.NewValue(tftypes.Bool, true),
+			"from":           tftypes.NewValue(tftypes.String, "noreply@example.test"),
+			"from_name":      tftypes.NewValue(tftypes.String, nil),
+			"subject":        tftypes.NewValue(tftypes.String, "Reset"),
+			"content":        tftypes.NewValue(tftypes.String, "<html>Reset</html>"),
+			"expires_after":  tftypes.NewValue(tftypes.Number, int64(3600)),
+		},
+	)
+
+	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: emailTemplateState(t, schemaResp.Schema, baseEmailTemplateModel()),
+	}, invalidPlanResp)
+	if !invalidPlanResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  emailTemplatePlan(t, schemaResp.Schema, baseEmailTemplateModel()),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

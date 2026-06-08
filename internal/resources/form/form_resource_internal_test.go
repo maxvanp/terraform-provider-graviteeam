@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -597,6 +598,81 @@ func TestFormUpdateReportsRemoteUpdateError(t *testing.T) {
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
+	}
+}
+
+func TestFormCRUDReportsInvalidPlanAndStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &FormResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"domain_id":      tftypes.Number,
+			"application_id": tftypes.String,
+			"template":       tftypes.String,
+			"enabled":        tftypes.Bool,
+			"content":        tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "form-123"),
+			"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+			"application_id": tftypes.NewValue(tftypes.String, nil),
+			"template":       tftypes.NewValue(tftypes.String, "LOGIN"),
+			"enabled":        tftypes.NewValue(tftypes.Bool, true),
+			"content":        tftypes.NewValue(tftypes.String, "<html>login</html>"),
+		},
+	)
+	valid := FormModel{
+		ID:       types.StringValue("form-123"),
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
+	}
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: formState(t, schemaResp.Schema, valid),
+	}, invalidPlanResp)
+	if !invalidPlanResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  formPlan(t, schemaResp.Schema, valid),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 

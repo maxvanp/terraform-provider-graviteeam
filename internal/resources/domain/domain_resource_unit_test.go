@@ -711,6 +711,21 @@ func TestDomainCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 		t.Fatal("expected update diagnostics")
 	}
 
+	validPlan := domainPlan(t, schemaResp.Schema, DomainModel{
+		ID:          types.StringValue("domain-123"),
+		Name:        types.StringValue("domain"),
+		Enabled:     types.BoolValue(true),
+		DataPlaneID: types.StringValue("default"),
+	})
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
 		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
