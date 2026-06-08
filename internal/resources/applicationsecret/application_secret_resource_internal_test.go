@@ -13,6 +13,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -444,6 +445,44 @@ func TestApplicationSecretReportsLifecycleErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestApplicationSecretDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationSecretResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"domain_id":      tftypes.Number,
+			"application_id": tftypes.String,
+			"name":           tftypes.String,
+			"renew_trigger":  tftypes.String,
+			"secret":         tftypes.String,
+			"settings_id":    tftypes.String,
+			"expires_at":     tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "secret-123"),
+			"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+			"application_id": tftypes.NewValue(tftypes.String, "app-123"),
+			"name":           tftypes.NewValue(tftypes.String, "client secret"),
+			"renew_trigger":  tftypes.NewValue(tftypes.String, nil),
+			"secret":         tftypes.NewValue(tftypes.String, "preserved-secret"),
+			"settings_id":    tftypes.NewValue(tftypes.String, nil),
+			"expires_at":     tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -523,6 +524,48 @@ func TestThemeReportsLifecycleErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestThemeDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ThemeResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                         tftypes.String,
+			"domain_id":                  tftypes.Number,
+			"logo_url":                   tftypes.String,
+			"logo_width":                 tftypes.Number,
+			"favicon_url":                tftypes.String,
+			"primary_button_color_hex":   tftypes.String,
+			"secondary_button_color_hex": tftypes.String,
+			"primary_text_color_hex":     tftypes.String,
+			"secondary_text_color_hex":   tftypes.String,
+			"css":                        tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":                         tftypes.NewValue(tftypes.String, "theme-123"),
+			"domain_id":                  tftypes.NewValue(tftypes.Number, 123),
+			"logo_url":                   tftypes.NewValue(tftypes.String, "https://example.test/logo.png"),
+			"logo_width":                 tftypes.NewValue(tftypes.Number, nil),
+			"favicon_url":                tftypes.NewValue(tftypes.String, nil),
+			"primary_button_color_hex":   tftypes.NewValue(tftypes.String, nil),
+			"secondary_button_color_hex": tftypes.NewValue(tftypes.String, nil),
+			"primary_text_color_hex":     tftypes.NewValue(tftypes.String, nil),
+			"secondary_text_color_hex":   tftypes.NewValue(tftypes.String, nil),
+			"css":                        tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

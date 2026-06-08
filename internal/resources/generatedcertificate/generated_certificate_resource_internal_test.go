@@ -167,6 +167,14 @@ func TestGeneratedCertificateCreateAndUpdateReportInvalidStateData(t *testing.T)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
 	}
+
+	deleteResp := resource.DeleteResponse{}
+	NewGeneratedCertificateResource().Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, &deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
 }
 
 func TestReadGeneratedCertificateMapsReturnedFields(t *testing.T) {

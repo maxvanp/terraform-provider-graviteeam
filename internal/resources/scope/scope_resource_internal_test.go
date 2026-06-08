@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -479,6 +480,46 @@ func TestScopeReportsLifecycleErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestScopeDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ScopeResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":            tftypes.String,
+			"domain_id":     tftypes.Number,
+			"key":           tftypes.String,
+			"name":          tftypes.String,
+			"description":   tftypes.String,
+			"discovery":     tftypes.Bool,
+			"expires_in":    tftypes.Number,
+			"icon_uri":      tftypes.String,
+			"parameterized": tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":            tftypes.NewValue(tftypes.String, "scope-123"),
+			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
+			"key":           tftypes.NewValue(tftypes.String, "claim_scope"),
+			"name":          tftypes.NewValue(tftypes.String, "Claim scope"),
+			"description":   tftypes.NewValue(tftypes.String, nil),
+			"discovery":     tftypes.NewValue(tftypes.Bool, true),
+			"expires_in":    tftypes.NewValue(tftypes.Number, nil),
+			"icon_uri":      tftypes.NewValue(tftypes.String, nil),
+			"parameterized": tftypes.NewValue(tftypes.Bool, false),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 
