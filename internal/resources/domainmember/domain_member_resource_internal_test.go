@@ -537,6 +537,19 @@ func TestDomainMemberImportStateSetsAttributes(t *testing.T) {
 	}
 }
 
+func TestDomainMemberImportRejectsInvalidID(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ImportStateResponse
+	NewDomainMemberResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/member/role",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import diagnostics")
+	}
+}
+
 func domainMemberPlan(t *testing.T, schema resourceschema.Schema, model DomainMemberModel) tfsdk.Plan {
 	t.Helper()
 

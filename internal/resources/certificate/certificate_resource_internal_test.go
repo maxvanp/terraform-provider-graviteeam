@@ -403,6 +403,36 @@ func TestCertificateImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestCertificateImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewCertificateResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: certificateState(t, schemaResp.Schema, CertificateModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("certificate"),
+		Type:          types.StringValue("pkcs12-am-certificate"),
+		Configuration: types.StringValue(`{"storepass":"secret"}`),
+	})}
+
+	(&CertificateResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/cert-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported CertificateModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "cert-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func decodeCertificateBody(t *testing.T, r *http.Request) map[string]interface{} {
 	t.Helper()
 	var body map[string]interface{}

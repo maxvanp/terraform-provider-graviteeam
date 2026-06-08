@@ -550,6 +550,19 @@ func TestProtectedResourceMemberImportStateSetsAttributes(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceMemberImportRejectsInvalidID(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ImportStateResponse
+	NewProtectedResourceMemberResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/resource/member/role",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import diagnostics")
+	}
+}
+
 func protectedResourceMemberPlan(t *testing.T, schema resourceschema.Schema, model ProtectedResourceMemberModel) tfsdk.Plan {
 	t.Helper()
 

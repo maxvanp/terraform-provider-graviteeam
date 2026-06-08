@@ -443,6 +443,34 @@ func TestGroupMembersImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestGroupMembersImportStateSetsDomainAndGroup(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: groupMembersState(t, schemaResp.Schema, GroupMembersModel{
+		DomainID: types.StringValue("placeholder"),
+		GroupID:  types.StringValue("placeholder"),
+		Members:  []types.String{types.StringValue("user-a")},
+	})}
+
+	(&GroupMembersResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/group-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported GroupMembersModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.GroupID.ValueString(), "group-123"; got != want {
+		t.Fatalf("group id = %q, want %q", got, want)
+	}
+}
+
 func groupMembersPlan(t *testing.T, schema resourceschema.Schema, model GroupMembersModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}

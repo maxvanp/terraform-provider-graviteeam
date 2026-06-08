@@ -661,6 +661,40 @@ func TestProtectedResourceImportStateRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceImportStateSetsDomainAndID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewProtectedResourceResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	importResp := &resource.ImportStateResponse{State: protectedResourceState(t, schemaResp.Schema, ProtectedResourceModel{
+		ID:                  types.StringValue("placeholder"),
+		DomainID:            types.StringValue("placeholder"),
+		Name:                types.StringValue("mcp"),
+		Type:                types.StringValue("MCP_SERVER"),
+		ResourceIdentifiers: []types.String{types.StringValue("https://api.example.test/mcp")},
+		ClientID:            types.StringValue("client-id"),
+		ClientSecret:        types.StringValue("client-secret"),
+	})}
+
+	NewProtectedResourceResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/resource-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported ProtectedResourceModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "resource-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func protectedResourceResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,

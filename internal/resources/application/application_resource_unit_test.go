@@ -968,6 +968,40 @@ func TestApplicationImportStateRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestApplicationImportStateSetsDomainAndID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewApplicationResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	importResp := &resource.ImportStateResponse{State: applicationState(t, schemaResp.Schema, ApplicationModel{
+		ID:           types.StringValue("placeholder"),
+		DomainID:     types.StringValue("placeholder"),
+		Name:         types.StringValue("application"),
+		Type:         types.StringValue("WEB"),
+		Description:  types.StringValue("application"),
+		ClientID:     types.StringValue("client-id"),
+		ClientSecret: types.StringValue("client-secret"),
+	})}
+
+	NewApplicationResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported ApplicationModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "app-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func applicationResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,

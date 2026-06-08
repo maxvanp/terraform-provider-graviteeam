@@ -546,6 +546,42 @@ func TestIdentityProviderImportStateRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestIdentityProviderImportStateSetsDomainAndID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewIdentityProviderResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	listType := types.ListType{ElemType: types.StringType}
+	importResp := &resource.ImportStateResponse{State: identityProviderState(t, schemaResp.Schema, IdentityProviderModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("inline"),
+		Type:          types.StringValue("inline-am-idp"),
+		External:      types.BoolValue(false),
+		Configuration: types.StringValue(`{"users":[]}`),
+		GroupMapper:   types.MapNull(listType),
+		RoleMapper:    types.MapNull(listType),
+	})}
+
+	NewIdentityProviderResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/idp-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported IdentityProviderModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "idp-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func identityProviderPlan(t *testing.T, schema resourceschema.Schema, model IdentityProviderModel) tfsdk.Plan {
 	t.Helper()
 

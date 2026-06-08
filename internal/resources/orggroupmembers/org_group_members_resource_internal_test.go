@@ -425,6 +425,32 @@ func TestOrgGroupMembersImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestOrgGroupMembersImportStateSetsGroupID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgGroupMembersState(t, schemaResp.Schema, OrgGroupMembersModel{
+		GroupID: types.StringValue("placeholder"),
+		Members: []types.String{
+			types.StringValue("user-a"),
+		},
+	})}
+
+	(&OrgGroupMembersResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "group-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgGroupMembersModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.GroupID.ValueString(), "group-123"; got != want {
+		t.Fatalf("group id = %q, want %q", got, want)
+	}
+}
+
 func orgGroupMembersPlan(t *testing.T, schema resourceschema.Schema, model OrgGroupMembersModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
