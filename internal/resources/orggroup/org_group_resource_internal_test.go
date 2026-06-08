@@ -65,6 +65,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgGroupResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBodyAppliesPlannedOrganizationGroupCollections(t *testing.T) {
 	t.Parallel()
 
@@ -460,6 +471,62 @@ func TestOrgGroupCreateReportsPostCreateUpdateError(t *testing.T) {
 	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected post-create update diagnostics")
+	}
+}
+
+func TestOrgGroupDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgGroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgGroupState(t, schemaResp.Schema, OrgGroupModel{
+		ID:   types.StringValue("group-123"),
+		Name: types.StringValue("admins"),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestOrgGroupImportStateSetsID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgGroupResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgGroupState(t, schemaResp.Schema, OrgGroupModel{
+		ID:   types.StringValue("placeholder"),
+		Name: types.StringValue("admins"),
+	})}
+
+	(&OrgGroupResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "group-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgGroupModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "group-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

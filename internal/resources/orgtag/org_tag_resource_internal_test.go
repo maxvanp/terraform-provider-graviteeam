@@ -61,6 +61,19 @@ func TestOrgTagConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestOrgTagConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgTagResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBodyForCreate(t *testing.T) {
 	t.Parallel()
 
@@ -377,6 +390,64 @@ func TestOrgTagReportsLifecycleErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestOrgTagDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/tags/tag-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgTagResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgTagState(t, schemaResp.Schema, OrgTagModel{
+		ID:          types.StringValue("tag-123"),
+		Name:        types.StringValue("shard-a"),
+		Description: types.StringValue("created"),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestOrgTagImportStateSetsID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgTagResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgTagState(t, schemaResp.Schema, OrgTagModel{
+		ID:          types.StringValue("placeholder"),
+		Name:        types.StringValue("shard-a"),
+		Description: types.StringValue("created"),
+	})}
+
+	(&OrgTagResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "tag-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgTagModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "tag-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

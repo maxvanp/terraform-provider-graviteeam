@@ -196,7 +196,7 @@ func (r *OrgGroupResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteOrgGroup(ctx, state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting organization group", err.Error())
 	}
 }

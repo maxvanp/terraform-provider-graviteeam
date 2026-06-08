@@ -57,6 +57,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgReporterResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBodyUsesPlannedOrganizationReporterFields(t *testing.T) {
 	t.Parallel()
 
@@ -416,6 +427,70 @@ func TestOrgReporterUpdateReportsPreReadError(t *testing.T) {
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected update pre-read diagnostics")
+	}
+}
+
+func TestOrgReporterDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/reporters/reporter-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgReporterResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgReporterState(t, schemaResp.Schema, OrgReporterModel{
+		ID:            types.StringValue("reporter-123"),
+		Name:          types.StringValue("file reporter"),
+		Type:          types.StringValue("reporter-am-file"),
+		Configuration: types.StringValue(`{"directory":"/tmp"}`),
+		Enabled:       types.BoolValue(true),
+		Inherited:     types.BoolValue(false),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestOrgReporterImportStateSetsID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgReporterResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgReporterState(t, schemaResp.Schema, OrgReporterModel{
+		ID:            types.StringValue("placeholder"),
+		Name:          types.StringValue("file reporter"),
+		Type:          types.StringValue("reporter-am-file"),
+		Configuration: types.StringValue(`{"directory":"/tmp"}`),
+		Enabled:       types.BoolValue(true),
+		Inherited:     types.BoolValue(false),
+	})}
+
+	(&OrgReporterResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "reporter-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgReporterModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "reporter-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

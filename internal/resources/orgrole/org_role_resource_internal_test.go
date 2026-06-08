@@ -57,6 +57,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgRoleResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildUpdateBodyAppliesPlannedFieldsAndPermissions(t *testing.T) {
 	t.Parallel()
 
@@ -486,6 +497,66 @@ func TestOrgRoleCreateReportsPostCreateReadError(t *testing.T) {
 	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected post-create read diagnostics")
+	}
+}
+
+func TestOrgRoleDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/roles/role-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgRoleResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgRoleState(t, schemaResp.Schema, OrgRoleModel{
+		ID:             types.StringValue("role-123"),
+		Name:           types.StringValue("org-role"),
+		Description:    types.StringValue("Role"),
+		AssignableType: types.StringValue("ORGANIZATION"),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestOrgRoleImportStateSetsID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgRoleResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgRoleState(t, schemaResp.Schema, OrgRoleModel{
+		ID:             types.StringValue("placeholder"),
+		Name:           types.StringValue("org-role"),
+		Description:    types.StringValue("Role"),
+		AssignableType: types.StringValue("ORGANIZATION"),
+	})}
+
+	(&OrgRoleResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "role-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgRoleModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "role-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

@@ -154,7 +154,7 @@ func (r *OrgEntrypointResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	err := r.client.DeleteOrgEntrypoint(ctx, state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting organization entrypoint", err.Error())
 	}
 }

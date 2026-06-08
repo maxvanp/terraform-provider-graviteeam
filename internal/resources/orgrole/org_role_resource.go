@@ -192,7 +192,7 @@ func (r *OrgRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	err := r.client.DeleteOrgRole(ctx, state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting organization role", err.Error())
 	}
 }

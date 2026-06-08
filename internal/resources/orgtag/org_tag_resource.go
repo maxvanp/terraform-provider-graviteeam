@@ -141,7 +141,7 @@ func (r *OrgTagResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	err := r.client.DeleteOrgTag(ctx, state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting organization tag", err.Error())
 	}
 }
