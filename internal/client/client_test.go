@@ -1116,6 +1116,26 @@ func TestClientRawRequestHelpersRejectInvalidBaseURL(t *testing.T) {
 	}
 }
 
+func TestClientRequestHelpersRejectUnmarshalableBodies(t *testing.T) {
+	c := &Client{
+		BaseURL:        "http://example.test",
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient:     http.DefaultClient,
+	}
+	body := map[string]interface{}{"bad": func() {}}
+
+	if _, err := c.DoRequest(context.Background(), http.MethodPost, "/domains", body); err == nil {
+		t.Fatal("expected domain request body marshal error")
+	}
+	if _, err := c.DoManagementRequest(context.Background(), http.MethodPost, "/management/raw", body); err == nil {
+		t.Fatal("expected management request body marshal error")
+	}
+	if _, err := c.DoOrgRequest(context.Background(), http.MethodPost, "/members", body); err == nil {
+		t.Fatal("expected organization request body marshal error")
+	}
+}
+
 func TestMembershipUpsertsHandleEmptyResponses(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members", func(w http.ResponseWriter, r *http.Request) {
@@ -3447,6 +3467,23 @@ func TestAccRotateCertificateLifecycle(t *testing.T) {
 	}
 	if err := c.DeleteCertificate(ctx, domainID, certificateID); err != nil {
 		t.Fatalf("delete rotated certificate %s: %v", certificateID, err)
+	}
+}
+
+func TestGetAnalyticsReportsInvalidJSON(t *testing.T) {
+	mux := testMux()
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/analytics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("analytics method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write([]byte(`{`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestClient(server)
+	if _, err := c.GetAnalytics(context.Background(), "domain-123", map[string]string{"from": "2026-01-01"}); err == nil {
+		t.Fatal("expected invalid analytics JSON error")
 	}
 }
 
