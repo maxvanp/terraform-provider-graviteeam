@@ -56,6 +56,24 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &DomainMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestFormatJSONHandlesEmptyTextAndJSON(t *testing.T) {
 	t.Parallel()
 

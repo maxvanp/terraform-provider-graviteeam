@@ -15,6 +15,34 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
+func TestPermissionsMetadataNewMetadataAndConfigure(t *testing.T) {
+	t.Parallel()
+
+	dataSource, ok := NewPermissionsMetadataDataSource().(*PermissionsMetadataDataSource)
+	if !ok {
+		t.Fatalf("data source type = %T, want *PermissionsMetadataDataSource", NewPermissionsMetadataDataSource())
+	}
+
+	var metadataResp datasource.MetadataResponse
+	dataSource.Metadata(context.Background(), datasource.MetadataRequest{
+		ProviderTypeName: "graviteeam",
+	}, &metadataResp)
+	if got, want := metadataResp.TypeName, "graviteeam_permissions_metadata"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+
+	var configureResp datasource.ConfigureResponse
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &configureResp)
+	if configureResp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", configureResp.Diagnostics)
+	}
+	if dataSource.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestPermissionsMetadataReadResolvesSupportedKinds(t *testing.T) {
 	var paths []string
 
