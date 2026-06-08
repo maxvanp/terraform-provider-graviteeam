@@ -22,7 +22,8 @@ var (
 )
 
 type DomainFlowResource struct {
-	client *client.Client
+	client      *client.Client
+	encodeFlows func(interface{}) (string, error)
 }
 
 func NewDomainFlowResource() resource.Resource {
@@ -82,7 +83,7 @@ func (r *DomainFlowResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	flowsJSON, err := encodeFlows(result)
+	flowsJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -109,7 +110,7 @@ func (r *DomainFlowResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	flowsJSON, err := encodeFlows(result)
+	flowsJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -137,7 +138,7 @@ func (r *DomainFlowResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	flowsJSON, err := encodeFlows(result)
+	flowsJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -184,4 +185,11 @@ func encodeFlows(value interface{}) (string, error) {
 		return "", err
 	}
 	return string(flowsJSON), nil
+}
+
+func (r *DomainFlowResource) encodeResponseFlows(value interface{}) (string, error) {
+	if r.encodeFlows != nil {
+		return r.encodeFlows(value)
+	}
+	return encodeFlows(value)
 }

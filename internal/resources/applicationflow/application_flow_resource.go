@@ -22,7 +22,8 @@ var (
 )
 
 type ApplicationFlowResource struct {
-	client *client.Client
+	client      *client.Client
+	encodeFlows func(interface{}) (string, error)
 }
 
 func NewApplicationFlowResource() resource.Resource {
@@ -89,7 +90,7 @@ func (r *ApplicationFlowResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	resultJSON, err := encodeFlows(result)
+	resultJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -116,7 +117,7 @@ func (r *ApplicationFlowResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	resultJSON, err := encodeFlows(result)
+	resultJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -144,7 +145,7 @@ func (r *ApplicationFlowResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	resultJSON, err := encodeFlows(result)
+	resultJSON, err := r.encodeResponseFlows(result)
 	if err != nil {
 		resp.Diagnostics.AddError("Error marshaling flows response", err.Error())
 		return
@@ -200,4 +201,11 @@ func encodeFlows(value interface{}) (string, error) {
 		return "", err
 	}
 	return string(flowsJSON), nil
+}
+
+func (r *ApplicationFlowResource) encodeResponseFlows(value interface{}) (string, error) {
+	if r.encodeFlows != nil {
+		return r.encodeFlows(value)
+	}
+	return encodeFlows(value)
 }

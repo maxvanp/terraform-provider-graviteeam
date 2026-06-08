@@ -3,6 +3,7 @@ package domainflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -354,6 +355,51 @@ func TestDomainFlowCRUDReportsRemoteErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State(plan)}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestDomainFlowCRUDReportsResponseEncodingErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/flows", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"id":"login","enabled":true}]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainFlowResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+		encodeFlows: func(interface{}) (string, error) {
+			return "", errors.New("encode failed")
+		},
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := domainFlowPlan(t, schemaResp.Schema, DomainFlowModel{
+		DomainID: types.StringValue("domain-123"),
+		Flows:    types.StringValue(`[]`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create encoding diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: tfsdk.State(plan)}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read encoding diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: tfsdk.State(plan)}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update encoding diagnostics")
 	}
 }
 
