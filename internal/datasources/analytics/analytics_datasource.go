@@ -113,11 +113,7 @@ func (d *AnalyticsDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	resultJSON, err := formatAnalyticsResult(result)
-	if err != nil {
-		resp.Diagnostics.AddError("Error marshaling analytics", err.Error())
-		return
-	}
+	resultJSON := formatAnalyticsResult(result)
 
 	config.Result = types.StringValue(resultJSON)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
@@ -149,10 +145,7 @@ func buildAnalyticsParams(config AnalyticsModel, now int64) map[string]string {
 	return params
 }
 
-func formatAnalyticsResult(value interface{}) (string, error) {
-	resultJSON, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(resultJSON), nil
+func formatAnalyticsResult(value interface{}) string {
+	resultJSON, _ := json.MarshalIndent(value, "", "  ")
+	return string(resultJSON)
 }

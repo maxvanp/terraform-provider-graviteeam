@@ -105,10 +105,7 @@ func TestFormatJSONHandlesEmptyJSONAndText(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := formatJSON(test.raw)
-			if err != nil {
-				t.Fatalf("format json: %v", err)
-			}
+			got := formatJSON(test.raw)
 			if got != test.want {
 				t.Fatalf("json = %q, want %q", got, test.want)
 			}
@@ -119,10 +116,7 @@ func TestFormatJSONHandlesEmptyJSONAndText(t *testing.T) {
 func TestFormatJSONProducesStableIndentedPreviewJSON(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSON([]byte(`{"content":"ok","type":"FORM"}`))
-	if err != nil {
-		t.Fatalf("format json: %v", err)
-	}
+	got := formatJSON([]byte(`{"content":"ok","type":"FORM"}`))
 	want := "{\n  \"content\": \"ok\",\n  \"type\": \"FORM\"\n}"
 	if got != want {
 		t.Fatalf("json = %q, want %q", got, want)

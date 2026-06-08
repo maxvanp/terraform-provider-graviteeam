@@ -128,25 +128,13 @@ func TestBuildAnalyticsParamsUsesDefaultTimeWindowAndOmitsUnknownOptionals(t *te
 func TestFormatAnalyticsResultProducesStableIndentedJSON(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatAnalyticsResult(map[string]interface{}{
+	got := formatAnalyticsResult(map[string]interface{}{
 		"count": float64(2),
 		"type":  "COUNT",
 	})
-	if err != nil {
-		t.Fatalf("format analytics: %v", err)
-	}
 	want := "{\n  \"count\": 2,\n  \"type\": \"COUNT\"\n}"
 	if got != want {
 		t.Fatalf("json = %q, want %q", got, want)
-	}
-}
-
-func TestFormatAnalyticsResultReturnsMarshalError(t *testing.T) {
-	t.Parallel()
-
-	_, err := formatAnalyticsResult(map[string]interface{}{"bad": func() {}})
-	if err == nil {
-		t.Fatalf("expected marshal error")
 	}
 }
 

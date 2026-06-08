@@ -235,6 +235,40 @@ func TestCollectionDataSourceReadReportsRemoteAndFormatErrors(t *testing.T) {
 	}
 }
 
+func TestCollectionDataSourceReadReportsInvalidConfigData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &collectionDataSource{
+		client:     client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+		typeSuffix: "user_devices",
+		collection: "devices",
+		resultName: "devices",
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id":  tftypes.Number,
+				"user_id":    tftypes.String,
+				"items_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id":  tftypes.NewValue(tftypes.Number, 123),
+				"user_id":    tftypes.NewValue(tftypes.String, "user-123"),
+				"items_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func collectionConfig(schema datasourceschema.Schema, model collectionModel) tfsdk.Config {
 	return tfsdk.Config{
 		Raw: tftypes.NewValue(

@@ -106,10 +106,7 @@ func TestFormatJSONResultHandlesEmptyJSONAndText(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := formatJSONResult(test.raw)
-			if err != nil {
-				t.Fatalf("format result: %v", err)
-			}
+			got := formatJSONResult(test.raw)
 			if got != test.want {
 				t.Fatalf("result = %q, want %q", got, test.want)
 			}
@@ -120,10 +117,7 @@ func TestFormatJSONResultHandlesEmptyJSONAndText(t *testing.T) {
 func TestFormatJSONResultProducesStableIndentedJSON(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSONResult([]byte(`{"id":"ldap","enabled":true}`))
-	if err != nil {
-		t.Fatalf("format result: %v", err)
-	}
+	got := formatJSONResult([]byte(`{"id":"ldap","enabled":true}`))
 	want := "{\n  \"enabled\": true,\n  \"id\": \"ldap\"\n}"
 	if got != want {
 		t.Fatalf("result = %q, want %q", got, want)
@@ -144,10 +138,7 @@ func TestPluginCategoryListContainsEveryAllowedCategory(t *testing.T) {
 func TestFormatJSONResultEscapesInvalidJSONText(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSONResult([]byte("line\nbreak"))
-	if err != nil {
-		t.Fatalf("format result: %v", err)
-	}
+	got := formatJSONResult([]byte("line\nbreak"))
 	var decoded string
 	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
 		t.Fatalf("formatted text is not a JSON string: %v", err)

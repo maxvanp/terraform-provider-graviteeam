@@ -244,6 +244,61 @@ func TestPermissionsMetadataReadReportsRemoteError(t *testing.T) {
 	}
 }
 
+func TestPermissionsMetadataReadReportsInvalidConfigData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PermissionsMetadataDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":                  tftypes.Number,
+				"domain_id":             tftypes.String,
+				"application_id":        tftypes.String,
+				"protected_resource_id": tftypes.String,
+				"result_json":           tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":                  tftypes.NewValue(tftypes.Number, 123),
+				"domain_id":             tftypes.NewValue(tftypes.String, nil),
+				"application_id":        tftypes.NewValue(tftypes.String, nil),
+				"protected_resource_id": tftypes.NewValue(tftypes.String, nil),
+				"result_json":           tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
+func TestPermissionsMetadataProtectedResourceRequiresDomainID(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PermissionsMetadataDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := permissionsMetadataConfig(schemaResp.Schema, PermissionsMetadataModel{
+		Kind:                types.StringValue("protected_resource_member_permissions"),
+		ProtectedResourceID: types.StringValue("resource-1"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected missing domain_id diagnostics")
+	}
+}
+
 func permissionsMetadataConfig(schema datasourceschema.Schema, model PermissionsMetadataModel) tfsdk.Config {
 	return tfsdk.Config{
 		Raw: tftypes.NewValue(

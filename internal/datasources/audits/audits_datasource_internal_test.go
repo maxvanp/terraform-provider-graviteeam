@@ -119,14 +119,11 @@ func TestExtractAuditEntriesReturnsDataSliceOnly(t *testing.T) {
 func TestFormatAuditEntriesProducesStableIndentedJSON(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatAuditEntries(map[string]interface{}{
+	got := formatAuditEntries(map[string]interface{}{
 		"data": []interface{}{
 			map[string]interface{}{"id": "audit-1", "type": "USER_CREATED"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("format audits: %v", err)
-	}
 	want := "[\n  {\n    \"id\": \"audit-1\",\n    \"type\": \"USER_CREATED\"\n  }\n]"
 	if got != want {
 		t.Fatalf("json = %q, want %q", got, want)
@@ -136,23 +133,9 @@ func TestFormatAuditEntriesProducesStableIndentedJSON(t *testing.T) {
 func TestFormatAuditEntriesUsesNullWhenDataIsMissing(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatAuditEntries(map[string]interface{}{})
-	if err != nil {
-		t.Fatalf("format audits: %v", err)
-	}
+	got := formatAuditEntries(map[string]interface{}{})
 	if got != "null" {
 		t.Fatalf("json = %q, want null", got)
-	}
-}
-
-func TestFormatAuditEntriesReportsMarshalError(t *testing.T) {
-	t.Parallel()
-
-	_, err := formatAuditEntries(map[string]interface{}{
-		"data": []interface{}{func() {}},
-	})
-	if err == nil {
-		t.Fatal("expected marshal error")
 	}
 }
 

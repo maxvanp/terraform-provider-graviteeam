@@ -95,25 +95,21 @@ func (d *FormPreviewDataSource) Read(ctx context.Context, req datasource.ReadReq
 		resp.Diagnostics.AddError("Error rendering form preview", err.Error())
 		return
 	}
-	result, err := formatJSON(raw)
-	if err != nil {
-		resp.Diagnostics.AddError("Error formatting form preview", err.Error())
-		return
-	}
+	result := formatJSON(raw)
 
 	config.ResultJSON = types.StringValue(result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
-func formatJSON(raw []byte) (string, error) {
+func formatJSON(raw []byte) string {
 	if len(raw) == 0 {
-		return "null", nil
+		return "null"
 	}
 	var parsed interface{}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		formatted, _ := json.Marshal(string(raw))
-		return string(formatted), nil
+		return string(formatted)
 	}
 	formatted, _ := json.MarshalIndent(parsed, "", "  ")
-	return string(formatted), nil
+	return string(formatted)
 }

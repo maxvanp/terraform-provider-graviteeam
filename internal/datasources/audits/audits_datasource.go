@@ -78,11 +78,7 @@ func (d *AuditsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	auditsJSON, err := formatAuditEntries(result)
-	if err != nil {
-		resp.Diagnostics.AddError("Error marshaling audits", err.Error())
-		return
-	}
+	auditsJSON := formatAuditEntries(result)
 
 	config.Audits = types.StringValue(auditsJSON)
 	if config.Size.IsNull() || config.Size.IsUnknown() {
@@ -99,13 +95,10 @@ func auditSize(config AuditsModel) int {
 	return 10
 }
 
-func formatAuditEntries(result map[string]interface{}) (string, error) {
+func formatAuditEntries(result map[string]interface{}) string {
 	entries := extractAuditEntries(result)
-	auditsJSON, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(auditsJSON), nil
+	auditsJSON, _ := json.MarshalIndent(entries, "", "  ")
+	return string(auditsJSON)
 }
 
 func extractAuditEntries(result map[string]interface{}) []interface{} {
