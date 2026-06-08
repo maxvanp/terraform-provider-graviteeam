@@ -137,6 +137,26 @@ func TestBuildBodySkipsUnknownOptionalFields(t *testing.T) {
 	}
 }
 
+func TestBuildBodySkipsNullOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	resource := &ThemeResource{}
+	plan := ThemeModel{
+		LogoURL:                 types.StringNull(),
+		LogoWidth:               types.Int64Null(),
+		FaviconURL:              types.StringNull(),
+		PrimaryButtonColorHex:   types.StringNull(),
+		SecondaryButtonColorHex: types.StringNull(),
+		PrimaryTextColorHex:     types.StringNull(),
+		SecondaryTextColorHex:   types.StringNull(),
+		CSS:                     types.StringNull(),
+	}
+
+	if got := resource.buildBody(plan); len(got) != 0 {
+		t.Fatalf("body = %#v, want no fields for null plan values", got)
+	}
+}
+
 func TestBuildUpdateBodyMergesCurrentAndClearsRemovedFields(t *testing.T) {
 	t.Parallel()
 
@@ -186,6 +206,36 @@ func TestBuildUpdateBodyMergesCurrentAndClearsRemovedFields(t *testing.T) {
 		"secondaryTextColorHex":   "",
 		"css":                     ".new {}",
 		"apiManaged":              "preserve-me",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("body = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildUpdateBodyClearsRemainingRemovedFields(t *testing.T) {
+	t.Parallel()
+
+	resource := &ThemeResource{}
+	state := ThemeModel{
+		LogoURL:               types.StringValue("https://example.com/old-logo.png"),
+		PrimaryButtonColorHex: types.StringValue("#000000"),
+		PrimaryTextColorHex:   types.StringValue("#020202"),
+		CSS:                   types.StringValue(".old {}"),
+	}
+	plan := ThemeModel{
+		LogoURL:               types.StringNull(),
+		PrimaryButtonColorHex: types.StringNull(),
+		PrimaryTextColorHex:   types.StringNull(),
+		CSS:                   types.StringNull(),
+	}
+
+	got := resource.buildUpdateBody(plan, state, map[string]interface{}{"apiManaged": "preserve-me"})
+	want := map[string]interface{}{
+		"logoUrl":               "",
+		"primaryButtonColorHex": "",
+		"primaryTextColorHex":   "",
+		"css":                   "",
+		"apiManaged":            "preserve-me",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("body = %#v, want %#v", got, want)
