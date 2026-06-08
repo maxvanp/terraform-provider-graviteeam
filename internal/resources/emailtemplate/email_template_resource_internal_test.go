@@ -196,6 +196,10 @@ func TestReadIntoModel(t *testing.T) {
 	assertString(t, model.Subject, "subject", "Reset")
 	assertString(t, model.Content, "content", "<html>Reset</html>")
 	assertInt64(t, model.ExpiresAfter, "expiresAfter", 86400)
+
+	model.ExpiresAfter = types.Int64Null()
+	resource.readIntoModel(&model, map[string]interface{}{"expiresAfter": int64(7200)})
+	assertInt64(t, model.ExpiresAfter, "expiresAfter", 7200)
 }
 
 func TestReadIntoModelPreservesExistingFromNameWhenAPIValueEmpty(t *testing.T) {
@@ -667,6 +671,22 @@ func TestEmailTemplateUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 		},
 	)
 
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
+
 	invalidPlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
 		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
@@ -683,6 +703,14 @@ func TestEmailTemplateUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	}, invalidStateResp)
 	if !invalidStateResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid delete state diagnostics")
 	}
 }
 

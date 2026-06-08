@@ -181,6 +181,12 @@ func TestReadIntoModelMapsApplicationEmailResponse(t *testing.T) {
 	if model.ExpiresAfter.ValueInt64() != 3600 {
 		t.Fatalf("expires_after = %d, want 3600", model.ExpiresAfter.ValueInt64())
 	}
+
+	model.ExpiresAfter = types.Int64Null()
+	(&ApplicationEmailResource{}).readIntoModel(&model, map[string]interface{}{"expiresAfter": int64(7200)})
+	if model.ExpiresAfter.ValueInt64() != 7200 {
+		t.Fatalf("expires_after = %d, want 7200", model.ExpiresAfter.ValueInt64())
+	}
 }
 
 func TestReadIntoModelKeepsExistingFromNameWhenAPIOmitsEmptyValue(t *testing.T) {
@@ -567,6 +573,22 @@ func TestApplicationEmailDeleteReportsInvalidStateData(t *testing.T) {
 			"expires_after":  tftypes.NewValue(tftypes.Number, 3600),
 		},
 	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
+	}
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
