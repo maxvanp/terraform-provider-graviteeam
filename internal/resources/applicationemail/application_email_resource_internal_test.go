@@ -339,6 +339,67 @@ func TestApplicationEmailReadRemovesMissingTemplateAndDeleteIgnores404(t *testin
 	}
 }
 
+func TestApplicationEmailCreateAndReadReportRemoteErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/emails", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			http.Error(w, "create failed", http.StatusInternalServerError)
+		case http.MethodGet:
+			http.Error(w, "read failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("collection method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ApplicationEmailResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := applicationEmailPlan(t, schemaResp.Schema, ApplicationEmailModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := applicationEmailState(t, schemaResp.Schema, ApplicationEmailModel{
+		ID:            types.StringValue("email-123"),
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringValue("Support"),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+}
+
 func TestApplicationEmailUpdateAndDeleteReportRemoteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -424,6 +485,16 @@ func applicationEmailPlan(t *testing.T, schema resourceschema.Schema, model Appl
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func applicationEmailState(t *testing.T, schema resourceschema.Schema, model ApplicationEmailModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
