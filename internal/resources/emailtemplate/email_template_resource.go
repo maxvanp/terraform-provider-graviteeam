@@ -217,6 +217,9 @@ func (r *EmailTemplateResource) Delete(ctx context.Context, req resource.DeleteR
 
 	err := r.client.DeleteEmail(ctx, state.DomainID.ValueString(), appID, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting email template", err.Error())
 	}
 }

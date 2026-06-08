@@ -56,6 +56,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgFormResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildCreateBody(t *testing.T) {
 	t.Parallel()
 
@@ -417,6 +428,36 @@ func TestOrgFormReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestOrgFormDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgFormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: orgFormState(t, schemaResp.Schema, baseOrgFormModel()),
+	}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func TestOrgFormUpdateReportsPreReadError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -453,6 +494,36 @@ func TestOrgFormUpdateReportsPreReadError(t *testing.T) {
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update pre-read diagnostics")
+	}
+}
+
+func TestOrgFormImportStateSetsTemplate(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&OrgFormResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgFormState(t, schemaResp.Schema, baseOrgFormModel())}
+
+	(&OrgFormResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "LOGIN",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state OrgFormModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.Template.ValueString(), "LOGIN"; got != want {
+		t.Fatalf("template = %q, want %q", got, want)
+	}
+}
+
+func baseOrgFormModel() OrgFormModel {
+	return OrgFormModel{
+		ID:       types.StringValue("form-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
 	}
 }
 

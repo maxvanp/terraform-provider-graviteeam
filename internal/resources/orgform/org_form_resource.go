@@ -186,6 +186,9 @@ func (r *OrgFormResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	err := r.client.DeleteOrgForm(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting organization form", err.Error())
 	}
 }
