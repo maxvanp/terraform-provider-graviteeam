@@ -68,6 +68,24 @@ func TestConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgSettingsResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestBuildPatchBodyIncludesIdentities(t *testing.T) {
 	t.Parallel()
 
@@ -253,7 +271,7 @@ func TestOrgSettingsCRUDSkipsEmptyCreatePatchAndDoesNotClearOnDelete(t *testing.
 		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
 	}
 
-	deleteResp := &resource.DeleteResponse{}
+	deleteResp := &resource.DeleteResponse{State: updateResp.State}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: updateResp.State}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
@@ -267,6 +285,53 @@ func TestOrgSettingsCRUDSkipsEmptyCreatePatchAndDoesNotClearOnDelete(t *testing.
 	}
 	if got := bodies[0]["identities"]; !reflect.DeepEqual(got, []interface{}{"idp-1", "idp-2"}) {
 		t.Fatalf("patch identities = %#v", got)
+	}
+}
+
+func TestOrgSettingsReadSetsSettingsIDAndIdentities(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":         "DEFAULT",
+			"identities": []interface{}{"idp-1", "idp-2"},
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgSettingsResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgSettingsState(t, schemaResp.Schema, OrgSettingsModel{
+		ID: types.StringValue("old"),
+		Identities: types.ListValueMust(types.StringType, []attr.Value{
+			types.StringValue("old-idp"),
+		}),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState OrgSettingsModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := readState.ID.ValueString(), "settings"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := listStrings(t, readState.Identities), []string{"idp-1", "idp-2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("identities = %#v, want %#v", got, want)
 	}
 }
 
