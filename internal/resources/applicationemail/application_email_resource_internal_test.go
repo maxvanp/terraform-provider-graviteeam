@@ -49,6 +49,19 @@ func TestSchemaAttributes(t *testing.T) {
 	assertInt64Attribute(t, resp.Schema.Attributes, "expires_after", true, false, false)
 }
 
+func TestEmailTemplateValidatorDescriptions(t *testing.T) {
+	t.Parallel()
+
+	validator := emailTemplateValidator{}
+	description := validator.Description(context.Background())
+	if description == "" {
+		t.Fatal("expected description")
+	}
+	if got := validator.MarkdownDescription(context.Background()); got != description {
+		t.Fatalf("markdown description = %q, want %q", got, description)
+	}
+}
+
 func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	t.Parallel()
 

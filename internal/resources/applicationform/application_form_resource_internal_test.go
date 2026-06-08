@@ -45,6 +45,19 @@ func TestSchemaAttributes(t *testing.T) {
 	assertStringAttribute(t, resp.Schema.Attributes, "content", true, false, false)
 }
 
+func TestFormTemplateValidatorDescriptions(t *testing.T) {
+	t.Parallel()
+
+	validator := formTemplateValidator{}
+	description := validator.Description(context.Background())
+	if description == "" {
+		t.Fatal("expected description")
+	}
+	if got := validator.MarkdownDescription(context.Background()); got != description {
+		t.Fatalf("markdown description = %q, want %q", got, description)
+	}
+}
+
 func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	t.Parallel()
 
