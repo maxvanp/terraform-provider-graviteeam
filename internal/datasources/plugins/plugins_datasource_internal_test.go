@@ -279,6 +279,69 @@ func TestPluginsReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
 	}
 }
 
+func TestPluginsReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PluginsDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"category":      tftypes.Number,
+				"plugin_id":     tftypes.String,
+				"schema":        tftypes.Bool,
+				"documentation": tftypes.Bool,
+				"result_json":   tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"category":      tftypes.NewValue(tftypes.Number, 123),
+				"plugin_id":     tftypes.NewValue(tftypes.String, nil),
+				"schema":        tftypes.NewValue(tftypes.Bool, nil),
+				"documentation": tftypes.NewValue(tftypes.Bool, nil),
+				"result_json":   tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
+func TestPluginsReadReportsRemoteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/platform/plugins/factors", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "plugins failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &PluginsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := pluginsConfig(t, schemaResp.Schema, PluginsModel{
+		Category: types.StringValue("factors"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected remote error diagnostics")
+	}
+}
+
 func pluginsConfig(t *testing.T, schema datasourceschema.Schema, model PluginsModel) tfsdk.Config {
 	t.Helper()
 

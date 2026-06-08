@@ -184,6 +184,35 @@ func TestSelfMetadataReadValidatesKindAndReportsRemoteError(t *testing.T) {
 	}
 }
 
+func TestSelfMetadataReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &SelfMetadataDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":        tftypes.Number,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":        tftypes.NewValue(tftypes.Number, 123),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func selfMetadataConfig(schema datasourceschema.Schema, model SelfMetadataModel) tfsdk.Config {
 	return tfsdk.Config{
 		Raw: tftypes.NewValue(
