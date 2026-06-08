@@ -349,6 +349,60 @@ func TestOrgRoleReadRemovesMissingRoleAndReportsErrors(t *testing.T) {
 	}
 }
 
+func TestOrgRoleReadMapsRemoteRole(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/roles/role-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":             "role-123",
+			"name":           "platform admin",
+			"description":    "Admin role",
+			"assignableType": "organization",
+			"permissions": []interface{}{
+				"organization_role_read",
+				"organization_role_update",
+			},
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgRoleResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgRoleState(t, schemaResp.Schema, OrgRoleModel{
+		ID:             types.StringValue("role-123"),
+		Name:           types.StringValue("old"),
+		Description:    types.StringValue("old"),
+		AssignableType: types.StringValue("ORGANIZATION"),
+		Permissions:    []types.String{types.StringValue("organization_role_read")},
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState OrgRoleModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if got, want := readState.Name.ValueString(), "platform admin"; got != want {
+		t.Fatalf("name = %q, want %q", got, want)
+	}
+	if got := []string{readState.Permissions[0].ValueString(), readState.Permissions[1].ValueString()}; !reflect.DeepEqual(got, []string{"organization_role_read", "organization_role_update"}) {
+		t.Fatalf("permissions = %#v", got)
+	}
+}
+
 func TestOrgRoleReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

@@ -316,6 +316,105 @@ func TestGroupReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 	}
 }
 
+func TestGroupReadPreservesManagedRelationshipsWhenAPIOmitsThem(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        "group-name",
+			"description": "from api",
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := groupState(t, schemaResp.Schema, GroupModel{
+		ID:          types.StringValue("group-123"),
+		DomainID:    types.StringValue("domain-123"),
+		Name:        types.StringValue("old-name"),
+		Description: types.StringValue("old"),
+		Members:     []types.String{types.StringValue("user-1")},
+		Roles:       []types.String{types.StringValue("role-1")},
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState GroupModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if len(readState.Members) != 1 || readState.Members[0].ValueString() != "user-1" {
+		t.Fatalf("members = %#v", readState.Members)
+	}
+	if len(readState.Roles) != 1 || readState.Roles[0].ValueString() != "role-1" {
+		t.Fatalf("roles = %#v", readState.Roles)
+	}
+}
+
+func TestGroupReadIgnoresRemoteRelationshipsWhenStateDoesNotManageThem(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":          "group-123",
+			"name":        "group-name",
+			"description": "from api",
+			"members":     []interface{}{"remote-user"},
+			"roles":       []interface{}{"remote-role"},
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &GroupResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := groupState(t, schemaResp.Schema, GroupModel{
+		ID:       types.StringValue("group-123"),
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("old-name"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var readState GroupModel
+	if diags := readResp.State.Get(context.Background(), &readState); diags.HasError() {
+		t.Fatalf("get read state: %#v", diags)
+	}
+	if readState.Members != nil {
+		t.Fatalf("members = %#v, want nil", readState.Members)
+	}
+	if readState.Roles != nil {
+		t.Fatalf("roles = %#v, want nil", readState.Roles)
+	}
+}
+
 func TestGroupReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
