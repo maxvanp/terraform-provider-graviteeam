@@ -2,6 +2,7 @@ package orggroup
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -130,6 +131,10 @@ func (r *OrgGroupResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetOrgGroup(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization group", err.Error())
 		return
 	}

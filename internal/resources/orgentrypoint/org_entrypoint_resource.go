@@ -2,6 +2,7 @@ package orgentrypoint
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -108,6 +109,10 @@ func (r *OrgEntrypointResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetOrgEntrypoint(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization entrypoint", err.Error())
 		return
 	}
