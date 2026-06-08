@@ -302,6 +302,105 @@ func TestDomainCertificateSettingsReadRemovesMissingDomainOrFallbackAndDeleteIgn
 	}
 }
 
+func TestDomainCertificateSettingsReadReportsServerError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("domain method = %s, want GET", r.Method)
+		}
+		http.Error(w, "read failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainCertificateSettingsResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := domainCertificateSettingsState(t, schemaResp.Schema, DomainCertificateSettingsModel{
+		ID:                    types.StringValue("domain-123"),
+		DomainID:              types.StringValue("domain-123"),
+		FallbackCertificateID: types.StringValue("cert-123"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+}
+
+func TestDomainCertificateSettingsReportsWriteErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation string
+	}{
+		{name: "create", operation: "create"},
+		{name: "update", operation: "update"},
+		{name: "delete", operation: "delete"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificate-settings", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("certificate settings method = %s, want PUT", r.Method)
+				}
+				http.Error(w, tt.operation+" failed", http.StatusInternalServerError)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &DomainCertificateSettingsResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			plan := domainCertificateSettingsPlan(t, schemaResp.Schema, DomainCertificateSettingsModel{
+				DomainID:              types.StringValue("domain-123"),
+				FallbackCertificateID: types.StringValue("cert-123"),
+			})
+			state := domainCertificateSettingsState(t, schemaResp.Schema, DomainCertificateSettingsModel{
+				ID:                    types.StringValue("domain-123"),
+				DomainID:              types.StringValue("domain-123"),
+				FallbackCertificateID: types.StringValue("cert-123"),
+			})
+
+			switch tt.operation {
+			case "create":
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+				resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected create diagnostics")
+				}
+			case "update":
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			case "delete":
+				resp := &resource.DeleteResponse{}
+				resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected delete diagnostics")
+				}
+			}
+		})
+	}
+}
+
 func domainCertificateSettingsPlan(t *testing.T, schema resourceschema.Schema, model DomainCertificateSettingsModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
@@ -309,4 +408,14 @@ func domainCertificateSettingsPlan(t *testing.T, schema resourceschema.Schema, m
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func domainCertificateSettingsState(t *testing.T, schema resourceschema.Schema, model DomainCertificateSettingsModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
