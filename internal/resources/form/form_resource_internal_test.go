@@ -416,6 +416,48 @@ func TestFormDeleteIgnoresMissingForm(t *testing.T) {
 	}
 }
 
+func TestFormDeleteUsesApplicationScopedPath(t *testing.T) {
+	var deletePaths []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		deletePaths = append(deletePaths, r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := formState(t, schemaResp.Schema, FormModel{
+		ID:            types.StringValue("form-123"),
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("LOGIN"),
+		Enabled:       types.BoolValue(true),
+		Content:       types.StringValue("<html>login</html>"),
+	})
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+	if got, want := deletePaths, []string{"/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("delete paths = %#v, want %#v", got, want)
+	}
+}
+
 func TestFormCreateReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
