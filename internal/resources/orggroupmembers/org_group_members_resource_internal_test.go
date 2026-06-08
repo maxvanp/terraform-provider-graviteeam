@@ -79,6 +79,23 @@ func TestOrgGroupMembersConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestOrgGroupMembersConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgGroupMembersResource{}
+	var resp resource.ConfigureResponse
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestValidImportID(t *testing.T) {
 	t.Parallel()
 
