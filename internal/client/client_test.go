@@ -569,6 +569,167 @@ func TestClientResourceMethodsReportInvalidJSONResponses(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "create authorization engine",
+			call: func(c *Client) error {
+				_, err := c.CreateAuthorizationEngine(context.Background(), "domain-123", map[string]interface{}{"name": "engine"})
+				return err
+			},
+		},
+		{
+			name: "get authorization engine",
+			call: func(c *Client) error {
+				_, err := c.GetAuthorizationEngine(context.Background(), "domain-123", "engine-123")
+				return err
+			},
+		},
+		{
+			name: "update authorization engine",
+			call: func(c *Client) error {
+				_, err := c.UpdateAuthorizationEngine(context.Background(), "domain-123", "engine-123", map[string]interface{}{"name": "engine"})
+				return err
+			},
+		},
+		{
+			name: "create device identifier",
+			call: func(c *Client) error {
+				_, err := c.CreateDeviceIdentifier(context.Background(), "domain-123", map[string]interface{}{"name": "device"})
+				return err
+			},
+		},
+		{
+			name: "get device identifier",
+			call: func(c *Client) error {
+				_, err := c.GetDeviceIdentifier(context.Background(), "domain-123", "device-123")
+				return err
+			},
+		},
+		{
+			name: "update device identifier",
+			call: func(c *Client) error {
+				_, err := c.UpdateDeviceIdentifier(context.Background(), "domain-123", "device-123", map[string]interface{}{"name": "device"})
+				return err
+			},
+		},
+		{
+			name: "create auth device notifier",
+			call: func(c *Client) error {
+				_, err := c.CreateAuthDeviceNotifier(context.Background(), "domain-123", map[string]interface{}{"name": "notifier"})
+				return err
+			},
+		},
+		{
+			name: "get auth device notifier",
+			call: func(c *Client) error {
+				_, err := c.GetAuthDeviceNotifier(context.Background(), "domain-123", "notifier-123")
+				return err
+			},
+		},
+		{
+			name: "update auth device notifier",
+			call: func(c *Client) error {
+				_, err := c.UpdateAuthDeviceNotifier(context.Background(), "domain-123", "notifier-123", map[string]interface{}{"name": "notifier"})
+				return err
+			},
+		},
+		{
+			name: "create protected resource",
+			call: func(c *Client) error {
+				_, err := c.CreateProtectedResource(context.Background(), "domain-123", map[string]interface{}{"name": "resource"})
+				return err
+			},
+		},
+		{
+			name: "get protected resource",
+			call: func(c *Client) error {
+				_, err := c.GetProtectedResource(context.Background(), "domain-123", "resource-123", "UMA")
+				return err
+			},
+		},
+		{
+			name: "update protected resource",
+			call: func(c *Client) error {
+				_, err := c.UpdateProtectedResource(context.Background(), "domain-123", "resource-123", map[string]interface{}{"name": "resource"})
+				return err
+			},
+		},
+		{
+			name: "list protected resource secrets",
+			call: func(c *Client) error {
+				_, err := c.ListProtectedResourceSecrets(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name: "create protected resource secret",
+			call: func(c *Client) error {
+				_, err := c.CreateProtectedResourceSecret(context.Background(), "domain-123", "resource-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name: "renew protected resource secret",
+			call: func(c *Client) error {
+				_, err := c.RenewProtectedResourceSecret(context.Background(), "domain-123", "resource-123", "secret-123")
+				return err
+			},
+		},
+		{
+			name: "add protected resource member",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateProtectedResourceMember(context.Background(), "domain-123", "resource-123", map[string]interface{}{"id": "member-123"})
+				return err
+			},
+		},
+		{
+			name: "create i18n dictionary",
+			call: func(c *Client) error {
+				_, err := c.CreateI18nDictionary(context.Background(), "domain-123", map[string]interface{}{"name": "dictionary"})
+				return err
+			},
+		},
+		{
+			name: "get i18n dictionary",
+			call: func(c *Client) error {
+				_, err := c.GetI18nDictionary(context.Background(), "domain-123", "dictionary-123")
+				return err
+			},
+		},
+		{
+			name: "update i18n dictionary",
+			call: func(c *Client) error {
+				_, err := c.UpdateI18nDictionary(context.Background(), "domain-123", "dictionary-123", map[string]interface{}{"name": "dictionary"})
+				return err
+			},
+		},
+		{
+			name: "replace i18n dictionary entries",
+			call: func(c *Client) error {
+				_, err := c.ReplaceI18nDictionaryEntries(context.Background(), "domain-123", "dictionary-123", map[string]string{"hello": "world"})
+				return err
+			},
+		},
+		{
+			name: "create alert notifier",
+			call: func(c *Client) error {
+				_, err := c.CreateAlertNotifier(context.Background(), "domain-123", map[string]interface{}{"name": "notifier"})
+				return err
+			},
+		},
+		{
+			name: "get alert notifier",
+			call: func(c *Client) error {
+				_, err := c.GetAlertNotifier(context.Background(), "domain-123", "notifier-123")
+				return err
+			},
+		},
+		{
+			name: "patch alert notifier",
+			call: func(c *Client) error {
+				_, err := c.PatchAlertNotifier(context.Background(), "domain-123", "notifier-123", map[string]interface{}{"name": "notifier"})
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
