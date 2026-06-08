@@ -493,6 +493,38 @@ func TestOrgMemberImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestOrgMemberImportStateSetsMemberTuple(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgMemberResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgMemberState(t, schemaResp.Schema, OrgMemberModel{
+		ID:         types.StringValue("placeholder"),
+		MemberID:   types.StringValue("placeholder"),
+		MemberType: types.StringValue("USER"),
+		RoleID:     types.StringValue("placeholder"),
+	})}
+
+	(&OrgMemberResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "member-123/group/role-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported OrgMemberModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.MemberID.ValueString(), "member-123"; got != want {
+		t.Fatalf("member id = %q, want %q", got, want)
+	}
+	if got, want := imported.MemberType.ValueString(), "GROUP"; got != want {
+		t.Fatalf("member type = %q, want %q", got, want)
+	}
+	if got, want := imported.RoleID.ValueString(), "role-123"; got != want {
+		t.Fatalf("role id = %q, want %q", got, want)
+	}
+}
+
 func orgMemberPlan(t *testing.T, schema resourceschema.Schema, model OrgMemberModel) tfsdk.Plan {
 	t.Helper()
 

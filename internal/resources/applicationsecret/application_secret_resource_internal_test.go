@@ -424,6 +424,39 @@ func TestApplicationSecretImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestApplicationSecretImportStateSetsDomainApplicationAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewApplicationSecretResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: applicationSecretState(t, schemaResp.Schema, ApplicationSecretModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		ApplicationID: types.StringValue("placeholder"),
+		Name:          types.StringValue("client secret"),
+		Secret:        types.StringValue("preserved-secret"),
+	})}
+
+	(&ApplicationSecretResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123/secret-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported ApplicationSecretModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ApplicationID.ValueString(), "app-123"; got != want {
+		t.Fatalf("application id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "secret-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func applicationSecretPlan(t *testing.T, schema resourceschema.Schema, model ApplicationSecretModel) tfsdk.Plan {
 	t.Helper()
 

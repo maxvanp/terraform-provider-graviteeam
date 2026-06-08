@@ -557,6 +557,32 @@ func domainResponse(id string, body map[string]interface{}) map[string]interface
 	return result
 }
 
+func TestDomainImportStateSetsID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewDomainResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: domainState(t, schemaResp.Schema, DomainModel{
+		ID:          types.StringValue("placeholder"),
+		Name:        types.StringValue("domain"),
+		Enabled:     types.BoolValue(true),
+		DataPlaneID: types.StringValue("default"),
+	})}
+
+	(&DomainResource{}).ImportState(context.Background(), resource.ImportStateRequest{ID: "domain-123"}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported DomainModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func domainState(t *testing.T, schema resourceschema.Schema, model DomainModel) tfsdk.State {
 	t.Helper()
 

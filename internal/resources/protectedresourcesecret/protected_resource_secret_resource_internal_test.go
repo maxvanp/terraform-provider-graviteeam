@@ -535,6 +535,39 @@ func TestProtectedResourceSecretImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestProtectedResourceSecretImportStateSetsDomainResourceAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewProtectedResourceSecretResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: protectedResourceSecretState(t, schemaResp.Schema, ProtectedResourceSecretModel{
+		ID:                  types.StringValue("placeholder"),
+		DomainID:            types.StringValue("placeholder"),
+		ProtectedResourceID: types.StringValue("placeholder"),
+		Name:                types.StringValue("client-secret"),
+		Secret:              types.StringValue("preserved-secret"),
+	})}
+
+	(&ProtectedResourceSecretResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/resource-123/secret-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported ProtectedResourceSecretModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ProtectedResourceID.ValueString(), "resource-123"; got != want {
+		t.Fatalf("protected resource id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "secret-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func protectedResourceSecretPlan(t *testing.T, schema resourceschema.Schema, model ProtectedResourceSecretModel) tfsdk.Plan {
 	t.Helper()
 

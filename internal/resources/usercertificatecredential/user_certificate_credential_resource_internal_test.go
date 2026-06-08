@@ -412,6 +412,38 @@ func TestUserCertificateCredentialImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestUserCertificateCredentialImportStateSetsDomainUserAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewUserCertificateCredentialResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: userCertificateCredentialState(t, schemaResp.Schema, UserCertificateCredentialModel{
+		ID:             types.StringValue("placeholder"),
+		DomainID:       types.StringValue("placeholder"),
+		UserID:         types.StringValue("placeholder"),
+		CertificatePEM: types.StringValue("pem"),
+	})}
+
+	(&UserCertificateCredentialResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/user-123/credential-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported UserCertificateCredentialModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.UserID.ValueString(), "user-123"; got != want {
+		t.Fatalf("user id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "credential-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func certificateCredentialResponse(id, certificatePEM string) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                      id,
