@@ -164,6 +164,9 @@ func (r *ApplicationFlowResource) Delete(ctx context.Context, req resource.Delet
 	// Reset flows to empty list (flows always exist, we just clear them)
 	_, err := r.client.UpdateApplicationFlows(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), []interface{}{})
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting application flows", err.Error())
 	}
 }

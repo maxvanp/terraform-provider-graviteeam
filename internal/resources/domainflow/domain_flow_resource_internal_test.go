@@ -338,6 +338,41 @@ func TestDomainFlowCRUDReportsRemoteErrors(t *testing.T) {
 	}
 }
 
+func TestDomainFlowDeleteIgnoresMissingDomain(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/flows", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainFlowResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &DomainFlowModel{
+		DomainID: types.StringValue("domain-123"),
+		Flows:    types.StringValue(`[]`),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func TestDomainFlowCreateAndUpdateRejectInvalidFlowsJSON(t *testing.T) {
 	t.Parallel()
 

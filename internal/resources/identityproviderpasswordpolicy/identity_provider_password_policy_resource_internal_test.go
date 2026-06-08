@@ -64,6 +64,17 @@ func TestIdentityProviderPasswordPolicyConfigureRejectsUnexpectedProviderData(t 
 	}
 }
 
+func TestIdentityProviderPasswordPolicyConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&IdentityProviderPasswordPolicyResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestParseAssignmentImportID(t *testing.T) {
 	t.Parallel()
 
@@ -450,6 +461,38 @@ func TestIdentityProviderPasswordPolicyImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestIdentityProviderPasswordPolicyImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&IdentityProviderPasswordPolicyResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: identityProviderPasswordPolicyState(t, schemaResp.Schema, IdentityProviderPasswordPolicyModel{
+		ID:                 types.StringValue("old-domain/old-idp"),
+		DomainID:           types.StringValue("old-domain"),
+		IdentityProviderID: types.StringValue("old-idp"),
+		PasswordPolicyID:   types.StringValue("policy-123"),
+	})}
+
+	(&IdentityProviderPasswordPolicyResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/idp-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state IdentityProviderPasswordPolicyModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.ID.ValueString(), "domain-123/idp-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.IdentityProviderID.ValueString(), "idp-123"; got != want {
+		t.Fatalf("identity_provider_id = %q, want %q", got, want)
 	}
 }
 

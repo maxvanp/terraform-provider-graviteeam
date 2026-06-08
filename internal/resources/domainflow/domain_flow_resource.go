@@ -156,6 +156,9 @@ func (r *DomainFlowResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	_, err := r.client.UpdateDomainFlows(ctx, state.DomainID.ValueString(), []interface{}{})
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting domain flows", err.Error())
 	}
 }
