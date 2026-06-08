@@ -83,6 +83,23 @@ func TestFormConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestFormConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &FormResource{}
+	var resp resource.ConfigureResponse
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestBuildUpdateBodyPreservesCurrentAssets(t *testing.T) {
 	t.Parallel()
 

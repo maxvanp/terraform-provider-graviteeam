@@ -87,6 +87,23 @@ func TestConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationEmailResource{}
+	var resp resource.ConfigureResponse
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestBuildBodyIncludesConfiguredFromName(t *testing.T) {
 	model := ApplicationEmailModel{
 		Enabled:      types.BoolValue(true),
