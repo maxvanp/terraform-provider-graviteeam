@@ -490,29 +490,37 @@ func TestDomainMemberDeleteReportsInvalidStateData(t *testing.T) {
 	resourceUnderTest := &DomainMemberResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":          tftypes.String,
-			"domain_id":   tftypes.Number,
-			"member_id":   tftypes.String,
-			"member_type": tftypes.String,
-			"role_id":     tftypes.String,
-		}},
-		map[string]tftypes.Value{
-			"id":          tftypes.NewValue(tftypes.String, "membership-123"),
-			"domain_id":   tftypes.NewValue(tftypes.Number, 123),
-			"member_id":   tftypes.NewValue(tftypes.String, "user-123"),
-			"member_type": tftypes.NewValue(tftypes.String, "USER"),
-			"role_id":     tftypes.NewValue(tftypes.String, "role-123"),
-		},
-	)
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
-		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidDomainMemberRaw()},
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
+	}
+}
+
+func TestDomainMemberCreateAndReadReportInvalidRequestData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainMemberResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: invalidDomainMemberRaw()},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: invalidDomainMemberRaw()},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
 	}
 }
 
@@ -618,6 +626,25 @@ func domainMemberState(t *testing.T, schema resourceschema.Schema, model DomainM
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func invalidDomainMemberRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":          tftypes.String,
+			"domain_id":   tftypes.Number,
+			"member_id":   tftypes.String,
+			"member_type": tftypes.String,
+			"role_id":     tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":          tftypes.NewValue(tftypes.String, "membership-123"),
+			"domain_id":   tftypes.NewValue(tftypes.Number, 123),
+			"member_id":   tftypes.NewValue(tftypes.String, "user-123"),
+			"member_type": tftypes.NewValue(tftypes.String, "USER"),
+			"role_id":     tftypes.NewValue(tftypes.String, "role-123"),
+		},
+	)
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
