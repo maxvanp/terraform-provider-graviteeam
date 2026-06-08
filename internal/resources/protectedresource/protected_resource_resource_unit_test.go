@@ -13,6 +13,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -614,6 +615,80 @@ func TestProtectedResourceCRUDReportsRemoteErrors(t *testing.T) {
 				t.Fatal("expected diagnostics")
 			}
 		})
+	}
+}
+
+func TestProtectedResourceCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ProtectedResourceResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	stringSetType := tftypes.Set{ElementType: tftypes.String}
+	featureType := tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"key":         tftypes.String,
+		"type":        tftypes.String,
+		"description": tftypes.String,
+		"scopes":      stringSetType,
+	}}}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                   tftypes.String,
+			"domain_id":            tftypes.Number,
+			"name":                 tftypes.String,
+			"description":          tftypes.String,
+			"type":                 tftypes.String,
+			"resource_identifiers": stringSetType,
+			"settings_json":        tftypes.String,
+			"client_id":            tftypes.String,
+			"client_secret":        tftypes.String,
+			"feature":              featureType,
+		}},
+		map[string]tftypes.Value{
+			"id":                   tftypes.NewValue(tftypes.String, "resource-123"),
+			"domain_id":            tftypes.NewValue(tftypes.Number, 123),
+			"name":                 tftypes.NewValue(tftypes.String, "mcp"),
+			"description":          tftypes.NewValue(tftypes.String, nil),
+			"type":                 tftypes.NewValue(tftypes.String, "MCP_SERVER"),
+			"resource_identifiers": tftypes.NewValue(stringSetType, []tftypes.Value{tftypes.NewValue(tftypes.String, "https://api.example.test/mcp")}),
+			"settings_json":        tftypes.NewValue(tftypes.String, nil),
+			"client_id":            tftypes.NewValue(tftypes.String, "client-123"),
+			"client_secret":        tftypes.NewValue(tftypes.String, "secret-123"),
+			"feature":              tftypes.NewValue(featureType, nil),
+		},
+	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 
