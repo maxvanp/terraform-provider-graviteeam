@@ -2,12 +2,19 @@ package metadata
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestPlatformMetadataMetadata(t *testing.T) {
@@ -141,6 +148,254 @@ func TestMetadataErrorMessage(t *testing.T) {
 	if err.Error() != "missing value" || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("error = %q", err.Error())
 	}
+}
+
+func TestPlatformMetadataReadResolvesSupportedKinds(t *testing.T) {
+	var paths []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/platform/installation", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		_, _ = w.Write([]byte(`{"version":"4.11.4"}`))
+	})
+	mux.HandleFunc("/management/platform/roles/role%2Fid%20with%20spaces", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		paths = append(paths, r.URL.EscapedPath())
+		_, _ = w.Write([]byte(`{"id":"role/id with spaces"}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &PlatformMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	cases := []struct {
+		name  string
+		model PlatformMetadataModel
+		want  string
+	}{
+		{
+			name: "installation",
+			model: PlatformMetadataModel{
+				Kind: types.StringValue("installation"),
+			},
+			want: "{\n  \"version\": \"4.11.4\"\n}",
+		},
+		{
+			name: "role",
+			model: PlatformMetadataModel{
+				Kind:   types.StringValue("role"),
+				RoleID: types.StringValue("role/id with spaces"),
+			},
+			want: "{\n  \"id\": \"role/id with spaces\"\n}",
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			config := platformMetadataConfig(schemaResp.Schema, tt.model)
+			readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+
+			dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+			}
+			var state PlatformMetadataModel
+			if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+				t.Fatalf("get state: %#v", diags)
+			}
+			if state.ResultJSON.ValueString() != tt.want {
+				t.Fatalf("result_json = %q, want %q", state.ResultJSON.ValueString(), tt.want)
+			}
+		})
+	}
+
+	wantPaths := []string{
+		"/management/platform/installation",
+		"/management/platform/roles/role%2Fid%20with%20spaces",
+	}
+	if strings.Join(paths, "\n") != strings.Join(wantPaths, "\n") {
+		t.Fatalf("paths = %#v, want %#v", paths, wantPaths)
+	}
+}
+
+func TestPlatformMetadataReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
+	dataSource := &PlatformMetadataDataSource{}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+
+	cases := []PlatformMetadataModel{
+		{Kind: types.StringValue("unknown")},
+		{Kind: types.StringValue("role")},
+	}
+
+	for _, model := range cases {
+		config := platformMetadataConfig(schemaResp.Schema, model)
+		readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+		if !readResp.Diagnostics.HasError() {
+			t.Fatalf("expected diagnostics for model %#v", model)
+		}
+	}
+}
+
+func TestPlatformMetadataReadReportsRemoteError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/platform/installation", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "platform metadata failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &PlatformMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := platformMetadataConfig(schemaResp.Schema, PlatformMetadataModel{
+		Kind: types.StringValue("installation"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func TestEnvironmentMetadataReadFormatsRemoteResult(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/data-planes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		_, _ = w.Write([]byte(`[{"id":"default"}]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &EnvironmentMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := environmentMetadataConfig(schemaResp.Schema, EnvironmentMetadataModel{
+		Kind: types.StringValue("data_planes"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	var state EnvironmentMetadataModel
+	if diags := readResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	want := "[\n  {\n    \"id\": \"default\"\n  }\n]"
+	if state.ResultJSON.ValueString() != want {
+		t.Fatalf("result_json = %q, want %q", state.ResultJSON.ValueString(), want)
+	}
+}
+
+func TestEnvironmentMetadataReadValidatesKindAndReportsRemoteError(t *testing.T) {
+	dataSource := &EnvironmentMetadataDataSource{}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := environmentMetadataConfig(schemaResp.Schema, EnvironmentMetadataModel{
+		Kind: types.StringValue("unknown"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected unsupported kind diagnostics")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/data-sources", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "environment metadata failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	remoteDataSource := &EnvironmentMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	config = environmentMetadataConfig(schemaResp.Schema, EnvironmentMetadataModel{
+		Kind: types.StringValue("data_sources"),
+	})
+	readResp = &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	remoteDataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func platformMetadataConfig(schema datasourceschema.Schema, model PlatformMetadataModel) tfsdk.Config {
+	return tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":        tftypes.String,
+				"role_id":     tftypes.String,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":        tftypes.NewValue(tftypes.String, model.Kind.ValueString()),
+				"role_id":     metadataStringConfigValue(model.RoleID),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
+	}
+}
+
+func environmentMetadataConfig(schema datasourceschema.Schema, model EnvironmentMetadataModel) tfsdk.Config {
+	return tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":        tftypes.String,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":        tftypes.NewValue(tftypes.String, model.Kind.ValueString()),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
+	}
+}
+
+func metadataStringConfigValue(value types.String) tftypes.Value {
+	if value.IsNull() || value.IsUnknown() {
+		return tftypes.NewValue(tftypes.String, nil)
+	}
+	return tftypes.NewValue(tftypes.String, value.ValueString())
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {

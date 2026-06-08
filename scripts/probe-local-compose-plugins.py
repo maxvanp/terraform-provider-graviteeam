@@ -47,6 +47,20 @@ def token(base_url: str, client_id: str, client_secret: str) -> str:
     return payload["access_token"]
 
 
+class LocalComposeUnavailable(RuntimeError):
+    """Raised when the stock local compose API is not reachable."""
+
+
+def token_or_unavailable(base_url: str, client_id: str, client_secret: str) -> str:
+    try:
+        return token(base_url, client_id, client_secret)
+    except urllib.error.URLError as err:
+        reason = getattr(err, "reason", err)
+        raise LocalComposeUnavailable(f"{base_url}: {reason}") from err
+    except TimeoutError as err:
+        raise LocalComposeUnavailable(f"{base_url}: {err}") from err
+
+
 def request(base_url: str, access_token: str, path: str) -> tuple[int | None, Any]:
     req = urllib.request.Request(
         base_url + path,
@@ -126,7 +140,12 @@ def main() -> int:
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
-    access_token = token(base_url, args.client_id, args.client_secret)
+    try:
+        access_token = token_or_unavailable(base_url, args.client_id, args.client_secret)
+    except LocalComposeUnavailable as err:
+        print("# Local Compose Plugin Probe")
+        print(f"- skipped: local Gravitee AM Management API is unavailable ({err})")
+        return 0
 
     all_probes: list[PluginProbe] = []
     for category in args.category:
