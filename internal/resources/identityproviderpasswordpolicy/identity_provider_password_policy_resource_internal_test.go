@@ -322,6 +322,137 @@ func TestIdentityProviderPasswordPolicyReadRemovesMissingRelationshipAndDeleteIg
 	}
 }
 
+func TestIdentityProviderPasswordPolicyReportsLifecycleErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		failingAction string
+		run           func(*IdentityProviderPasswordPolicyResource, resourceschema.Schema)
+	}{
+		{
+			name:          "create assign error",
+			failingAction: "assign",
+			run: func(resourceUnderTest *IdentityProviderPasswordPolicyResource, schema resourceschema.Schema) {
+				plan := identityProviderPasswordPolicyPlan(t, schema, IdentityProviderPasswordPolicyModel{
+					DomainID:           types.StringValue("domain-123"),
+					IdentityProviderID: types.StringValue("idp-123"),
+					PasswordPolicyID:   types.StringValue("policy-create"),
+				})
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected create diagnostics")
+				}
+			},
+		},
+		{
+			name:          "read server error",
+			failingAction: "read",
+			run: func(resourceUnderTest *IdentityProviderPasswordPolicyResource, schema resourceschema.Schema) {
+				state := identityProviderPasswordPolicyState(t, schema, IdentityProviderPasswordPolicyModel{
+					ID:                 types.StringValue("domain-123/idp-123"),
+					DomainID:           types.StringValue("domain-123"),
+					IdentityProviderID: types.StringValue("idp-123"),
+					PasswordPolicyID:   types.StringValue("policy-123"),
+				})
+				resp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected read diagnostics")
+				}
+			},
+		},
+		{
+			name:          "update assign error",
+			failingAction: "assign",
+			run: func(resourceUnderTest *IdentityProviderPasswordPolicyResource, schema resourceschema.Schema) {
+				plan := identityProviderPasswordPolicyPlan(t, schema, IdentityProviderPasswordPolicyModel{
+					DomainID:           types.StringValue("domain-123"),
+					IdentityProviderID: types.StringValue("idp-123"),
+					PasswordPolicyID:   types.StringValue("policy-update"),
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:          "delete clear error",
+			failingAction: "clear",
+			run: func(resourceUnderTest *IdentityProviderPasswordPolicyResource, schema resourceschema.Schema) {
+				state := identityProviderPasswordPolicyState(t, schema, IdentityProviderPasswordPolicyModel{
+					ID:                 types.StringValue("domain-123/idp-123"),
+					DomainID:           types.StringValue("domain-123"),
+					IdentityProviderID: types.StringValue("idp-123"),
+					PasswordPolicyID:   types.StringValue("policy-123"),
+				})
+				resp := &resource.DeleteResponse{}
+				resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected delete diagnostics")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			putCount := 0
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("identity provider method = %s, want GET", r.Method)
+				}
+				if tt.failingAction == "read" {
+					http.Error(w, "read failed", http.StatusInternalServerError)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "idp-123", "passwordPolicy": "policy-123"})
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/identities/idp-123/password-policy", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("password policy method = %s, want PUT", r.Method)
+				}
+				putCount++
+				if tt.failingAction == "assign" || tt.failingAction == "clear" {
+					http.Error(w, "assign failed", http.StatusInternalServerError)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"updated": true})
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &IdentityProviderPasswordPolicyResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			tt.run(resourceUnderTest, schemaResp.Schema)
+			if tt.failingAction != "read" && putCount != 1 {
+				t.Fatalf("PUT count = %d, want 1", putCount)
+			}
+		})
+	}
+}
+
+func TestIdentityProviderPasswordPolicyImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&IdentityProviderPasswordPolicyResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/idp/extra",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func identityProviderPasswordPolicyPlan(t *testing.T, schema resourceschema.Schema, model IdentityProviderPasswordPolicyModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
@@ -329,4 +460,13 @@ func identityProviderPasswordPolicyPlan(t *testing.T, schema resourceschema.Sche
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func identityProviderPasswordPolicyState(t *testing.T, schema resourceschema.Schema, model IdentityProviderPasswordPolicyModel) tfsdk.State {
+	t.Helper()
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
