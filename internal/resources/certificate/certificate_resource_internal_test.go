@@ -271,6 +271,138 @@ func TestCertificateCRUDPreservesSecretConfiguration(t *testing.T) {
 	}
 }
 
+func TestCertificateReadRemovesMissingCertificateAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{name: "missing certificate", statusCode: http.StatusNotFound, wantRemove: true},
+		{name: "server error", statusCode: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates/cert-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &CertificateResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := certificateState(t, schemaResp.Schema, CertificateModel{
+				ID:            types.StringValue("cert-123"),
+				DomainID:      types.StringValue("domain-123"),
+				Name:          types.StringValue("certificate"),
+				Type:          types.StringValue("pkcs12-am-certificate"),
+				Configuration: types.StringValue(`{"storepass":"real-secret"}`),
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing certificate to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestCertificateReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/certificates/cert-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			http.Error(w, "update failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &CertificateResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := certificatePlan(t, schemaResp.Schema, CertificateModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("certificate"),
+		Type:          types.StringValue("pkcs12-am-certificate"),
+		Configuration: types.StringValue(`{"storepass":"secret"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := certificateState(t, schemaResp.Schema, CertificateModel{
+		ID:            types.StringValue("cert-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("certificate"),
+		Type:          types.StringValue("pkcs12-am-certificate"),
+		Configuration: types.StringValue(`{"storepass":"secret"}`),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestCertificateImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&CertificateResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func decodeCertificateBody(t *testing.T, r *http.Request) map[string]interface{} {
 	t.Helper()
 	var body map[string]interface{}
@@ -287,4 +419,13 @@ func certificatePlan(t *testing.T, schema resourceschema.Schema, model Certifica
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func certificateState(t *testing.T, schema resourceschema.Schema, model CertificateModel) tfsdk.State {
+	t.Helper()
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
