@@ -46,6 +46,35 @@ func TestAuditsNewMetadataAndConfigure(t *testing.T) {
 	}
 }
 
+func TestAuditsConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.ConfigureResponse
+	(&AuditsDataSource{}).Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
+
+func TestAuditsConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AuditsDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestAuditSizeUsesDefaultAndExplicitValues(t *testing.T) {
 	t.Parallel()
 

@@ -54,6 +54,40 @@ func TestPlatformMetadataConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestPlatformMetadataConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PlatformMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestPlatformMetadataConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PlatformMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestEnvironmentMetadataMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -87,6 +121,40 @@ func TestEnvironmentMetadataConfigureRejectsUnexpectedProviderData(t *testing.T)
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
+
+func TestEnvironmentMetadataConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &EnvironmentMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestEnvironmentMetadataConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &EnvironmentMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
 	}
 }
 

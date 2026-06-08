@@ -61,6 +61,40 @@ func TestCollectionDataSourceConfigureRejectsUnexpectedProviderData(t *testing.T
 	}
 }
 
+func TestCollectionDataSourceConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	ds := &collectionDataSource{}
+	var resp datasource.ConfigureResponse
+
+	ds.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if ds.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestCollectionDataSourceConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	ds := &collectionDataSource{}
+	var resp datasource.ConfigureResponse
+
+	ds.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if ds.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestUserCollectionWrapperMetadata(t *testing.T) {
 	t.Parallel()
 

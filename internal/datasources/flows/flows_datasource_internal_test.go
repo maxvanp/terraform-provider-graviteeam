@@ -57,6 +57,40 @@ func TestFlowsConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestFlowsConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	ds := &FlowsDataSource{}
+	var resp datasource.ConfigureResponse
+
+	ds.Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if ds.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestFlowsConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	ds := &FlowsDataSource{}
+	var resp datasource.ConfigureResponse
+
+	ds.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if ds.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestFormatFlowsProducesStableIndentedJSON(t *testing.T) {
 	t.Parallel()
 

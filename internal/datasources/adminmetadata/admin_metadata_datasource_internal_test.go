@@ -44,6 +44,35 @@ func TestAdminMetadataNewMetadataAndConfigure(t *testing.T) {
 	}
 }
 
+func TestAdminMetadataConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.ConfigureResponse
+	(&AdminMetadataDataSource{}).Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
+
+func TestAdminMetadataConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AdminMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestAdminMetadataReadResolvesEnvironmentAndOrganizationScopes(t *testing.T) {
 	var paths []string
 

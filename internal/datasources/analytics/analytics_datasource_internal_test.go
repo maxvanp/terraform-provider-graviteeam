@@ -45,6 +45,35 @@ func TestAnalyticsNewMetadataAndConfigure(t *testing.T) {
 	}
 }
 
+func TestAnalyticsConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.ConfigureResponse
+	(&AnalyticsDataSource{}).Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
+
+func TestAnalyticsConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AnalyticsDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestBuildAnalyticsParamsUsesExplicitValues(t *testing.T) {
 	t.Parallel()
 

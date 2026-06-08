@@ -43,6 +43,35 @@ func TestPermissionsMetadataNewMetadataAndConfigure(t *testing.T) {
 	}
 }
 
+func TestPermissionsMetadataConfigureRejectsUnexpectedProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.ConfigureResponse
+	(&PermissionsMetadataDataSource{}).Configure(context.Background(), datasource.ConfigureRequest{
+		ProviderData: "not a client",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unexpected provider data")
+	}
+}
+
+func TestPermissionsMetadataConfigureIgnoresNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PermissionsMetadataDataSource{}
+	var resp datasource.ConfigureResponse
+
+	dataSource.Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if dataSource.client != nil {
+		t.Fatal("expected nil provider data to leave client unset")
+	}
+}
+
 func TestPermissionsMetadataReadResolvesSupportedKinds(t *testing.T) {
 	var paths []string
 
