@@ -56,6 +56,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp datasource.ConfigureResponse
+	(&DomainMetadataDataSource{}).Configure(context.Background(), datasource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestConfigureAcceptsClient(t *testing.T) {
 	t.Parallel()
 

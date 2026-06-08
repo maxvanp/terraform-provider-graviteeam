@@ -121,6 +121,30 @@ func TestProviderConfigureBuildsClientWithConfiguredScope(t *testing.T) {
 	}
 }
 
+func TestProviderConfigureStopsOnInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	p := New("test")()
+	schemaResp := &fwprovider.SchemaResponse{}
+	p.Schema(ctx, fwprovider.SchemaRequest{}, schemaResp)
+	resp := &fwprovider.ConfigureResponse{}
+
+	p.Configure(ctx, fwprovider.ConfigureRequest{
+		Config: tfsdk.Config{
+			Raw:    tftypes.NewValue(tftypes.String, "not an object"),
+			Schema: schemaResp.Schema,
+		},
+	}, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected configure diagnostics")
+	}
+	if resp.ResourceData != nil || resp.DataSourceData != nil {
+		t.Fatalf("expected no configured client, got resource=%T datasource=%T", resp.ResourceData, resp.DataSourceData)
+	}
+}
+
 func TestProviderRegistersExpectedResourceTypeNames(t *testing.T) {
 	t.Parallel()
 
