@@ -2,6 +2,7 @@ package orgreporter
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -111,6 +112,10 @@ func (r *OrgReporterResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetOrgReporter(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization reporter", err.Error())
 		return
 	}

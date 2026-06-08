@@ -142,6 +142,10 @@ func (r *ExtensionGrantResource) Read(ctx context.Context, req resource.ReadRequ
 
 	result, err := r.client.GetExtensionGrant(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading extension grant", err.Error())
 		return
 	}
