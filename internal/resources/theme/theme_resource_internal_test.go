@@ -74,6 +74,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ThemeResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBody(t *testing.T) {
 	t.Parallel()
 
@@ -495,6 +506,39 @@ func TestThemeReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestThemeDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes/theme-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ThemeResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := themeState(t, schemaResp.Schema, ThemeModel{
+		ID:       types.StringValue("theme-123"),
+		DomainID: types.StringValue("domain-123"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func TestThemeUpdateReportsPreReadError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -540,6 +584,34 @@ func TestThemeImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestThemeImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&ThemeResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: themeState(t, schemaResp.Schema, ThemeModel{
+		ID:       types.StringValue("old-theme"),
+		DomainID: types.StringValue("old-domain"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})}
+
+	(&ThemeResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/theme-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state ThemeModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ID.ValueString(), "theme-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

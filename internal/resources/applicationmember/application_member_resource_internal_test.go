@@ -57,6 +57,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ApplicationMemberResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestMatchesMembershipByID(t *testing.T) {
 	model := ApplicationMemberModel{
 		ID:         types.StringValue("membership-id"),
@@ -416,6 +427,46 @@ func TestApplicationMemberImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestApplicationMemberImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&ApplicationMemberResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: applicationMemberState(t, schemaResp.Schema, ApplicationMemberModel{
+		ID:            types.StringValue("membership-123"),
+		DomainID:      types.StringValue("old-domain"),
+		ApplicationID: types.StringValue("old-app"),
+		MemberID:      types.StringValue("old-member"),
+		MemberType:    types.StringValue("USER"),
+		RoleID:        types.StringValue("old-role"),
+	})}
+
+	(&ApplicationMemberResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123/user-123/group/role-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state ApplicationMemberModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ApplicationID.ValueString(), "app-123"; got != want {
+		t.Fatalf("application_id = %q, want %q", got, want)
+	}
+	if got, want := state.MemberID.ValueString(), "user-123"; got != want {
+		t.Fatalf("member_id = %q, want %q", got, want)
+	}
+	if got, want := state.MemberType.ValueString(), "GROUP"; got != want {
+		t.Fatalf("member_type = %q, want %q", got, want)
+	}
+	if got, want := state.RoleID.ValueString(), "role-123"; got != want {
+		t.Fatalf("role_id = %q, want %q", got, want)
 	}
 }
 

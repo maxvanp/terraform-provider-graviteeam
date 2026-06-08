@@ -73,6 +73,17 @@ func TestOrgUserTokenConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestOrgUserTokenConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgUserTokenResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestOrgUserTokenUpdateIsUnsupported(t *testing.T) {
 	t.Parallel()
 
@@ -387,6 +398,39 @@ func TestOrgUserTokenImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestOrgUserTokenImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&OrgUserTokenResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgUserTokenState(t, schemaResp.Schema, OrgUserTokenModel{
+		ID:      types.StringValue("old-user/old-token"),
+		UserID:  types.StringValue("old-user"),
+		TokenID: types.StringValue("old-token"),
+		Name:    types.StringValue("automation-token"),
+		Token:   types.StringValue("secret-token-value"),
+	})}
+
+	(&OrgUserTokenResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "user-123/token-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state OrgUserTokenModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.ID.ValueString(), "user-123/token-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := state.UserID.ValueString(), "user-123"; got != want {
+		t.Fatalf("user_id = %q, want %q", got, want)
+	}
+	if got, want := state.TokenID.ValueString(), "token-123"; got != want {
+		t.Fatalf("token_id = %q, want %q", got, want)
 	}
 }
 
