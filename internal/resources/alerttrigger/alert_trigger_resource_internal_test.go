@@ -13,6 +13,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -546,6 +547,38 @@ func TestAlertTriggerDeleteIgnores404(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
+func TestAlertTriggerDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AlertTriggerResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                 tftypes.String,
+			"domain_id":          tftypes.Number,
+			"type":               tftypes.String,
+			"enabled":            tftypes.Bool,
+			"alert_notifier_ids": tftypes.Set{ElementType: tftypes.String},
+		}},
+		map[string]tftypes.Value{
+			"id":                 tftypes.NewValue(tftypes.String, "domain-123/TOO_MANY_LOGIN_FAILURES"),
+			"domain_id":          tftypes.NewValue(tftypes.Number, 123),
+			"type":               tftypes.NewValue(tftypes.String, "TOO_MANY_LOGIN_FAILURES"),
+			"enabled":            tftypes.NewValue(tftypes.Bool, true),
+			"alert_notifier_ids": tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "notifier-1")}),
+		},
+	)
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

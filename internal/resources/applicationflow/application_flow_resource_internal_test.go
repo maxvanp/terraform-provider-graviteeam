@@ -419,7 +419,7 @@ func TestApplicationFlowCreateAndUpdateRejectInvalidFlowsJSON(t *testing.T) {
 	}
 }
 
-func TestApplicationFlowCreateReadAndUpdateReportInvalidStateData(t *testing.T) {
+func TestApplicationFlowCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 	resourceUnderTest := &ApplicationFlowResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
@@ -459,6 +459,14 @@ func TestApplicationFlowCreateReadAndUpdateReportInvalidStateData(t *testing.T) 
 	}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 

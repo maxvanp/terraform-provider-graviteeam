@@ -416,7 +416,7 @@ func TestDomainFlowCreateAndUpdateRejectInvalidFlowsJSON(t *testing.T) {
 	}
 }
 
-func TestDomainFlowCreateReadAndUpdateReportInvalidStateData(t *testing.T) {
+func TestDomainFlowCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 	resourceUnderTest := &DomainFlowResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
@@ -454,6 +454,14 @@ func TestDomainFlowCreateReadAndUpdateReportInvalidStateData(t *testing.T) {
 	}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 
