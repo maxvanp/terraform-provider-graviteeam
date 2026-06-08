@@ -465,6 +465,17 @@ func TestFormUpdateReportsRemoteUpdateError(t *testing.T) {
 	}
 }
 
+func TestFormImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&FormResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "invalid",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func formPlan(t *testing.T, schema resourceschema.Schema, model FormModel) tfsdk.Plan {
 	t.Helper()
 

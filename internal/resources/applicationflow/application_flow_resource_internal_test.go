@@ -339,6 +339,17 @@ func TestApplicationFlowCRUDReportsRemoteErrors(t *testing.T) {
 	}
 }
 
+func TestApplicationFlowImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&ApplicationFlowResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func applicationFlowPlan(t *testing.T, schema resourceschema.Schema, model ApplicationFlowModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
