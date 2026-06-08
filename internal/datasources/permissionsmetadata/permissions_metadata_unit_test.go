@@ -136,10 +136,7 @@ func TestPermissionsMetadataKindListIsSorted(t *testing.T) {
 func TestFormatJSONRawString(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSON([]byte("APPLICATION[READ]"))
-	if err != nil {
-		t.Fatalf("formatJSON returned error: %v", err)
-	}
+	got := formatJSON([]byte("APPLICATION[READ]"))
 	if got != `"APPLICATION[READ]"` {
 		t.Fatalf("formatJSON() = %q, want %q", got, `"APPLICATION[READ]"`)
 	}
@@ -148,10 +145,7 @@ func TestFormatJSONRawString(t *testing.T) {
 func TestFormatJSONEmptyBody(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSON(nil)
-	if err != nil {
-		t.Fatalf("formatJSON returned error: %v", err)
-	}
+	got := formatJSON(nil)
 	if got != "null" {
 		t.Fatalf("formatJSON() = %q, want null", got)
 	}
@@ -160,10 +154,7 @@ func TestFormatJSONEmptyBody(t *testing.T) {
 func TestFormatJSONPrettyPrintsObjects(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSON([]byte(`{"permissions":["READ","UPDATE"]}`))
-	if err != nil {
-		t.Fatalf("formatJSON returned error: %v", err)
-	}
+	got := formatJSON([]byte(`{"permissions":["READ","UPDATE"]}`))
 	if !strings.Contains(got, "\n") || !strings.Contains(got, `"permissions": [`) || !strings.Contains(got, `"UPDATE"`) {
 		t.Fatalf("formatJSON() = %q, want pretty JSON object", got)
 	}

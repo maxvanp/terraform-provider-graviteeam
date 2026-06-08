@@ -134,13 +134,7 @@ func (d *PermissionsMetadataDataSource) Read(ctx context.Context, req datasource
 		resp.Diagnostics.AddError("Error reading permission metadata", err.Error())
 		return
 	}
-	result, err := formatJSON(raw)
-	if err != nil {
-		resp.Diagnostics.AddError("Error formatting permission metadata", err.Error())
-		return
-	}
-
-	config.ResultJSON = types.StringValue(result)
+	config.ResultJSON = types.StringValue(formatJSON(raw))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
@@ -148,17 +142,17 @@ func missing(value types.String) bool {
 	return value.IsNull() || value.IsUnknown() || value.ValueString() == ""
 }
 
-func formatJSON(raw []byte) (string, error) {
+func formatJSON(raw []byte) string {
 	if len(raw) == 0 {
-		return "null", nil
+		return "null"
 	}
 	var parsed interface{}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		formatted, _ := json.Marshal(string(raw))
-		return string(formatted), nil
+		return string(formatted)
 	}
 	formatted, _ := json.MarshalIndent(parsed, "", "  ")
-	return string(formatted), nil
+	return string(formatted)
 }
 
 func permissionsMetadataKindList() string {

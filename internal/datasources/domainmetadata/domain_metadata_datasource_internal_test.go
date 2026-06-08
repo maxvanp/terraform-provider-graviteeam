@@ -90,10 +90,7 @@ func TestFormatJSONHandlesEmptyTextAndJSON(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := formatJSON(test.raw)
-			if err != nil {
-				t.Fatalf("format json: %v", err)
-			}
+			got := formatJSON(test.raw)
 			if got != test.want {
 				t.Fatalf("json = %q, want %q", got, test.want)
 			}
@@ -304,10 +301,7 @@ func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name
 func TestFormatJSONEscapesInvalidJSONText(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatJSON([]byte("line\nbreak"))
-	if err != nil {
-		t.Fatalf("format json: %v", err)
-	}
+	got := formatJSON([]byte("line\nbreak"))
 	var decoded string
 	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
 		t.Fatalf("formatted text is not a JSON string: %v", err)

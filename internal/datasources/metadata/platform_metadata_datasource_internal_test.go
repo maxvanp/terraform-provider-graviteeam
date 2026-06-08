@@ -320,6 +320,58 @@ func TestPlatformMetadataReadValidatesRequestShapeBeforeHTTP(t *testing.T) {
 	}
 }
 
+func TestPlatformMetadataPathBuildersResolveSupportedKinds(t *testing.T) {
+	t.Parallel()
+
+	for kind, builder := range platformMetadataPaths {
+		kind, builder := kind, builder
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
+			path, err := builder(PlatformMetadataModel{
+				RoleID: types.StringValue("role/id with spaces"),
+			})
+			if err != nil {
+				t.Fatalf("path builder returned error: %v", err)
+			}
+			if path == "" {
+				t.Fatal("path should not be empty")
+			}
+		})
+	}
+}
+
+func TestPlatformMetadataReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PlatformMetadataDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"kind":        tftypes.Number,
+				"role_id":     tftypes.String,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"kind":        tftypes.NewValue(tftypes.Number, 123),
+				"role_id":     tftypes.NewValue(tftypes.String, nil),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func TestPlatformMetadataReadReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -345,6 +397,34 @@ func TestPlatformMetadataReadReportsRemoteError(t *testing.T) {
 	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
 	if !readResp.Diagnostics.HasError() {
 		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func TestPlatformMetadataReadReportsFormatError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/platform/installation", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &PlatformMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := platformMetadataConfig(schemaResp.Schema, PlatformMetadataModel{
+		Kind: types.StringValue("installation"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected format error diagnostics")
 	}
 }
 
@@ -422,6 +502,34 @@ func TestEnvironmentMetadataReadValidatesKindAndReportsRemoteError(t *testing.T)
 	remoteDataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
 	if !readResp.Diagnostics.HasError() {
 		t.Fatal("expected remote error diagnostics")
+	}
+}
+
+func TestEnvironmentMetadataReadReportsFormatError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/data-planes", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &EnvironmentMetadataDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := environmentMetadataConfig(schemaResp.Schema, EnvironmentMetadataModel{
+		Kind: types.StringValue("data_planes"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected format error diagnostics")
 	}
 }
 

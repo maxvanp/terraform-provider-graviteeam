@@ -10,9 +10,6 @@ func formatJSON(raw []byte) (string, error) {
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return "", err
 	}
-	formatted, err := json.MarshalIndent(parsed, "", "  ")
-	if err != nil {
-		return "", err
-	}
+	formatted, _ := json.MarshalIndent(parsed, "", "  ")
 	return string(formatted), nil
 }
