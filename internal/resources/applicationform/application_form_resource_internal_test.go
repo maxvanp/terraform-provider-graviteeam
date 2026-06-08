@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -491,6 +492,40 @@ func TestApplicationFormDeleteIgnores404(t *testing.T) {
 	}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestApplicationFormDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationFormResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"domain_id":      tftypes.Number,
+			"application_id": tftypes.String,
+			"template":       tftypes.String,
+			"enabled":        tftypes.Bool,
+			"content":        tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "form-123"),
+			"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+			"application_id": tftypes.NewValue(tftypes.String, "app-123"),
+			"template":       tftypes.NewValue(tftypes.String, "LOGIN"),
+			"enabled":        tftypes.NewValue(tftypes.Bool, true),
+			"content":        tftypes.NewValue(tftypes.String, "<html>login</html>"),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

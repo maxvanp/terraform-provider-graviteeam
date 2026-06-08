@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -584,6 +585,50 @@ func TestOrgUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
 		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestOrgUserDeleteReportsInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgUserResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                     tftypes.Number,
+			"username":               tftypes.String,
+			"password":               tftypes.String,
+			"email":                  tftypes.String,
+			"first_name":             tftypes.String,
+			"last_name":              tftypes.String,
+			"force_reset_password":   tftypes.Bool,
+			"enabled":                tftypes.Bool,
+			"pre_registration":       tftypes.Bool,
+			"reset_password":         tftypes.String,
+			"reset_password_trigger": tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":                     tftypes.NewValue(tftypes.Number, 123),
+			"username":               tftypes.NewValue(tftypes.String, "alice"),
+			"password":               tftypes.NewValue(tftypes.String, "initial-secret"),
+			"email":                  tftypes.NewValue(tftypes.String, "alice@example.com"),
+			"first_name":             tftypes.NewValue(tftypes.String, "Alice"),
+			"last_name":              tftypes.NewValue(tftypes.String, "Liddell"),
+			"force_reset_password":   tftypes.NewValue(tftypes.Bool, false),
+			"enabled":                tftypes.NewValue(tftypes.Bool, true),
+			"pre_registration":       tftypes.NewValue(tftypes.Bool, true),
+			"reset_password":         tftypes.NewValue(tftypes.String, nil),
+			"reset_password_trigger": tftypes.NewValue(tftypes.String, nil),
+		},
+	)
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 
