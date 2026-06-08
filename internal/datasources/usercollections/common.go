@@ -89,9 +89,6 @@ func formatCollectionItems(rawJSON []byte) (string, error) {
 	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
 		return "", err
 	}
-	formatted, err := json.MarshalIndent(parsed, "", "  ")
-	if err != nil {
-		return "", err
-	}
+	formatted, _ := json.MarshalIndent(parsed, "", "  ")
 	return string(formatted), nil
 }

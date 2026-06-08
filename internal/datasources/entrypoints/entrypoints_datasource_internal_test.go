@@ -175,6 +175,34 @@ func TestEntrypointsReadReportsRemoteError(t *testing.T) {
 	}
 }
 
+func TestEntrypointsReadReportsFormatError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/entrypoints", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	dataSource := &EntrypointsDataSource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := entrypointsConfig(schemaResp.Schema, EntrypointsModel{
+		DomainID: types.StringValue("domain-123"),
+	})
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected format error diagnostics")
+	}
+}
+
 func TestEntrypointsReadReportsInvalidConfig(t *testing.T) {
 	dataSource := &EntrypointsDataSource{}
 	var schemaResp datasource.SchemaResponse
