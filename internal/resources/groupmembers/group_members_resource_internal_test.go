@@ -252,6 +252,197 @@ func TestGroupMembersCRUDReconcilesOnlyMembershipDiff(t *testing.T) {
 	}
 }
 
+func TestGroupMembersReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{
+			name:       "missing group",
+			statusCode: http.StatusNotFound,
+			wantRemove: true,
+		},
+		{
+			name:       "server error",
+			statusCode: http.StatusInternalServerError,
+			wantRemove: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &GroupMembersResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := groupMembersState(t, schemaResp.Schema, GroupMembersModel{
+				DomainID: types.StringValue("domain-123"),
+				GroupID:  types.StringValue("group-123"),
+				Members:  []types.String{types.StringValue("user-a")},
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing group to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestGroupMembersReportsCreateUpdateAndDeleteErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		failingMethod string
+		failingMember string
+		run           func(*GroupMembersResource, resourceschema.Schema)
+	}{
+		{
+			name:          "create add error",
+			failingMethod: http.MethodPost,
+			failingMember: "user-a",
+			run: func(resourceUnderTest *GroupMembersResource, schema resourceschema.Schema) {
+				plan := groupMembersPlan(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  []types.String{types.StringValue("user-a")},
+				})
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected create diagnostics")
+				}
+			},
+		},
+		{
+			name:          "update remove error",
+			failingMethod: http.MethodDelete,
+			failingMember: "user-a",
+			run: func(resourceUnderTest *GroupMembersResource, schema resourceschema.Schema) {
+				plan := groupMembersPlan(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  []types.String{types.StringValue("user-b")},
+				})
+				state := groupMembersState(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  []types.String{types.StringValue("user-a")},
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:          "update add error",
+			failingMethod: http.MethodPost,
+			failingMember: "user-b",
+			run: func(resourceUnderTest *GroupMembersResource, schema resourceschema.Schema) {
+				plan := groupMembersPlan(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  []types.String{types.StringValue("user-b")},
+				})
+				state := groupMembersState(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  nil,
+				})
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected update diagnostics")
+				}
+			},
+		},
+		{
+			name:          "delete remove error",
+			failingMethod: http.MethodDelete,
+			failingMember: "user-a",
+			run: func(resourceUnderTest *GroupMembersResource, schema resourceschema.Schema) {
+				state := groupMembersState(t, schema, GroupMembersModel{
+					DomainID: types.StringValue("domain-123"),
+					GroupID:  types.StringValue("group-123"),
+					Members:  []types.String{types.StringValue("user-a")},
+				})
+				resp := &resource.DeleteResponse{}
+				resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected delete diagnostics")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members/", func(w http.ResponseWriter, r *http.Request) {
+				memberID := strings.TrimPrefix(r.URL.Path, "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members/")
+				if r.Method == tt.failingMethod && memberID == tt.failingMember {
+					http.Error(w, "membership operation failed", http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &GroupMembersResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			tt.run(resourceUnderTest, schemaResp.Schema)
+		})
+	}
+}
+
+func TestGroupMembersImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&GroupMembersResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain/group/extra",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func groupMembersPlan(t *testing.T, schema resourceschema.Schema, model GroupMembersModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}
@@ -259,4 +450,13 @@ func groupMembersPlan(t *testing.T, schema resourceschema.Schema, model GroupMem
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func groupMembersState(t *testing.T, schema resourceschema.Schema, model GroupMembersModel) tfsdk.State {
+	t.Helper()
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
