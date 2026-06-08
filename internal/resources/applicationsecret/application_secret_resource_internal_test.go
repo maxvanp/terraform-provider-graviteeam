@@ -363,6 +363,25 @@ func TestApplicationSecretReadRemovesMissingSecretAndDeleteIgnores404(t *testing
 	}
 }
 
+func TestApplicationSecretStopsOnInvalidPlanOrState(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewApplicationSecretResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	invalidPlan := applicationSecretInvalidPlan(schemaResp.Schema)
+	invalidState := applicationSecretInvalidState(schemaResp.Schema)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationSecretResource{}).Create(context.Background(), resource.CreateRequest{Plan: invalidPlan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationSecretResource{}).Read(context.Background(), resource.ReadRequest{State: invalidState}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+}
+
 func TestApplicationSecretReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -564,6 +583,34 @@ func applicationSecretPlan(t *testing.T, schema resourceschema.Schema, model App
 	return plan
 }
 
+func applicationSecretInvalidPlan(schema resourceschema.Schema) tfsdk.Plan {
+	return tfsdk.Plan{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"id":             tftypes.String,
+				"domain_id":      tftypes.Number,
+				"application_id": tftypes.String,
+				"name":           tftypes.String,
+				"renew_trigger":  tftypes.String,
+				"secret":         tftypes.String,
+				"settings_id":    tftypes.String,
+				"expires_at":     tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"id":             tftypes.NewValue(tftypes.String, nil),
+				"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+				"application_id": tftypes.NewValue(tftypes.String, "app-123"),
+				"name":           tftypes.NewValue(tftypes.String, "client secret"),
+				"renew_trigger":  tftypes.NewValue(tftypes.String, nil),
+				"secret":         tftypes.NewValue(tftypes.String, nil),
+				"settings_id":    tftypes.NewValue(tftypes.String, nil),
+				"expires_at":     tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
+	}
+}
+
 func applicationSecretState(t *testing.T, schema resourceschema.Schema, model ApplicationSecretModel) tfsdk.State {
 	t.Helper()
 
@@ -572,6 +619,34 @@ func applicationSecretState(t *testing.T, schema resourceschema.Schema, model Ap
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func applicationSecretInvalidState(schema resourceschema.Schema) tfsdk.State {
+	return tfsdk.State{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"id":             tftypes.String,
+				"domain_id":      tftypes.Number,
+				"application_id": tftypes.String,
+				"name":           tftypes.String,
+				"renew_trigger":  tftypes.String,
+				"secret":         tftypes.String,
+				"settings_id":    tftypes.String,
+				"expires_at":     tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"id":             tftypes.NewValue(tftypes.String, "secret-123"),
+				"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+				"application_id": tftypes.NewValue(tftypes.String, "app-123"),
+				"name":           tftypes.NewValue(tftypes.String, "client secret"),
+				"renew_trigger":  tftypes.NewValue(tftypes.String, nil),
+				"secret":         tftypes.NewValue(tftypes.String, nil),
+				"settings_id":    tftypes.NewValue(tftypes.String, nil),
+				"expires_at":     tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schema,
+	}
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed, sensitive bool) {

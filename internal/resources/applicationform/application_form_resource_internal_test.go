@@ -546,6 +546,44 @@ func TestApplicationFormDeleteReportsInvalidStateData(t *testing.T) {
 	}
 }
 
+func TestApplicationFormStopsOnInvalidPlanOrState(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewApplicationFormResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	invalidPlan := applicationFormInvalidPlan(schemaResp.Schema)
+	invalidState := applicationFormInvalidState(schemaResp.Schema)
+	validPlan := applicationFormPlan(t, schemaResp.Schema, baseApplicationFormModel())
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationFormResource{}).Create(context.Background(), resource.CreateRequest{Plan: invalidPlan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationFormResource{}).Read(context.Background(), resource.ReadRequest{State: invalidState}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updatePlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationFormResource{}).Update(context.Background(), resource.UpdateRequest{
+		Plan:  invalidPlan,
+		State: applicationFormState(t, schemaResp.Schema, baseApplicationFormModel()),
+	}, updatePlanResp)
+	if !updatePlanResp.Diagnostics.HasError() {
+		t.Fatal("expected update plan diagnostics")
+	}
+
+	updateStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&ApplicationFormResource{}).Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: invalidState,
+	}, updateStateResp)
+	if !updateStateResp.Diagnostics.HasError() {
+		t.Fatal("expected update state diagnostics")
+	}
+}
+
 func TestApplicationFormUpdateReportsRemoteUpdateError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -659,6 +697,10 @@ func applicationFormPlan(t *testing.T, schema resourceschema.Schema, model Appli
 	return plan
 }
 
+func applicationFormInvalidPlan(schema resourceschema.Schema) tfsdk.Plan {
+	return tfsdk.Plan{Schema: schema, Raw: applicationFormInvalidRaw()}
+}
+
 func applicationFormState(t *testing.T, schema resourceschema.Schema, model ApplicationFormModel) tfsdk.State {
 	t.Helper()
 
@@ -667,6 +709,31 @@ func applicationFormState(t *testing.T, schema resourceschema.Schema, model Appl
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func applicationFormInvalidState(schema resourceschema.Schema) tfsdk.State {
+	return tfsdk.State{Schema: schema, Raw: applicationFormInvalidRaw()}
+}
+
+func applicationFormInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":             tftypes.String,
+			"domain_id":      tftypes.Number,
+			"application_id": tftypes.String,
+			"template":       tftypes.String,
+			"enabled":        tftypes.Bool,
+			"content":        tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":             tftypes.NewValue(tftypes.String, "form-123"),
+			"domain_id":      tftypes.NewValue(tftypes.Number, 123),
+			"application_id": tftypes.NewValue(tftypes.String, "app-123"),
+			"template":       tftypes.NewValue(tftypes.String, "LOGIN"),
+			"enabled":        tftypes.NewValue(tftypes.Bool, true),
+			"content":        tftypes.NewValue(tftypes.String, "<html>login</html>"),
+		},
+	)
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {

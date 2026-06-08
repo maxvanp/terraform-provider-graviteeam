@@ -425,24 +425,7 @@ func TestAlertNotifierUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	resourceUnderTest := &AlertNotifierResource{}
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	raw := tftypes.NewValue(
-		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-			"id":            tftypes.String,
-			"domain_id":     tftypes.Number,
-			"name":          tftypes.String,
-			"type":          tftypes.String,
-			"configuration": tftypes.String,
-			"enabled":       tftypes.Bool,
-		}},
-		map[string]tftypes.Value{
-			"id":            tftypes.NewValue(tftypes.String, "notifier-123"),
-			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
-			"name":          tftypes.NewValue(tftypes.String, "webhook"),
-			"type":          tftypes.NewValue(tftypes.String, "webhook-notifier"),
-			"configuration": tftypes.NewValue(tftypes.String, "{}"),
-			"enabled":       tftypes.NewValue(tftypes.Bool, true),
-		},
-	)
+	raw := alertNotifierInvalidRaw()
 
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
@@ -475,6 +458,31 @@ func TestAlertNotifierUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete state diagnostics")
+	}
+}
+
+func TestAlertNotifierStopsOnInvalidCreatePlanOrReadState(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AlertNotifierResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := alertNotifierInvalidRaw()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid create plan diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid read state diagnostics")
 	}
 }
 
@@ -538,4 +546,25 @@ func alertNotifierState(t *testing.T, schema resourceschema.Schema, model AlertN
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func alertNotifierInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":            tftypes.String,
+			"domain_id":     tftypes.Number,
+			"name":          tftypes.String,
+			"type":          tftypes.String,
+			"configuration": tftypes.String,
+			"enabled":       tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":            tftypes.NewValue(tftypes.String, "notifier-123"),
+			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
+			"name":          tftypes.NewValue(tftypes.String, "webhook"),
+			"type":          tftypes.NewValue(tftypes.String, "webhook-notifier"),
+			"configuration": tftypes.NewValue(tftypes.String, "{}"),
+			"enabled":       tftypes.NewValue(tftypes.Bool, true),
+		},
+	)
 }

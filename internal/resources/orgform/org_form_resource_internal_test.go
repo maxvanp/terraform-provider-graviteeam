@@ -529,6 +529,44 @@ func TestOrgFormDeleteReportsInvalidStateData(t *testing.T) {
 	}
 }
 
+func TestOrgFormStopsOnInvalidPlanOrState(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgFormResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	invalidPlan := orgFormInvalidPlan(schemaResp.Schema)
+	invalidState := orgFormInvalidState(schemaResp.Schema)
+	validPlan := orgFormPlan(t, schemaResp.Schema, baseOrgFormModel())
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&OrgFormResource{}).Create(context.Background(), resource.CreateRequest{Plan: invalidPlan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&OrgFormResource{}).Read(context.Background(), resource.ReadRequest{State: invalidState}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updatePlanResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&OrgFormResource{}).Update(context.Background(), resource.UpdateRequest{
+		Plan:  invalidPlan,
+		State: orgFormState(t, schemaResp.Schema, baseOrgFormModel()),
+	}, updatePlanResp)
+	if !updatePlanResp.Diagnostics.HasError() {
+		t.Fatal("expected update plan diagnostics")
+	}
+
+	updateStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	(&OrgFormResource{}).Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: invalidState,
+	}, updateStateResp)
+	if !updateStateResp.Diagnostics.HasError() {
+		t.Fatal("expected update state diagnostics")
+	}
+}
+
 func TestOrgFormUpdateReportsPreReadError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -608,6 +646,10 @@ func orgFormPlan(t *testing.T, schema resourceschema.Schema, model OrgFormModel)
 	return plan
 }
 
+func orgFormInvalidPlan(schema resourceschema.Schema) tfsdk.Plan {
+	return tfsdk.Plan{Schema: schema, Raw: orgFormInvalidRaw()}
+}
+
 func orgFormState(t *testing.T, schema resourceschema.Schema, model OrgFormModel) tfsdk.State {
 	t.Helper()
 
@@ -616,6 +658,27 @@ func orgFormState(t *testing.T, schema resourceschema.Schema, model OrgFormModel
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func orgFormInvalidState(schema resourceschema.Schema) tfsdk.State {
+	return tfsdk.State{Schema: schema, Raw: orgFormInvalidRaw()}
+}
+
+func orgFormInvalidRaw() tftypes.Value {
+	return tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":       tftypes.Number,
+			"template": tftypes.String,
+			"enabled":  tftypes.Bool,
+			"content":  tftypes.String,
+		}},
+		map[string]tftypes.Value{
+			"id":       tftypes.NewValue(tftypes.Number, 123),
+			"template": tftypes.NewValue(tftypes.String, "LOGIN"),
+			"enabled":  tftypes.NewValue(tftypes.Bool, true),
+			"content":  tftypes.NewValue(tftypes.String, "<html>login</html>"),
+		},
+	)
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
