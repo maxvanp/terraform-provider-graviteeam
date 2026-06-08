@@ -544,6 +544,21 @@ func TestBotDetectionCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.
 		t.Fatal("expected update diagnostics")
 	}
 
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: botDetectionPlan(t, schemaResp.Schema, BotDetectionModel{
+			DomainID:      types.StringValue("domain-123"),
+			Name:          types.StringValue("reCAPTCHA"),
+			Type:          types.StringValue("google-recaptcha-v3-am-bot-detection"),
+			DetectionType: types.StringValue("CAPTCHA"),
+			Configuration: types.StringValue("{}"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

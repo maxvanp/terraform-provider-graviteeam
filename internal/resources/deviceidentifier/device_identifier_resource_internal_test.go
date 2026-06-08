@@ -498,6 +498,20 @@ func TestDeviceIdentifierCreateReadUpdateAndDeleteReportInvalidStateData(t *test
 		t.Fatal("expected update diagnostics")
 	}
 
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: deviceIdentifierPlan(t, schemaResp.Schema, DeviceIdentifierModel{
+			DomainID:      types.StringValue("domain-123"),
+			Name:          types.StringValue("Fingerprint"),
+			Type:          types.StringValue("fingerprintjs-v3-am-device-identifier"),
+			Configuration: types.StringValue("{}"),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
