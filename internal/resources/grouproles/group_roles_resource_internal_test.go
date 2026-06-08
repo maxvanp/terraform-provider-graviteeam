@@ -15,6 +15,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -312,6 +313,60 @@ func TestGroupRolesReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 	}
 }
 
+func TestGroupRolesLifecycleStopsOnInvalidPlanOrState(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewGroupRolesResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	invalidPlan := groupRolesInvalidPlan(schemaResp.Schema)
+	invalidState := groupRolesInvalidState(schemaResp.Schema)
+	validPlan := groupRolesPlan(t, schemaResp.Schema, GroupRolesModel{
+		DomainID: types.StringValue("domain-123"),
+		GroupID:  types.StringValue("group-123"),
+		Roles:    []types.String{types.StringValue("role-a")},
+	})
+
+	t.Run("create invalid plan", func(t *testing.T) {
+		resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&GroupRolesResource{}).Create(context.Background(), resource.CreateRequest{Plan: invalidPlan}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected create diagnostics")
+		}
+	})
+	t.Run("read invalid state", func(t *testing.T) {
+		resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&GroupRolesResource{}).Read(context.Background(), resource.ReadRequest{State: invalidState}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected read diagnostics")
+		}
+	})
+	t.Run("update invalid plan", func(t *testing.T) {
+		resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&GroupRolesResource{}).Update(context.Background(), resource.UpdateRequest{
+			Plan:  invalidPlan,
+			State: groupRolesState(t, schemaResp.Schema, GroupRolesModel{}),
+		}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected update diagnostics")
+		}
+	})
+	t.Run("update invalid state", func(t *testing.T) {
+		resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&GroupRolesResource{}).Update(context.Background(), resource.UpdateRequest{
+			Plan:  validPlan,
+			State: invalidState,
+		}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected update diagnostics")
+		}
+	})
+	t.Run("delete invalid state", func(t *testing.T) {
+		resp := &resource.DeleteResponse{}
+		(&GroupRolesResource{}).Delete(context.Background(), resource.DeleteRequest{State: invalidState}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected delete diagnostics")
+		}
+	})
+}
+
 func TestGroupRolesReportsCreateUpdateAndDeleteErrors(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -501,6 +556,24 @@ func groupRolesPlan(t *testing.T, schema resourceschema.Schema, model GroupRoles
 	return plan
 }
 
+func groupRolesInvalidPlan(schema resourceschema.Schema) tfsdk.Plan {
+	return tfsdk.Plan{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id": tftypes.Number,
+				"group_id":  tftypes.String,
+				"roles":     tftypes.Set{ElementType: tftypes.String},
+			}},
+			map[string]tftypes.Value{
+				"domain_id": tftypes.NewValue(tftypes.Number, 123),
+				"group_id":  tftypes.NewValue(tftypes.String, "group-123"),
+				"roles":     tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "role-a")}),
+			},
+		),
+		Schema: schema,
+	}
+}
+
 func groupRolesState(t *testing.T, schema resourceschema.Schema, model GroupRolesModel) tfsdk.State {
 	t.Helper()
 
@@ -509,6 +582,24 @@ func groupRolesState(t *testing.T, schema resourceschema.Schema, model GroupRole
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func groupRolesInvalidState(schema resourceschema.Schema) tfsdk.State {
+	return tfsdk.State{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id": tftypes.Number,
+				"group_id":  tftypes.String,
+				"roles":     tftypes.Set{ElementType: tftypes.String},
+			}},
+			map[string]tftypes.Value{
+				"domain_id": tftypes.NewValue(tftypes.Number, 123),
+				"group_id":  tftypes.NewValue(tftypes.String, "group-123"),
+				"roles":     tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "role-a")}),
+			},
+		),
+		Schema: schema,
+	}
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string) {

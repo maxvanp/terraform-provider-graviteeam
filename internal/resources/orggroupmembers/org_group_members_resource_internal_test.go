@@ -13,6 +13,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -321,6 +322,59 @@ func TestOrgGroupMembersReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 	}
 }
 
+func TestOrgGroupMembersLifecycleStopsOnInvalidPlanOrState(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewOrgGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	invalidPlan := orgGroupMembersInvalidPlan(schemaResp.Schema)
+	invalidState := orgGroupMembersInvalidState(schemaResp.Schema)
+	validPlan := orgGroupMembersPlan(t, schemaResp.Schema, OrgGroupMembersModel{
+		GroupID: types.StringValue("group-123"),
+		Members: []types.String{types.StringValue("user-a")},
+	})
+
+	t.Run("create invalid plan", func(t *testing.T) {
+		resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&OrgGroupMembersResource{}).Create(context.Background(), resource.CreateRequest{Plan: invalidPlan}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected create diagnostics")
+		}
+	})
+	t.Run("read invalid state", func(t *testing.T) {
+		resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&OrgGroupMembersResource{}).Read(context.Background(), resource.ReadRequest{State: invalidState}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected read diagnostics")
+		}
+	})
+	t.Run("update invalid plan", func(t *testing.T) {
+		resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&OrgGroupMembersResource{}).Update(context.Background(), resource.UpdateRequest{
+			Plan:  invalidPlan,
+			State: orgGroupMembersState(t, schemaResp.Schema, OrgGroupMembersModel{}),
+		}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected update diagnostics")
+		}
+	})
+	t.Run("update invalid state", func(t *testing.T) {
+		resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		(&OrgGroupMembersResource{}).Update(context.Background(), resource.UpdateRequest{
+			Plan:  validPlan,
+			State: invalidState,
+		}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected update diagnostics")
+		}
+	})
+	t.Run("delete invalid state", func(t *testing.T) {
+		resp := &resource.DeleteResponse{}
+		(&OrgGroupMembersResource{}).Delete(context.Background(), resource.DeleteRequest{State: invalidState}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected delete diagnostics")
+		}
+	})
+}
+
 func TestOrgGroupMembersReportsCreateUpdateAndDeleteErrors(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -477,6 +531,22 @@ func orgGroupMembersPlan(t *testing.T, schema resourceschema.Schema, model OrgGr
 	return plan
 }
 
+func orgGroupMembersInvalidPlan(schema resourceschema.Schema) tfsdk.Plan {
+	return tfsdk.Plan{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"group_id": tftypes.Number,
+				"members":  tftypes.List{ElementType: tftypes.String},
+			}},
+			map[string]tftypes.Value{
+				"group_id": tftypes.NewValue(tftypes.Number, 123),
+				"members":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "user-a")}),
+			},
+		),
+		Schema: schema,
+	}
+}
+
 func orgGroupMembersState(t *testing.T, schema resourceschema.Schema, model OrgGroupMembersModel) tfsdk.State {
 	t.Helper()
 	state := tfsdk.State{Schema: schema}
@@ -484,4 +554,20 @@ func orgGroupMembersState(t *testing.T, schema resourceschema.Schema, model OrgG
 		t.Fatalf("set state: %#v", diags)
 	}
 	return state
+}
+
+func orgGroupMembersInvalidState(schema resourceschema.Schema) tfsdk.State {
+	return tfsdk.State{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"group_id": tftypes.Number,
+				"members":  tftypes.List{ElementType: tftypes.String},
+			}},
+			map[string]tftypes.Value{
+				"group_id": tftypes.NewValue(tftypes.Number, 123),
+				"members":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "user-a")}),
+			},
+		),
+		Schema: schema,
+	}
 }
