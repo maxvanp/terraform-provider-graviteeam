@@ -338,6 +338,57 @@ func TestDomainFlowCRUDReportsRemoteErrors(t *testing.T) {
 	}
 }
 
+func TestDomainFlowCreateAndUpdateRejectInvalidFlowsJSON(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainFlowResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := domainFlowPlan(t, schemaResp.Schema, DomainFlowModel{
+		DomainID: types.StringValue("domain-123"),
+		Flows:    types.StringValue(`{"id":"login"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: tfsdk.State(plan)}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+}
+
+func TestDomainFlowImportStateSetsDomainID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewDomainFlowResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &DomainFlowModel{}); diags.HasError() {
+		t.Fatalf("set empty state: %#v", diags)
+	}
+	importResp := &resource.ImportStateResponse{State: state}
+
+	NewDomainFlowResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported DomainFlowModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if imported.DomainID.ValueString() != "domain-123" {
+		t.Fatalf("domain_id = %q, want domain-123", imported.DomainID.ValueString())
+	}
+}
+
 func domainFlowPlan(t *testing.T, schema resourceschema.Schema, model DomainFlowModel) tfsdk.Plan {
 	t.Helper()
 	plan := tfsdk.Plan{Schema: schema}

@@ -76,6 +76,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&DomainResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestDomainBuildUpdateBodyMergesCurrentPatchFields(t *testing.T) {
 	t.Parallel()
 
@@ -389,6 +400,153 @@ func TestDomainCRUDUsesPatchMergeAndDerivesDefaultIDP(t *testing.T) {
 	}
 }
 
+func TestDomainReadRemovesMissingDomain(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := domainState(t, schemaResp.Schema, DomainModel{
+		ID:          types.StringValue("domain-123"),
+		Name:        types.StringValue("domain"),
+		Enabled:     types.BoolValue(false),
+		DataPlaneID: types.StringValue("default"),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing domain to remove state, got %#v", readResp.State.Raw)
+	}
+}
+
+func TestDomainCRUDReportsRemoteErrors(t *testing.T) {
+	tests := map[string]struct {
+		createStatus int
+		itemStatus   int
+		action       func(context.Context, *DomainResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
+	}{
+		"create": {
+			createStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"post_create_update": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"read": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, _ tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				r.Read(ctx, resource.ReadRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"update_read_before": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"delete": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *DomainResource, _ tfsdk.Plan, state tfsdk.State, _ resourceschema.Schema) bool {
+				resp := &resource.DeleteResponse{}
+				r.Delete(ctx, resource.DeleteRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Fatalf("collection method = %s, want POST", r.Method)
+				}
+				if tc.createStatus != 0 {
+					http.Error(w, "remote error", tc.createStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
+					"name":        "domain",
+					"dataPlaneId": "default",
+				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123", func(w http.ResponseWriter, r *http.Request) {
+				if tc.itemStatus != 0 {
+					http.Error(w, "remote error", tc.itemStatus)
+					return
+				}
+				switch r.Method {
+				case http.MethodGet, http.MethodPut:
+					_ = json.NewEncoder(w).Encode(domainResponse("domain-123", map[string]interface{}{
+						"name":        "domain",
+						"dataPlaneId": "default",
+						"enabled":     false,
+					}))
+				case http.MethodDelete:
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Fatalf("item method = %s", r.Method)
+				}
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &DomainResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			model := DomainModel{
+				ID:          types.StringValue("domain-123"),
+				Name:        types.StringValue("domain"),
+				Enabled:     types.BoolValue(false),
+				DataPlaneID: types.StringValue("default"),
+			}
+			plan := domainPlan(t, schemaResp.Schema, model)
+			state := domainState(t, schemaResp.Schema, model)
+
+			if !tc.action(context.Background(), resourceUnderTest, plan, state, schemaResp.Schema) {
+				t.Fatal("expected diagnostics")
+			}
+		})
+	}
+}
+
 func domainResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,
@@ -397,6 +555,16 @@ func domainResponse(id string, body map[string]interface{}) map[string]interface
 		result[key] = value
 	}
 	return result
+}
+
+func domainState(t *testing.T, schema resourceschema.Schema, model DomainModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func domainPlan(t *testing.T, schema resourceschema.Schema, model DomainModel) tfsdk.Plan {
