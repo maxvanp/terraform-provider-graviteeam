@@ -920,6 +920,24 @@ func TestApplicationCreateReportsInvalidCreateBodyConfiguration(t *testing.T) {
 	}
 }
 
+func TestApplicationCreateReportsInvalidUpdateBodyConfiguration(t *testing.T) {
+	resourceUnderTest := &ApplicationResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+		DomainID:     types.StringValue("domain-123"),
+		Name:         types.StringValue("app"),
+		Type:         types.StringValue("WEB"),
+		SettingsJSON: types.StringValue(`{"oauth":`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid application configuration diagnostics")
+	}
+}
+
 func TestApplicationUpdateReportsInvalidUpdateBodyConfiguration(t *testing.T) {
 	resourceUnderTest := &ApplicationResource{}
 	var schemaResp resource.SchemaResponse
