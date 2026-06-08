@@ -71,6 +71,17 @@ func TestFormConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestFormConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&FormResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildUpdateBodyPreservesCurrentAssets(t *testing.T) {
 	t.Parallel()
 
@@ -156,6 +167,18 @@ func TestTemplateValidatorRejectsInvalidTemplate(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected diagnostics for invalid template")
+	}
+}
+
+func TestTemplateValidatorDescriptions(t *testing.T) {
+	t.Parallel()
+
+	validator := templateValidator{}
+	if validator.Description(context.Background()) == "" {
+		t.Fatal("expected non-empty description")
+	}
+	if validator.MarkdownDescription(context.Background()) == "" {
+		t.Fatal("expected non-empty markdown description")
 	}
 }
 
@@ -323,6 +346,41 @@ func TestFormReadRemovesMissingForm(t *testing.T) {
 	}
 }
 
+func TestFormDeleteIgnoresMissingForm(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := formState(t, schemaResp.Schema, FormModel{
+		ID:       types.StringValue("form-123"),
+		DomainID: types.StringValue("domain-123"),
+		Template: types.StringValue("LOGIN"),
+		Enabled:  types.BoolValue(true),
+		Content:  types.StringValue("<html>login</html>"),
+	})
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func TestFormCreateReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -473,6 +531,63 @@ func TestFormImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestFormImportSetsDomainTemplateAndOptionalApplication(t *testing.T) {
+	t.Parallel()
+
+	for name, test := range map[string]struct {
+		id              string
+		wantDomain      string
+		wantApplication types.String
+		wantTemplate    string
+	}{
+		"domain": {
+			id:              "domain-123/LOGIN",
+			wantDomain:      "domain-123",
+			wantApplication: types.StringNull(),
+			wantTemplate:    "LOGIN",
+		},
+		"application": {
+			id:              "domain-123/app-123/LOGIN",
+			wantDomain:      "domain-123",
+			wantApplication: types.StringValue("app-123"),
+			wantTemplate:    "LOGIN",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var schemaResp resource.SchemaResponse
+			NewFormResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := formState(t, schemaResp.Schema, FormModel{
+				ID:            types.StringValue("form-123"),
+				DomainID:      types.StringValue("placeholder-domain"),
+				ApplicationID: types.StringNull(),
+				Template:      types.StringValue("ERROR"),
+				Enabled:       types.BoolValue(true),
+				Content:       types.StringValue("<html>login</html>"),
+			})
+			importResp := &resource.ImportStateResponse{State: state}
+
+			NewFormResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+				ID: test.id,
+			}, importResp)
+
+			if importResp.Diagnostics.HasError() {
+				t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+			}
+			var imported FormModel
+			if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+				t.Fatalf("get imported state: %#v", diags)
+			}
+			if imported.DomainID.ValueString() != test.wantDomain ||
+				!imported.ApplicationID.Equal(test.wantApplication) ||
+				imported.Template.ValueString() != test.wantTemplate {
+				t.Fatalf("imported = %#v", imported)
+			}
+		})
 	}
 }
 

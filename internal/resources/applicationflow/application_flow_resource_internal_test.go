@@ -339,6 +339,31 @@ func TestApplicationFlowCRUDReportsRemoteErrors(t *testing.T) {
 	}
 }
 
+func TestApplicationFlowCreateAndUpdateRejectInvalidFlowsJSON(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ApplicationFlowResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := applicationFlowPlan(t, schemaResp.Schema, ApplicationFlowModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Flows:         types.StringValue(`{"id":"login"}`),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: tfsdk.State(plan)}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+}
+
 func TestApplicationFlowImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&ApplicationFlowResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -347,6 +372,33 @@ func TestApplicationFlowImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestApplicationFlowImportSetsDomainAndApplicationIDs(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewApplicationFlowResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &ApplicationFlowModel{}); diags.HasError() {
+		t.Fatalf("set empty state: %#v", diags)
+	}
+	importResp := &resource.ImportStateResponse{State: state}
+
+	NewApplicationFlowResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var imported ApplicationFlowModel
+	if diags := importResp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if imported.DomainID.ValueString() != "domain-123" || imported.ApplicationID.ValueString() != "app-123" {
+		t.Fatalf("imported = %#v", imported)
 	}
 }
 

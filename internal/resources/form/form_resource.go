@@ -222,6 +222,9 @@ func (r *FormResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	err := r.client.DeleteForm(ctx, state.DomainID.ValueString(), appID, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting form", err.Error())
 	}
 }
