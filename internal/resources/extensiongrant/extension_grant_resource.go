@@ -234,7 +234,7 @@ func (r *ExtensionGrantResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeleteExtensionGrant(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting extension grant", err.Error())
 	}
 }

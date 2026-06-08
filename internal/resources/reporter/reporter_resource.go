@@ -212,7 +212,7 @@ func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting reporter", err.Error())
 	}
 }

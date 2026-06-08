@@ -561,6 +561,54 @@ func TestI18nDictionaryImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestI18nDictionaryConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &I18nDictionaryResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestI18nDictionaryImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewI18nDictionaryResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: i18nDictionaryState(t, schemaResp.Schema, I18nDictionaryModel{
+		ID:       types.StringValue("placeholder"),
+		DomainID: types.StringValue("placeholder"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  nullEntries(),
+	})}
+
+	(&I18nDictionaryResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/dict-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported I18nDictionaryModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "dict-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func i18nDictionaryPlan(t *testing.T, schema resourceschema.Schema, model I18nDictionaryModel) tfsdk.Plan {
 	t.Helper()
 

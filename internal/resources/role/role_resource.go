@@ -187,7 +187,7 @@ func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 
 	err := r.client.DeleteRole(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting role", err.Error())
 	}
 }

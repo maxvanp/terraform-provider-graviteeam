@@ -227,7 +227,7 @@ func (r *PasswordPolicyResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeletePasswordPolicy(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting password policy", err.Error())
 	}
 }

@@ -428,6 +428,52 @@ func TestGroupImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestGroupConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &GroupResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestGroupImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewGroupResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: groupState(t, schemaResp.Schema, GroupModel{
+		ID:       types.StringValue("placeholder"),
+		DomainID: types.StringValue("placeholder"),
+		Name:     types.StringValue("group-name"),
+	})}
+
+	(&GroupResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/group-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported GroupModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "group-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func groupPlan(t *testing.T, schema resourceschema.Schema, model GroupModel) tfsdk.Plan {
 	t.Helper()
 

@@ -440,6 +440,53 @@ func TestRoleImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestRoleConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &RoleResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestRoleImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewRoleResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: roleState(t, schemaResp.Schema, RoleModel{
+		ID:             types.StringValue("placeholder"),
+		DomainID:       types.StringValue("placeholder"),
+		Name:           types.StringValue("role-name"),
+		AssignableType: types.StringValue("DOMAIN"),
+	})}
+
+	(&RoleResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/role-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported RoleModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "role-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func rolePlan(t *testing.T, schema resourceschema.Schema, model RoleModel) tfsdk.Plan {
 	t.Helper()
 

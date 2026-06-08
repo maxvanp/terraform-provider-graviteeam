@@ -498,6 +498,58 @@ func TestExtensionGrantImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestExtensionGrantConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ExtensionGrantResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestExtensionGrantImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewExtensionGrantResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: extensionGrantState(t, schemaResp.Schema, ExtensionGrantModel{
+		ID:               types.StringValue("placeholder"),
+		DomainID:         types.StringValue("placeholder"),
+		Name:             types.StringValue("jwt bearer"),
+		Type:             types.StringValue("jwtbearer-am-extension-grant"),
+		GrantType:        types.StringValue("urn:ietf:params:oauth:grant-type:jwt-bearer"),
+		Configuration:    types.StringValue(`{"issuer":"test"}`),
+		IdentityProvider: types.StringValue("idp-1"),
+		CreateUser:       types.BoolValue(true),
+		UserExists:       types.BoolValue(false),
+	})}
+
+	(&ExtensionGrantResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/grant-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported ExtensionGrantModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "grant-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func extensionGrantPlan(t *testing.T, schema resourceschema.Schema, model ExtensionGrantModel) tfsdk.Plan {
 	t.Helper()
 

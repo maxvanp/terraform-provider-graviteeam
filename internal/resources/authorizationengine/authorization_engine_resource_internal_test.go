@@ -403,6 +403,54 @@ func TestAuthorizationEngineImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestAuthorizationEngineConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AuthorizationEngineResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestAuthorizationEngineImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewAuthorizationEngineResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: authorizationEngineState(t, schemaResp.Schema, AuthorizationEngineModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("OpenFGA"),
+		Type:          types.StringValue("openfga"),
+		Configuration: types.StringValue(`{"storeId":"store-1"}`),
+	})}
+
+	(&AuthorizationEngineResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/engine-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported AuthorizationEngineModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "engine-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func authorizationEnginePlan(t *testing.T, schema resourceschema.Schema, model AuthorizationEngineModel) tfsdk.Plan {
 	t.Helper()
 

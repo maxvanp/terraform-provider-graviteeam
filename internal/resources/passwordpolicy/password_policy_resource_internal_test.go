@@ -596,6 +596,52 @@ func TestPasswordPolicyImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestPasswordPolicyConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &PasswordPolicyResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestPasswordPolicyImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewPasswordPolicyResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: passwordPolicyState(t, schemaResp.Schema, PasswordPolicyModel{
+		ID:       types.StringValue("placeholder"),
+		DomainID: types.StringValue("placeholder"),
+		Name:     types.StringValue("Strict Policy"),
+	})}
+
+	(&PasswordPolicyResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/policy-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported PasswordPolicyModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "policy-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func passwordPolicyResponse(id string, body map[string]interface{}, defaultPolicy bool) map[string]interface{} {
 	result := map[string]interface{}{
 		"id":            id,

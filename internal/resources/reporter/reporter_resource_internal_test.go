@@ -438,6 +438,56 @@ func TestReporterImportRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestReporterConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &ReporterResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
+func TestReporterImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewReporterResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: reporterState(t, schemaResp.Schema, ReporterModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("file reporter"),
+		Type:          types.StringValue("reporter-am-file"),
+		Configuration: types.StringValue(`{"directory":"/tmp"}`),
+		Enabled:       types.BoolValue(true),
+		Inherited:     types.BoolValue(false),
+	})}
+
+	(&ReporterResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/reporter-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported ReporterModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "reporter-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func reporterPlan(t *testing.T, schema resourceschema.Schema, model ReporterModel) tfsdk.Plan {
 	t.Helper()
 
