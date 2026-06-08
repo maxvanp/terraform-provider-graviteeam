@@ -165,6 +165,89 @@ func TestPasswordPolicyEvaluationReadPostsPasswordAndUserContext(t *testing.T) {
 	}
 }
 
+func TestPasswordPolicyEvaluationReadOmitsEmptyUserContext(t *testing.T) {
+	tests := map[string]types.String{
+		"empty": types.StringValue(""),
+		"null":  types.StringNull(),
+	}
+
+	for name, userID := range tests {
+		t.Run(name, func(t *testing.T) {
+			var body map[string]interface{}
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/password-policies/policy-123/evaluate", func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				_, _ = w.Write([]byte(`{"valid":true}`))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			dataSource := &PasswordPolicyEvaluationDataSource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp datasource.SchemaResponse
+			dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+			config := passwordPolicyEvaluationConfig(t, schemaResp.Schema, PasswordPolicyEvaluationModel{
+				DomainID: types.StringValue("domain-123"),
+				PolicyID: types.StringValue("policy-123"),
+				Password: types.StringValue("Stronger123!"),
+				UserID:   userID,
+			})
+
+			readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+			}
+			if _, ok := body["userId"]; ok {
+				t.Fatalf("userId should be omitted from body: %#v", body)
+			}
+		})
+	}
+}
+
+func TestPasswordPolicyEvaluationReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &PasswordPolicyEvaluationDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id":   tftypes.Number,
+				"policy_id":   tftypes.String,
+				"password":    tftypes.String,
+				"user_id":     tftypes.String,
+				"result_json": tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id":   tftypes.NewValue(tftypes.Number, 123),
+				"policy_id":   tftypes.NewValue(tftypes.String, "policy-123"),
+				"password":    tftypes.NewValue(tftypes.String, "short"),
+				"user_id":     tftypes.NewValue(tftypes.String, nil),
+				"result_json": tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func TestPasswordPolicyEvaluationReadReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

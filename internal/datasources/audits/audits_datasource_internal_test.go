@@ -145,6 +145,48 @@ func TestFormatAuditEntriesUsesNullWhenDataIsMissing(t *testing.T) {
 	}
 }
 
+func TestFormatAuditEntriesReportsMarshalError(t *testing.T) {
+	t.Parallel()
+
+	_, err := formatAuditEntries(map[string]interface{}{
+		"data": []interface{}{func() {}},
+	})
+	if err == nil {
+		t.Fatal("expected marshal error")
+	}
+}
+
+func TestAuditsReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AuditsDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id": tftypes.Number,
+				"size":      tftypes.Number,
+				"audits":    tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id": tftypes.NewValue(tftypes.Number, big.NewFloat(123)),
+				"size":      tftypes.NewValue(tftypes.Number, big.NewFloat(5)),
+				"audits":    tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func TestAuditsReadUsesDefaultSizeAndFormatsEntries(t *testing.T) {
 	var rawQuery string
 
