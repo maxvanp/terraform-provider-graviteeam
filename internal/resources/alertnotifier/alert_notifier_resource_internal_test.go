@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -398,6 +399,57 @@ func TestAlertNotifierReportsLifecycleErrors(t *testing.T) {
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
 		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestAlertNotifierUpdateReportsInvalidPlanAndStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &AlertNotifierResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":            tftypes.String,
+			"domain_id":     tftypes.Number,
+			"name":          tftypes.String,
+			"type":          tftypes.String,
+			"configuration": tftypes.String,
+			"enabled":       tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":            tftypes.NewValue(tftypes.String, "notifier-123"),
+			"domain_id":     tftypes.NewValue(tftypes.Number, 123),
+			"name":          tftypes.NewValue(tftypes.String, "webhook"),
+			"type":          tftypes.NewValue(tftypes.String, "webhook-notifier"),
+			"configuration": tftypes.NewValue(tftypes.String, "{}"),
+			"enabled":       tftypes.NewValue(tftypes.Bool, true),
+		},
+	)
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: alertNotifierState(t, schemaResp.Schema, AlertNotifierModel{}),
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid plan diagnostics")
+	}
+
+	validPlan := alertNotifierPlan(t, schemaResp.Schema, AlertNotifierModel{
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("webhook"),
+		Type:          types.StringValue("webhook-notifier"),
+		Configuration: types.StringValue("{}"),
+		Enabled:       types.BoolValue(true),
+	})
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 }
 

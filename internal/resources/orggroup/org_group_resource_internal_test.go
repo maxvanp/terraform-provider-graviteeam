@@ -579,6 +579,21 @@ func TestOrgGroupCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 		t.Fatal("expected update diagnostics")
 	}
 
+	validPlan := orgGroupPlan(t, schemaResp.Schema, OrgGroupModel{
+		Name:        types.StringValue("admins"),
+		Description: types.StringValue("created"),
+		Members:     []types.String{types.StringValue("user-123")},
+		Roles:       []types.String{types.StringValue("role-123")},
+	})
+	updateResp = &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  validPlan,
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
 		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},

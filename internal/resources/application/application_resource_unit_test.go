@@ -968,6 +968,7 @@ func TestApplicationCRUDReportsRemoteErrors(t *testing.T) {
 	tests := map[string]struct {
 		createStatus int
 		itemStatus   int
+		putStatus    int
 		typeStatus   int
 		action       func(context.Context, *ApplicationResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
 	}{
@@ -997,6 +998,14 @@ func TestApplicationCRUDReportsRemoteErrors(t *testing.T) {
 		},
 		"update_read_before": {
 			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *ApplicationResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"update_put": {
+			putStatus: http.StatusInternalServerError,
 			action: func(ctx context.Context, r *ApplicationResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
 				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
@@ -1053,7 +1062,20 @@ func TestApplicationCRUDReportsRemoteErrors(t *testing.T) {
 					return
 				}
 				switch r.Method {
-				case http.MethodGet, http.MethodPut:
+				case http.MethodGet:
+					_ = json.NewEncoder(w).Encode(applicationResponse("app-123", map[string]interface{}{
+						"name":        "app",
+						"type":        "WEB",
+						"description": "application",
+						"settings": map[string]interface{}{
+							"oauth": map[string]interface{}{"clientId": "client-123", "clientSecret": "********"},
+						},
+					}))
+				case http.MethodPut:
+					if tc.putStatus != 0 {
+						http.Error(w, "remote error", tc.putStatus)
+						return
+					}
 					_ = json.NewEncoder(w).Encode(applicationResponse("app-123", map[string]interface{}{
 						"name":        "app",
 						"type":        "WEB",
