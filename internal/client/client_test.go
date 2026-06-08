@@ -2053,6 +2053,55 @@ func TestMembershipListsHandleMissingCollectionFields(t *testing.T) {
 	}
 }
 
+func TestMembershipListsReportInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(*Client) error
+	}{
+		{
+			name: "application members",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members",
+			call: func(c *Client) error {
+				_, err := c.ListApplicationMembers(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name: "protected resource members",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members",
+			call: func(c *Client) error {
+				_, err := c.ListProtectedResourceMembers(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name: "organization group members",
+			path: "/management/organizations/DEFAULT/groups/group-123/members",
+			call: func(c *Client) error {
+				_, err := c.GetOrgGroupMembers(context.Background(), "group-123")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(tt.path, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`{`))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if err := tt.call(newTestClient(server)); err == nil {
+				t.Fatal("expected invalid JSON error")
+			}
+		})
+	}
+}
+
 func TestDomainMemberUpsertReturnsJSONResponse(t *testing.T) {
 	mux := testMux()
 	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
@@ -2070,6 +2119,295 @@ func TestDomainMemberUpsertReturnsJSONResponse(t *testing.T) {
 	}
 	if member["id"] != "membership-123" {
 		t.Fatalf("member = %#v", member)
+	}
+}
+
+func TestMembershipUpsertsReportInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(*Client) error
+	}{
+		{
+			name: "application member",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateApplicationMember(context.Background(), "domain-123", "app-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name: "domain member",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name: "protected resource member",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateProtectedResourceMember(context.Background(), "domain-123", "resource-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name: "organization member",
+			path: "/management/organizations/DEFAULT/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"member": "user@example.com"})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(tt.path, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Fatalf("method = %s, want POST", r.Method)
+				}
+				_, _ = w.Write([]byte(`{`))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if err := tt.call(newTestClient(server)); err == nil {
+				t.Fatal("expected invalid JSON error")
+			}
+		})
+	}
+}
+
+func TestClientHelpersPropagateHTTPError(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(*Client) error
+	}{
+		{
+			name:   "list application secrets",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.ListApplicationSecrets(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name:   "create application secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.CreateApplicationSecret(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name:   "renew application secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123/_renew",
+			call: func(c *Client) error {
+				_, err := c.RenewApplicationSecret(context.Background(), "domain-123", "app-123", "secret-123")
+				return err
+			},
+		},
+		{
+			name:   "list application members",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members",
+			call: func(c *Client) error {
+				_, err := c.ListApplicationMembers(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name:   "add application member",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateApplicationMember(context.Background(), "domain-123", "app-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name:   "add domain member",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateDomainMember(context.Background(), "domain-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name:   "list protected resource secrets",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.ListProtectedResourceSecrets(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name:   "create protected resource secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.CreateProtectedResourceSecret(context.Background(), "domain-123", "resource-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name:   "renew protected resource secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets/secret-123/_renew",
+			call: func(c *Client) error {
+				_, err := c.RenewProtectedResourceSecret(context.Background(), "domain-123", "resource-123", "secret-123")
+				return err
+			},
+		},
+		{
+			name:   "list protected resource members",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members",
+			call: func(c *Client) error {
+				_, err := c.ListProtectedResourceMembers(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name:   "add protected resource member",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateProtectedResourceMember(context.Background(), "domain-123", "resource-123", map[string]interface{}{"memberId": "user-123"})
+				return err
+			},
+		},
+		{
+			name:   "add organization member",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/members",
+			call: func(c *Client) error {
+				_, err := c.AddOrUpdateOrgMember(context.Background(), map[string]interface{}{"member": "user@example.com"})
+				return err
+			},
+		},
+		{
+			name:   "organization group members",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/groups/group-123/members",
+			call: func(c *Client) error {
+				_, err := c.GetOrgGroupMembers(context.Background(), "group-123")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(tt.path, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tt.method {
+					t.Fatalf("method = %s, want %s", r.Method, tt.method)
+				}
+				http.Error(w, "failed", http.StatusInternalServerError)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if err := tt.call(newTestClient(server)); err == nil {
+				t.Fatal("expected HTTP error")
+			}
+		})
+	}
+}
+
+func TestSecretOperationsReportInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(*Client) error
+	}{
+		{
+			name:   "list application secrets",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.ListApplicationSecrets(context.Background(), "domain-123", "app-123")
+				return err
+			},
+		},
+		{
+			name:   "create application secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.CreateApplicationSecret(context.Background(), "domain-123", "app-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name:   "renew application secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/secrets/secret-123/_renew",
+			call: func(c *Client) error {
+				_, err := c.RenewApplicationSecret(context.Background(), "domain-123", "app-123", "secret-123")
+				return err
+			},
+		},
+		{
+			name:   "list protected resource secrets",
+			method: http.MethodGet,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.ListProtectedResourceSecrets(context.Background(), "domain-123", "resource-123")
+				return err
+			},
+		},
+		{
+			name:   "create protected resource secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets",
+			call: func(c *Client) error {
+				_, err := c.CreateProtectedResourceSecret(context.Background(), "domain-123", "resource-123", map[string]interface{}{"name": "secret"})
+				return err
+			},
+		},
+		{
+			name:   "renew protected resource secret",
+			method: http.MethodPost,
+			path:   "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/protected-resources/resource-123/secrets/secret-123/_renew",
+			call: func(c *Client) error {
+				_, err := c.RenewProtectedResourceSecret(context.Background(), "domain-123", "resource-123", "secret-123")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(tt.path, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tt.method {
+					t.Fatalf("method = %s, want %s", r.Method, tt.method)
+				}
+				_, _ = w.Write([]byte(`{`))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if err := tt.call(newTestClient(server)); err == nil {
+				t.Fatal("expected invalid JSON error")
+			}
+		})
 	}
 }
 
