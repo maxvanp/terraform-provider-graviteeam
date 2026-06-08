@@ -90,6 +90,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgUserResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildCreateBodyIncludesRequiredAndOptionalFields(t *testing.T) {
 	t.Parallel()
 
@@ -505,6 +516,251 @@ func TestOrgUserCRUDUsesMergedProfileUpdateAndSeparateActions(t *testing.T) {
 	}
 }
 
+func TestOrgUserCreateRequiresPassword(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgUserResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := orgUserPlan(t, schemaResp.Schema, OrgUserModel{
+		Username:           types.StringValue("alice"),
+		Password:           types.StringNull(),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected missing password diagnostics")
+	}
+}
+
+func TestOrgUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodDelete:
+			http.Error(w, "not found", http.StatusNotFound)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &OrgUserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := orgUserState(t, schemaResp.Schema, OrgUserModel{
+		ID:                 types.StringValue("org-user-123"),
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		Email:              types.StringValue("alice@example.com"),
+		FirstName:          types.StringValue("Alice"),
+		LastName:           types.StringValue("Liddell"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+	})
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected missing organization user to remove state, got %#v", readResp.State.Raw)
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestOrgUserCRUDReportsRemoteErrors(t *testing.T) {
+	tests := map[string]struct {
+		createStatus int
+		itemStatus   int
+		statusStatus int
+		action       func(context.Context, *OrgUserResource, tfsdk.Plan, tfsdk.State, resourceschema.Schema) bool
+	}{
+		"create": {
+			createStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgUserResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"post_create_status": {
+			statusStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgUserResource, plan tfsdk.Plan, _ tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(ctx, resource.CreateRequest{Plan: plan}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"read": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgUserResource, _ tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				r.Read(ctx, resource.ReadRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"update_username": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgUserResource, plan tfsdk.Plan, state tfsdk.State, schema resourceschema.Schema) bool {
+				resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+		"delete": {
+			itemStatus: http.StatusInternalServerError,
+			action: func(ctx context.Context, r *OrgUserResource, _ tfsdk.Plan, state tfsdk.State, _ resourceschema.Schema) bool {
+				resp := &resource.DeleteResponse{}
+				r.Delete(ctx, resource.DeleteRequest{State: state}, resp)
+				return resp.Diagnostics.HasError()
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Fatalf("collection method = %s, want POST", r.Method)
+				}
+				if tc.createStatus != 0 {
+					http.Error(w, "remote error", tc.createStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+					"username":           "alice",
+					"enabled":            true,
+					"forceResetPassword": false,
+					"preRegistration":    true,
+				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123", func(w http.ResponseWriter, r *http.Request) {
+				if tc.itemStatus != 0 {
+					http.Error(w, "remote error", tc.itemStatus)
+					return
+				}
+				switch r.Method {
+				case http.MethodGet, http.MethodPut:
+					_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+						"username":           "alice",
+						"enabled":            true,
+						"forceResetPassword": false,
+						"preRegistration":    true,
+					}))
+				case http.MethodDelete:
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Fatalf("item method = %s", r.Method)
+				}
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/status", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut {
+					t.Fatalf("status method = %s, want PUT", r.Method)
+				}
+				if tc.statusStatus != 0 {
+					http.Error(w, "remote error", tc.statusStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{
+					"username":           "alice",
+					"enabled":            false,
+					"forceResetPassword": false,
+					"preRegistration":    true,
+				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/users/org-user-123/username", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.itemStatus != 0 {
+					http.Error(w, "remote error", tc.itemStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(orgUserResponse("org-user-123", map[string]interface{}{"username": "alice-updated"}))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &OrgUserResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			planModel := OrgUserModel{
+				ID:                 types.StringValue("org-user-123"),
+				Username:           types.StringValue("alice-updated"),
+				Password:           types.StringValue("initial-secret"),
+				ForceResetPassword: types.BoolValue(false),
+				Enabled:            types.BoolValue(false),
+				PreRegistration:    types.BoolValue(true),
+			}
+			stateModel := planModel
+			stateModel.Username = types.StringValue("alice")
+			stateModel.Enabled = types.BoolValue(true)
+			plan := orgUserPlan(t, schemaResp.Schema, planModel)
+			state := orgUserState(t, schemaResp.Schema, stateModel)
+
+			if !tc.action(context.Background(), resourceUnderTest, plan, state, schemaResp.Schema) {
+				t.Fatal("expected diagnostics")
+			}
+		})
+	}
+}
+
+func TestOrgUserUpdateRequiresResetPasswordWhenTriggerChanges(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgUserResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := orgUserPlan(t, schemaResp.Schema, OrgUserModel{
+		ID:                 types.StringValue("org-user-123"),
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+		ResetPassword:      types.StringNull(),
+		ResetTrigger:       types.StringValue("rotation-2"),
+	})
+	state := orgUserState(t, schemaResp.Schema, OrgUserModel{
+		ID:                 types.StringValue("org-user-123"),
+		Username:           types.StringValue("alice"),
+		Password:           types.StringValue("initial-secret"),
+		ForceResetPassword: types.BoolValue(false),
+		Enabled:            types.BoolValue(true),
+		PreRegistration:    types.BoolValue(true),
+		ResetTrigger:       types.StringValue("rotation-1"),
+	})
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected missing reset password diagnostics")
+	}
+}
+
 func orgUserResponse(id string, body map[string]interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"id": id,
@@ -513,6 +769,16 @@ func orgUserResponse(id string, body map[string]interface{}) map[string]interfac
 		result[key] = value
 	}
 	return result
+}
+
+func orgUserState(t *testing.T, schema resourceschema.Schema, model OrgUserModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func orgUserPlan(t *testing.T, schema resourceschema.Schema, model OrgUserModel) tfsdk.Plan {
