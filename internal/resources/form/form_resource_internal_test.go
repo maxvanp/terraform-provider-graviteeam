@@ -476,6 +476,99 @@ func TestFormDeleteUsesApplicationScopedPath(t *testing.T) {
 	}
 }
 
+func TestFormCreateReadAndUpdateUseApplicationScopedPath(t *testing.T) {
+	var paths []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms", func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		switch r.Method {
+		case http.MethodPost:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":       "form-123",
+				"template": "LOGIN",
+				"enabled":  true,
+				"content":  "<html>login</html>",
+			})
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":       "form-123",
+				"template": "LOGIN",
+				"enabled":  true,
+				"content":  "<html>current</html>",
+			})
+		default:
+			t.Fatalf("collection method = %s", r.Method)
+		}
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123", func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		if r.Method != http.MethodPut {
+			t.Fatalf("item method = %s, want PUT", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":       "form-123",
+			"template": "LOGIN",
+			"enabled":  false,
+			"content":  "<html>updated</html>",
+		})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FormResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := formPlan(t, schemaResp.Schema, FormModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("LOGIN"),
+		Enabled:       types.BoolValue(true),
+		Content:       types.StringValue("<html>login</html>"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+
+	readResp := &resource.ReadResponse{State: createResp.State}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: createResp.State}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+	}
+
+	updatePlan := formPlan(t, schemaResp.Schema, FormModel{
+		DomainID:      types.StringValue("domain-123"),
+		ApplicationID: types.StringValue("app-123"),
+		Template:      types.StringValue("LOGIN"),
+		Enabled:       types.BoolValue(false),
+		Content:       types.StringValue("<html>updated</html>"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan, State: createResp.State}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf("update diagnostics: %#v", updateResp.Diagnostics)
+	}
+
+	want := []string{
+		"POST /management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms",
+		"GET /management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms",
+		"GET /management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms",
+		"PUT /management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications/app-123/forms/form-123",
+	}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("paths = %#v, want %#v", paths, want)
+	}
+}
+
 func TestFormCreateReportsRemoteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

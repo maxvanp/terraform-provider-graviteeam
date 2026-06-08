@@ -562,6 +562,85 @@ func TestI18nDictionaryReportsUpdateEntriesError(t *testing.T) {
 	}
 }
 
+func TestI18nDictionaryCreateReportsInvalidEntriesData(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dict-123", "name": "French", "locale": "fr"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries: types.MapValueMust(types.StringType, map[string]attr.Value{
+			"login.title": types.StringUnknown(),
+		}),
+	})
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid entries diagnostics")
+	}
+}
+
+func TestI18nDictionaryUpdateReportsInvalidEntriesData(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dict-123", "name": "French", "locale": "fr"})
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries: types.MapValueMust(types.StringType, map[string]attr.Value{
+			"login.title": types.StringUnknown(),
+		}),
+	})
+	state := i18nDictionaryState(t, schemaResp.Schema, I18nDictionaryModel{
+		ID:       types.StringValue("dict-123"),
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  nullEntries(),
+	})
+
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid entries diagnostics")
+	}
+}
+
 func TestI18nDictionaryImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&I18nDictionaryResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -666,6 +745,21 @@ func TestI18nDictionaryCreateReadUpdateAndDeleteReportInvalidStateData(t *testin
 	}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+			ID:       types.StringValue("dict-123"),
+			DomainID: types.StringValue("domain-123"),
+			Name:     types.StringValue("messages"),
+			Locale:   types.StringValue("en"),
+			Entries:  mapValue(t, map[string]string{"hello": "Hello"}),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 
 	deleteResp := &resource.DeleteResponse{}
