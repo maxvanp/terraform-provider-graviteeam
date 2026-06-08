@@ -116,6 +116,26 @@ func TestBuildBody(t *testing.T) {
 	}
 }
 
+func TestBuildBodySkipsUnknownOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	resource := &ThemeResource{}
+	plan := ThemeModel{
+		LogoURL:                 types.StringUnknown(),
+		LogoWidth:               types.Int64Unknown(),
+		FaviconURL:              types.StringUnknown(),
+		PrimaryButtonColorHex:   types.StringUnknown(),
+		SecondaryButtonColorHex: types.StringUnknown(),
+		PrimaryTextColorHex:     types.StringUnknown(),
+		SecondaryTextColorHex:   types.StringUnknown(),
+		CSS:                     types.StringUnknown(),
+	}
+
+	if got := resource.buildBody(plan); len(got) != 0 {
+		t.Fatalf("body = %#v, want no fields for unknown plan values", got)
+	}
+}
+
 func TestBuildUpdateBodyMergesCurrentAndClearsRemovedFields(t *testing.T) {
 	t.Parallel()
 
