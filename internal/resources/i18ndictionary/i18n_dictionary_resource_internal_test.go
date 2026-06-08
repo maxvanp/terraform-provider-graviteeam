@@ -342,6 +342,225 @@ func TestI18nDictionaryCRUDManagesEntriesSeparately(t *testing.T) {
 	}
 }
 
+func TestI18nDictionaryReadRemovesMissingDictionaryAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{name: "missing dictionary", statusCode: http.StatusNotFound, wantRemove: true},
+		{name: "server error", statusCode: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &I18nDictionaryResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := i18nDictionaryState(t, schemaResp.Schema, I18nDictionaryModel{
+				ID:       types.StringValue("dict-123"),
+				DomainID: types.StringValue("domain-123"),
+				Name:     types.StringValue("French"),
+				Locale:   types.StringValue("fr"),
+				Entries:  mapValue(t, map[string]string{"login.title": "Connexion"}),
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing dictionary to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestI18nDictionaryReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			http.Error(w, "update failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  nullEntries(),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := i18nDictionaryState(t, schemaResp.Schema, I18nDictionaryModel{
+		ID:       types.StringValue("dict-123"),
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  nullEntries(),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestI18nDictionaryReportsCreateEntriesError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dict-123", "name": "French", "locale": "fr"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123/entries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		http.Error(w, "entries failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  mapValue(t, map[string]string{"login.title": "Connexion"}),
+	})
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected create entries diagnostics")
+	}
+}
+
+func TestI18nDictionaryReportsUpdateEntriesError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "dict-123", "name": "French", "locale": "fr"})
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/i18n/dictionaries/dict-123/entries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		http.Error(w, "entries failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &I18nDictionaryResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := i18nDictionaryPlan(t, schemaResp.Schema, I18nDictionaryModel{
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  mapValue(t, map[string]string{"login.title": "Connexion"}),
+	})
+	state := i18nDictionaryState(t, schemaResp.Schema, I18nDictionaryModel{
+		ID:       types.StringValue("dict-123"),
+		DomainID: types.StringValue("domain-123"),
+		Name:     types.StringValue("French"),
+		Locale:   types.StringValue("fr"),
+		Entries:  nullEntries(),
+	})
+
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected update entries diagnostics")
+	}
+}
+
+func TestI18nDictionaryImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&I18nDictionaryResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func i18nDictionaryPlan(t *testing.T, schema resourceschema.Schema, model I18nDictionaryModel) tfsdk.Plan {
 	t.Helper()
 
@@ -352,6 +571,16 @@ func i18nDictionaryPlan(t *testing.T, schema resourceschema.Schema, model I18nDi
 	return plan
 }
 
+func i18nDictionaryState(t *testing.T, schema resourceschema.Schema, model I18nDictionaryModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
+}
+
 func mapValue(t *testing.T, values map[string]string) types.Map {
 	t.Helper()
 
@@ -360,6 +589,10 @@ func mapValue(t *testing.T, values map[string]string) types.Map {
 		t.Fatalf("map value diagnostics: %#v", diags)
 	}
 	return value
+}
+
+func nullEntries() types.Map {
+	return types.MapNull(types.StringType)
 }
 
 func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
