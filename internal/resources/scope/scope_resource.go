@@ -180,6 +180,9 @@ func (r *ScopeResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	err := r.client.DeleteScope(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting scope", err.Error())
 	}
 }

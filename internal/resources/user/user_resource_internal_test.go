@@ -821,6 +821,136 @@ func TestUserUpdateRequiresResetPasswordWhenTriggerChanges(t *testing.T) {
 	}
 }
 
+func TestUserUpdateReportsActionErrors(t *testing.T) {
+	tests := map[string]struct {
+		unlockStatus       int
+		resetStatus        int
+		registrationStatus int
+		finalReadStatus    int
+		plan               func() UserModel
+		state              func() UserModel
+	}{
+		"unlock": {
+			unlockStatus: http.StatusInternalServerError,
+			plan: func() UserModel {
+				model := baseUserModel()
+				model.Locked = types.BoolValue(false)
+				return model
+			},
+			state: func() UserModel {
+				model := baseUserModel()
+				model.Locked = types.BoolValue(true)
+				return model
+			},
+		},
+		"reset_password": {
+			resetStatus: http.StatusInternalServerError,
+			plan: func() UserModel {
+				model := baseUserModel()
+				model.ResetPassword = types.StringValue("rotated-secret")
+				model.ResetTrigger = types.StringValue("rotation-2")
+				return model
+			},
+			state: func() UserModel {
+				model := baseUserModel()
+				model.ResetTrigger = types.StringValue("rotation-1")
+				return model
+			},
+		},
+		"registration_confirmation": {
+			registrationStatus: http.StatusInternalServerError,
+			plan: func() UserModel {
+				model := baseUserModel()
+				model.RegistrationTrigger = types.StringValue("send-2")
+				return model
+			},
+			state: func() UserModel {
+				model := baseUserModel()
+				model.RegistrationTrigger = types.StringValue("send-1")
+				return model
+			},
+		},
+		"final_read": {
+			finalReadStatus: http.StatusInternalServerError,
+			plan: func() UserModel {
+				model := baseUserModel()
+				model.ResetPassword = types.StringValue("rotated-secret")
+				model.ResetTrigger = types.StringValue("rotation-2")
+				return model
+			},
+			state: func() UserModel {
+				model := baseUserModel()
+				model.ResetTrigger = types.StringValue("rotation-1")
+				return model
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("item method = %s, want GET", r.Method)
+				}
+				if tc.finalReadStatus != 0 {
+					http.Error(w, "remote error", tc.finalReadStatus)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+					"username":           "alice",
+					"enabled":            true,
+					"accountNonLocked":   true,
+					"forceResetPassword": false,
+					"preRegistration":    true,
+				}))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/unlock", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.unlockStatus != 0 {
+					http.Error(w, "remote error", tc.unlockStatus)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/resetPassword", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.resetStatus != 0 {
+					http.Error(w, "remote error", tc.resetStatus)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/sendRegistrationConfirmation", func(w http.ResponseWriter, _ *http.Request) {
+				if tc.registrationStatus != 0 {
+					http.Error(w, "remote error", tc.registrationStatus)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &UserResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+
+			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+				Plan:  userPlan(t, schemaResp.Schema, tc.plan()),
+				State: userState(t, schemaResp.Schema, tc.state()),
+			}, updateResp)
+			if !updateResp.Diagnostics.HasError() {
+				t.Fatal("expected update diagnostics")
+			}
+		})
+	}
+}
+
 func TestUserImportStateRejectsInvalidID(t *testing.T) {
 	t.Parallel()
 
@@ -834,6 +964,51 @@ func TestUserImportStateRejectsInvalidID(t *testing.T) {
 
 	if !importResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import diagnostics")
+	}
+}
+
+func TestUserImportStateSetsAttributes(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	NewUserResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	importResp := &resource.ImportStateResponse{State: userState(t, schemaResp.Schema, baseUserModel())}
+
+	NewUserResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/user-123",
+	}, importResp)
+
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", importResp.Diagnostics)
+	}
+	var state UserModel
+	if diags := importResp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ID.ValueString(), "user-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
+func baseUserModel() UserModel {
+	return UserModel{
+		ID:                  types.StringValue("user-123"),
+		DomainID:            types.StringValue("domain-123"),
+		Username:            types.StringValue("alice"),
+		Email:               types.StringNull(),
+		FirstName:           types.StringNull(),
+		LastName:            types.StringNull(),
+		DisplayName:         types.StringNull(),
+		ForceResetPassword:  types.BoolValue(false),
+		Enabled:             types.BoolValue(true),
+		Locked:              types.BoolValue(false),
+		PreRegistration:     types.BoolValue(true),
+		ResetPassword:       types.StringNull(),
+		ResetTrigger:        types.StringNull(),
+		RegistrationTrigger: types.StringNull(),
 	}
 }
 

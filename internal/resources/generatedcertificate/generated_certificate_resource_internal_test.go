@@ -67,6 +67,19 @@ func TestGeneratedCertificateConfigureRejectsUnexpectedProviderData(t *testing.T
 	}
 }
 
+func TestGeneratedCertificateConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &GeneratedCertificateResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestGeneratedCertificateUpdateIsNoOp(t *testing.T) {
 	t.Parallel()
 
@@ -365,6 +378,39 @@ func TestGeneratedCertificateImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestGeneratedCertificateImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&GeneratedCertificateResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	if diags := resp.State.Set(context.Background(), &GeneratedCertificateModel{
+		ID:              types.StringValue("old-cert"),
+		DomainID:        types.StringValue("old-domain"),
+		RotationTrigger: types.StringNull(),
+		Name:            types.StringValue("generated-cert"),
+		Type:            types.StringValue("pem"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	(&GeneratedCertificateResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/cert-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state GeneratedCertificateModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ID.ValueString(), "cert-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

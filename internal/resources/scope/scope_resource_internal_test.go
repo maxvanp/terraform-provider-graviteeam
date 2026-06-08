@@ -77,6 +77,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ScopeResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildUpdateBodyClearsRemovedScopeFields(t *testing.T) {
 	t.Parallel()
 
@@ -412,6 +423,42 @@ func TestScopeReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestScopeDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/scopes/scope-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ScopeResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := scopeState(t, schemaResp.Schema, ScopeModel{
+		ID:            types.StringValue("scope-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Key:           types.StringValue("claim_scope"),
+		Name:          types.StringValue("Claim scope"),
+		Discovery:     types.BoolValue(true),
+		Parameterized: types.BoolValue(false),
+	})
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
 func TestScopeImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&ScopeResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -420,6 +467,37 @@ func TestScopeImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestScopeImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&ScopeResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: scopeState(t, schemaResp.Schema, ScopeModel{
+		ID:            types.StringValue("old-scope"),
+		DomainID:      types.StringValue("old-domain"),
+		Key:           types.StringValue("claim_scope"),
+		Name:          types.StringValue("Claim scope"),
+		Discovery:     types.BoolValue(true),
+		Parameterized: types.BoolValue(false),
+	})}
+
+	(&ScopeResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/scope-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state ScopeModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ID.ValueString(), "scope-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 
