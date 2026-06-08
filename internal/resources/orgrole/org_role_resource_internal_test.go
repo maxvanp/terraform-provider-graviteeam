@@ -14,6 +14,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -611,6 +612,58 @@ func TestOrgRoleImportStateSetsID(t *testing.T) {
 	}
 	if got, want := imported.ID.ValueString(), "role-123"; got != want {
 		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
+func TestOrgRoleCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &OrgRoleResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	permissionsType := tftypes.List{ElementType: tftypes.String}
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":              tftypes.String,
+			"name":            tftypes.Number,
+			"description":     tftypes.String,
+			"assignable_type": tftypes.String,
+			"permissions":     permissionsType,
+		}},
+		map[string]tftypes.Value{
+			"id":              tftypes.NewValue(tftypes.String, "role-123"),
+			"name":            tftypes.NewValue(tftypes.Number, 123),
+			"description":     tftypes.NewValue(tftypes.String, "created"),
+			"assignable_type": tftypes.NewValue(tftypes.String, "ORGANIZATION"),
+			"permissions":     tftypes.NewValue(permissionsType, []tftypes.Value{tftypes.NewValue(tftypes.String, "organization_member_read")}),
+		},
+	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw}}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 

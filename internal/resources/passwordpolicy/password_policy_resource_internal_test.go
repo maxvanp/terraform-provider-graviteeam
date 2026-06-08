@@ -12,6 +12,7 @@ import (
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
@@ -639,6 +640,77 @@ func TestPasswordPolicyImportStateSetsDomainAndID(t *testing.T) {
 	}
 	if got, want := imported.ID.ValueString(), "policy-123"; got != want {
 		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
+func TestPasswordPolicyCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &PasswordPolicyResource{}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	raw := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"id":                                    tftypes.String,
+			"domain_id":                             tftypes.Number,
+			"name":                                  tftypes.String,
+			"min_length":                            tftypes.Number,
+			"max_length":                            tftypes.Number,
+			"max_consecutive_letters":               tftypes.Number,
+			"expiry_duration":                       tftypes.Number,
+			"old_passwords":                         tftypes.Number,
+			"include_numbers":                       tftypes.Bool,
+			"include_special_characters":            tftypes.Bool,
+			"letters_in_mixed_case":                 tftypes.Bool,
+			"exclude_passwords_in_dictionary":       tftypes.Bool,
+			"exclude_user_profile_info_in_password": tftypes.Bool,
+			"password_history_enabled":              tftypes.Bool,
+			"default_policy":                        tftypes.Bool,
+		}},
+		map[string]tftypes.Value{
+			"id":                                    tftypes.NewValue(tftypes.String, "policy-123"),
+			"domain_id":                             tftypes.NewValue(tftypes.Number, 123),
+			"name":                                  tftypes.NewValue(tftypes.String, "policy"),
+			"min_length":                            tftypes.NewValue(tftypes.Number, 8),
+			"max_length":                            tftypes.NewValue(tftypes.Number, 64),
+			"max_consecutive_letters":               tftypes.NewValue(tftypes.Number, 3),
+			"expiry_duration":                       tftypes.NewValue(tftypes.Number, 90),
+			"old_passwords":                         tftypes.NewValue(tftypes.Number, 5),
+			"include_numbers":                       tftypes.NewValue(tftypes.Bool, true),
+			"include_special_characters":            tftypes.NewValue(tftypes.Bool, true),
+			"letters_in_mixed_case":                 tftypes.NewValue(tftypes.Bool, true),
+			"exclude_passwords_in_dictionary":       tftypes.NewValue(tftypes.Bool, true),
+			"exclude_user_profile_info_in_password": tftypes.NewValue(tftypes.Bool, true),
+			"password_history_enabled":              tftypes.NewValue(tftypes.Bool, true),
+			"default_policy":                        tftypes.NewValue(tftypes.Bool, false),
+		},
+	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw}}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
 	}
 }
 
