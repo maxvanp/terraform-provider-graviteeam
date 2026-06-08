@@ -283,6 +283,47 @@ func TestAnalyticsReadReportsNon500RemoteError(t *testing.T) {
 	}
 }
 
+func TestAnalyticsReadReportsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	dataSource := &AnalyticsDataSource{
+		client: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp datasource.SchemaResponse
+	dataSource.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	config := tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"domain_id": tftypes.Number,
+				"type":      tftypes.String,
+				"field":     tftypes.String,
+				"from":      tftypes.Number,
+				"to":        tftypes.Number,
+				"interval":  tftypes.Number,
+				"size":      tftypes.Number,
+				"result":    tftypes.String,
+			}},
+			map[string]tftypes.Value{
+				"domain_id": tftypes.NewValue(tftypes.Number, 123),
+				"type":      tftypes.NewValue(tftypes.String, "COUNT"),
+				"field":     tftypes.NewValue(tftypes.String, nil),
+				"from":      tftypes.NewValue(tftypes.Number, big.NewFloat(1000)),
+				"to":        tftypes.NewValue(tftypes.Number, big.NewFloat(2000)),
+				"interval":  tftypes.NewValue(tftypes.Number, nil),
+				"size":      tftypes.NewValue(tftypes.Number, nil),
+				"result":    tftypes.NewValue(tftypes.String, nil),
+			},
+		),
+		Schema: schemaResp.Schema,
+	}
+
+	readResp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	dataSource.Read(context.Background(), datasource.ReadRequest{Config: config}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid config diagnostics")
+	}
+}
+
 func analyticsConfig(schema datasourceschema.Schema, model AnalyticsModel) tfsdk.Config {
 	return tfsdk.Config{
 		Raw: tftypes.NewValue(
