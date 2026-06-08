@@ -343,6 +343,86 @@ func TestFactorReadRemovesMissingFactorAndDeleteIgnores404(t *testing.T) {
 	}
 }
 
+func TestFactorReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/factors/factor-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			http.Error(w, "read failed", http.StatusInternalServerError)
+		case http.MethodPut:
+			http.Error(w, "update failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &FactorResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := factorPlan(t, schemaResp.Schema, FactorModel{
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login TOTP"),
+		FactorType: types.StringValue("TOTP"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := factorState(t, schemaResp.Schema, FactorModel{
+		ID:         types.StringValue("factor-123"),
+		DomainID:   types.StringValue("domain-123"),
+		Name:       types.StringValue("Login TOTP"),
+		FactorType: types.StringValue("TOTP"),
+	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestFactorImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&FactorResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func factorPlan(t *testing.T, schema resourceschema.Schema, model FactorModel) tfsdk.Plan {
 	t.Helper()
 
@@ -351,4 +431,14 @@ func factorPlan(t *testing.T, schema resourceschema.Schema, model FactorModel) t
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func factorState(t *testing.T, schema resourceschema.Schema, model FactorModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
