@@ -9,6 +9,10 @@ import (
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
 )
 
 func TestProviderMetadata(t *testing.T) {
@@ -62,6 +66,59 @@ func TestProviderSchemaAttributes(t *testing.T) {
 	assertProviderStringAttribute(t, resp.Schema.Attributes, "client_secret", true, false, true)
 	assertProviderStringAttribute(t, resp.Schema.Attributes, "organization_id", false, true, false)
 	assertProviderStringAttribute(t, resp.Schema.Attributes, "environment_id", false, true, false)
+}
+
+func TestProviderConfigureBuildsClientWithDefaultScope(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	p := New("test")()
+	schemaResp := &fwprovider.SchemaResponse{}
+	p.Schema(ctx, fwprovider.SchemaRequest{}, schemaResp)
+	resp := &fwprovider.ConfigureResponse{}
+
+	p.Configure(ctx, fwprovider.ConfigureRequest{
+		Config: providerConfig(schemaResp.Schema, "http://example.test", "client-id", "client-secret", "", ""),
+	}, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %+v", resp.Diagnostics)
+	}
+	got, ok := resp.ResourceData.(*client.Client)
+	if !ok {
+		t.Fatalf("resource data = %T, want *client.Client", resp.ResourceData)
+	}
+	if resp.DataSourceData != got {
+		t.Fatalf("data source data should reuse resource client")
+	}
+	if got.BaseURL != "http://example.test" || got.OrganizationID != "DEFAULT" || got.EnvironmentID != "DEFAULT" {
+		t.Fatalf("client = %#v, want default organization/environment scope", got)
+	}
+}
+
+func TestProviderConfigureBuildsClientWithConfiguredScope(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	p := New("test")()
+	schemaResp := &fwprovider.SchemaResponse{}
+	p.Schema(ctx, fwprovider.SchemaRequest{}, schemaResp)
+	resp := &fwprovider.ConfigureResponse{}
+
+	p.Configure(ctx, fwprovider.ConfigureRequest{
+		Config: providerConfig(schemaResp.Schema, "http://example.test", "client-id", "client-secret", "ORG", "ENV"),
+	}, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %+v", resp.Diagnostics)
+	}
+	got, ok := resp.ResourceData.(*client.Client)
+	if !ok {
+		t.Fatalf("resource data = %T, want *client.Client", resp.ResourceData)
+	}
+	if got.OrganizationID != "ORG" || got.EnvironmentID != "ENV" {
+		t.Fatalf("client scope = %s/%s, want ORG/ENV", got.OrganizationID, got.EnvironmentID)
+	}
 }
 
 func TestProviderRegistersExpectedResourceTypeNames(t *testing.T) {
@@ -161,6 +218,36 @@ func TestProviderRegistersExpectedDataSourceTypeNames(t *testing.T) {
 	sort.Strings(want)
 
 	assertStringSlicesEqual(t, got, want)
+}
+
+func providerConfig(configSchema schema.Schema, apiURL, clientID, clientSecret, orgID, envID string) tfsdk.Config {
+	values := map[string]tftypes.Value{
+		"api_url":         tftypes.NewValue(tftypes.String, apiURL),
+		"client_id":       tftypes.NewValue(tftypes.String, clientID),
+		"client_secret":   tftypes.NewValue(tftypes.String, clientSecret),
+		"organization_id": providerConfigOptionalString(orgID),
+		"environment_id":  providerConfigOptionalString(envID),
+	}
+	return tfsdk.Config{
+		Raw: tftypes.NewValue(
+			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"api_url":         tftypes.String,
+				"client_id":       tftypes.String,
+				"client_secret":   tftypes.String,
+				"organization_id": tftypes.String,
+				"environment_id":  tftypes.String,
+			}},
+			values,
+		),
+		Schema: configSchema,
+	}
+}
+
+func providerConfigOptionalString(value string) tftypes.Value {
+	if value == "" {
+		return tftypes.NewValue(tftypes.String, nil)
+	}
+	return tftypes.NewValue(tftypes.String, value)
 }
 
 func TestResourceSchemas(t *testing.T) {
