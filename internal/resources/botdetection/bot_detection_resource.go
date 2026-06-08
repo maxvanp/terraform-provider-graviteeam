@@ -163,7 +163,7 @@ func (r *BotDetectionResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	err := r.client.DeleteBotDetection(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting bot detection", err.Error())
 	}
 }

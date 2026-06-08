@@ -57,6 +57,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&BotDetectionResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
@@ -422,6 +433,42 @@ func TestBotDetectionReportsLifecycleErrors(t *testing.T) {
 	}
 }
 
+func TestBotDetectionDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/bot-detections/bot-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &BotDetectionResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := botDetectionState(t, schemaResp.Schema, BotDetectionModel{
+		ID:            types.StringValue("bot-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("reCAPTCHA"),
+		Type:          types.StringValue("google-recaptcha-v3-am-bot-detection"),
+		DetectionType: types.StringValue("CAPTCHA"),
+		Configuration: types.StringValue(`{"secretKey":"real-secret"}`),
+	})
+
+	resp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBotDetectionImportRejectsInvalidID(t *testing.T) {
 	var resp resource.ImportStateResponse
 	(&BotDetectionResource{}).ImportState(context.Background(), resource.ImportStateRequest{
@@ -430,6 +477,37 @@ func TestBotDetectionImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestBotDetectionImportStateSetsDomainAndID(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewBotDetectionResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: botDetectionState(t, schemaResp.Schema, BotDetectionModel{
+		ID:            types.StringValue("placeholder"),
+		DomainID:      types.StringValue("placeholder"),
+		Name:          types.StringValue("reCAPTCHA"),
+		Type:          types.StringValue("google-recaptcha-v3-am-bot-detection"),
+		DetectionType: types.StringValue("CAPTCHA"),
+		Configuration: types.StringValue(`{"secretKey":"real-secret"}`),
+	})}
+
+	(&BotDetectionResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/bot-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported BotDetectionModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.ID.ValueString(), "bot-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

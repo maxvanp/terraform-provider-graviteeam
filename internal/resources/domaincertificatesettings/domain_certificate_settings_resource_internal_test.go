@@ -64,6 +64,19 @@ func TestDomainCertificateSettingsConfigureRejectsUnexpectedProviderData(t *test
 	}
 }
 
+func TestDomainCertificateSettingsConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &DomainCertificateSettingsResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBodySetsFallbackCertificate(t *testing.T) {
 	t.Parallel()
 
@@ -398,6 +411,34 @@ func TestDomainCertificateSettingsReportsWriteErrors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDomainCertificateSettingsImportStateSetsIDAndDomain(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewDomainCertificateSettingsResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: domainCertificateSettingsState(t, schemaResp.Schema, DomainCertificateSettingsModel{
+		ID:                    types.StringValue("placeholder"),
+		DomainID:              types.StringValue("placeholder"),
+		FallbackCertificateID: types.StringValue("cert-123"),
+	})}
+
+	(&DomainCertificateSettingsResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported DomainCertificateSettingsModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
 	}
 }
 

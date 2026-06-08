@@ -72,6 +72,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&AlertTriggerResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestValidateTriggerTypeNormalizesAcceptedValues(t *testing.T) {
 	t.Parallel()
 
@@ -522,6 +533,39 @@ func TestAlertTriggerImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestAlertTriggerImportStateSetsDomainAndNormalizedType(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewAlertTriggerResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: alertTriggerState(t, schemaResp.Schema, AlertTriggerModel{
+		ID:               types.StringValue("placeholder"),
+		DomainID:         types.StringValue("placeholder"),
+		Type:             types.StringValue("TOO_MANY_LOGIN_FAILURES"),
+		Enabled:          types.BoolValue(true),
+		AlertNotifierIDs: stringSet(t, nil),
+	})}
+
+	(&AlertTriggerResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/risk_assessment",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var imported AlertTriggerModel
+	if diags := resp.State.Get(context.Background(), &imported); diags.HasError() {
+		t.Fatalf("get imported state: %#v", diags)
+	}
+	if got, want := imported.ID.ValueString(), "domain-123/risk_assessment"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := imported.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain id = %q, want %q", got, want)
+	}
+	if got, want := imported.Type.ValueString(), "RISK_ASSESSMENT"; got != want {
+		t.Fatalf("type = %q, want %q", got, want)
 	}
 }
 
