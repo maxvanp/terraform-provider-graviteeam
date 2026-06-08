@@ -365,6 +365,19 @@ func TestReadIntoModelHandlesInt64LogoWidth(t *testing.T) {
 	}
 }
 
+func TestReadIntoModelClearsMissingLogoWidth(t *testing.T) {
+	t.Parallel()
+
+	model := ThemeModel{
+		LogoWidth: types.Int64Value(64),
+	}
+	(&ThemeResource{}).readIntoModel(&model, map[string]interface{}{})
+
+	if !model.LogoWidth.IsNull() {
+		t.Fatalf("missing logo width should be null, got %d", model.LogoWidth.ValueInt64())
+	}
+}
+
 func TestThemeCRUDMergesCurrentThemeOnUpdate(t *testing.T) {
 	var bodies []map[string]interface{}
 	var methods []string

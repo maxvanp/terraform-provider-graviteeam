@@ -605,7 +605,7 @@ func TestOrgUserReadRemovesMissingUserAndDeleteIgnores404(t *testing.T) {
 	}
 }
 
-func TestOrgUserDeleteReportsInvalidStateData(t *testing.T) {
+func TestOrgUserCRUDReportsInvalidStateData(t *testing.T) {
 	t.Parallel()
 
 	resourceUnderTest := &OrgUserResource{}
@@ -639,6 +639,51 @@ func TestOrgUserDeleteReportsInvalidStateData(t *testing.T) {
 			"reset_password_trigger": tftypes.NewValue(tftypes.String, nil),
 		},
 	)
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+	}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: raw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: orgUserPlan(t, schemaResp.Schema, OrgUserModel{
+			ID:                 types.StringValue("org-user-123"),
+			Username:           types.StringValue("alice"),
+			Password:           types.StringValue("initial-secret"),
+			Email:              types.StringValue("alice@example.com"),
+			FirstName:          types.StringValue("Alice"),
+			LastName:           types.StringValue("Liddell"),
+			ForceResetPassword: types.BoolValue(false),
+			Enabled:            types.BoolValue(true),
+			PreRegistration:    types.BoolValue(true),
+			ResetPassword:      types.StringNull(),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
 
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{

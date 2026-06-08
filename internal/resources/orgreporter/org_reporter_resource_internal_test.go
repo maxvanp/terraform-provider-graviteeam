@@ -558,6 +558,22 @@ func TestOrgReporterCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: orgReporterPlan(t, schemaResp.Schema, OrgReporterModel{
+			ID:            types.StringValue("reporter-123"),
+			Name:          types.StringValue("file reporter"),
+			Type:          types.StringValue("reporter-am-file"),
+			Configuration: types.StringValue("{}"),
+			Enabled:       types.BoolValue(true),
+			Inherited:     types.BoolValue(false),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {

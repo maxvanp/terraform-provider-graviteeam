@@ -156,6 +156,23 @@ func TestReadIntoModelMapsRoleResponse(t *testing.T) {
 	}
 }
 
+func TestReadIntoModelClearsAbsentRoleOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	model := RoleModel{
+		Description:    types.StringValue("description"),
+		AssignableType: types.StringValue("DOMAIN"),
+	}
+	(&RoleResource{}).readIntoModel(&model, map[string]interface{}{})
+
+	if !model.Description.IsNull() {
+		t.Fatalf("description should be null, got %q", model.Description.ValueString())
+	}
+	if !model.AssignableType.IsNull() {
+		t.Fatalf("assignable type should be null, got %q", model.AssignableType.ValueString())
+	}
+}
+
 func TestRoleCRUDUsesCreateThenUpdateAndClearsManagedLists(t *testing.T) {
 	var bodies []map[string]interface{}
 	var methods []string
@@ -563,6 +580,23 @@ func TestRoleCreateReadUpdateAndDeleteReportInvalidStateData(t *testing.T) {
 	}, updateResp)
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected update diagnostics")
+	}
+
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: rolePlan(t, schemaResp.Schema, RoleModel{
+			ID:             types.StringValue("role-123"),
+			DomainID:       types.StringValue("domain-123"),
+			Name:           types.StringValue("role"),
+			Description:    types.StringValue("created"),
+			AssignableType: types.StringValue("DOMAIN"),
+			Permissions:    []types.String{types.StringValue("domain_user_read")},
+			OAuthScopes:    []types.String{types.StringValue("openid")},
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
 	}
 
 	deleteResp := &resource.DeleteResponse{}

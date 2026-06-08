@@ -291,6 +291,19 @@ func TestReadIntoModelMapsOrgIdentityProvider(t *testing.T) {
 	assertListValue(t, model.RoleMapper.Elements()["{#profile['groups'].contains('external-admin-role')}"], []string{"role-id"})
 }
 
+func TestReadIntoModelAcceptsStringConfiguration(t *testing.T) {
+	t.Parallel()
+
+	model := OrgIdentityProviderModel{}
+	readIntoModel(&model, map[string]interface{}{
+		"configuration": `{"users":[]}`,
+	})
+
+	if got, want := model.Configuration.ValueString(), `{"users":[]}`; got != want {
+		t.Fatalf("configuration = %q, want %q", got, want)
+	}
+}
+
 func TestReadIntoModelClearsAbsentOptionalMappings(t *testing.T) {
 	t.Parallel()
 

@@ -160,6 +160,14 @@ func TestGeneratedCertificateCreateAndUpdateReportInvalidStateData(t *testing.T)
 		t.Fatal("expected create diagnostics")
 	}
 
+	readResp := resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	NewGeneratedCertificateResource().Read(context.Background(), resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, &readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
 	updateResp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	NewGeneratedCertificateResource().Update(context.Background(), resource.UpdateRequest{
 		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},

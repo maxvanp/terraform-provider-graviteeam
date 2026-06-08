@@ -149,6 +149,19 @@ func TestReadAPIConditionMapper(t *testing.T) {
 	assertListValue(t, elements["{#profile['groups'].contains('external-users')}"], []string{"group-user"})
 }
 
+func TestIdentityProviderReadIntoModelAcceptsStringConfiguration(t *testing.T) {
+	t.Parallel()
+
+	model := IdentityProviderModel{}
+	(&IdentityProviderResource{}).readIntoModel(&model, map[string]interface{}{
+		"configuration": `{"users":[]}`,
+	})
+
+	if got, want := model.Configuration.ValueString(), `{"users":[]}`; got != want {
+		t.Fatalf("configuration = %q, want %q", got, want)
+	}
+}
+
 func TestBuildUpdateBodyClearsRemovedIdentityProviderCollections(t *testing.T) {
 	t.Parallel()
 

@@ -735,6 +735,31 @@ func TestPasswordPolicyCreateReadUpdateAndDeleteReportInvalidStateData(t *testin
 		t.Fatal("expected update diagnostics")
 	}
 
+	invalidStateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{
+		Plan: passwordPolicyPlan(t, schemaResp.Schema, PasswordPolicyModel{
+			ID:                               types.StringValue("policy-123"),
+			DomainID:                         types.StringValue("domain-123"),
+			Name:                             types.StringValue("policy"),
+			MinLength:                        types.Int64Value(8),
+			MaxLength:                        types.Int64Value(64),
+			MaxConsecutiveLetters:            types.Int64Value(3),
+			ExpiryDuration:                   types.Int64Value(90),
+			OldPasswords:                     types.Int64Value(5),
+			IncludeNumbers:                   types.BoolValue(true),
+			IncludeSpecialCharacters:         types.BoolValue(true),
+			LettersInMixedCase:               types.BoolValue(true),
+			ExcludePasswordsInDictionary:     types.BoolValue(true),
+			ExcludeUserProfileInfoInPassword: types.BoolValue(true),
+			PasswordHistoryEnabled:           types.BoolValue(true),
+			DefaultPolicy:                    types.BoolValue(false),
+		}),
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, invalidStateResp)
+	if !invalidStateResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state diagnostics")
+	}
+
 	deleteResp := &resource.DeleteResponse{}
 	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw}}, deleteResp)
 	if !deleteResp.Diagnostics.HasError() {
