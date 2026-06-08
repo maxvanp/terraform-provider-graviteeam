@@ -62,6 +62,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&ApplicationEmailResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildBodyIncludesConfiguredFromName(t *testing.T) {
 	model := ApplicationEmailModel{
 		Enabled:      types.BoolValue(true),
@@ -501,6 +512,44 @@ func TestApplicationEmailImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestApplicationEmailImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&ApplicationEmailResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: applicationEmailState(t, schemaResp.Schema, ApplicationEmailModel{
+		ID:            types.StringValue("email-123"),
+		DomainID:      types.StringValue("old-domain"),
+		ApplicationID: types.StringValue("old-app"),
+		Template:      types.StringValue("RESET_PASSWORD"),
+		Enabled:       types.BoolValue(true),
+		From:          types.StringValue("noreply@example.test"),
+		FromName:      types.StringNull(),
+		Subject:       types.StringValue("Reset"),
+		Content:       types.StringValue("<html>Reset</html>"),
+		ExpiresAfter:  types.Int64Value(3600),
+	})}
+
+	(&ApplicationEmailResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/app-123/RESET_PASSWORD",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state ApplicationEmailModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ApplicationID.ValueString(), "app-123"; got != want {
+		t.Fatalf("application_id = %q, want %q", got, want)
+	}
+	if got, want := state.Template.ValueString(), "RESET_PASSWORD"; got != want {
+		t.Fatalf("template = %q, want %q", got, want)
 	}
 }
 

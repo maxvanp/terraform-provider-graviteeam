@@ -67,6 +67,17 @@ func TestAlertNotifierConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestAlertNotifierConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&AlertNotifierResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildCreateBodyIncludesImmutableAndMutableFields(t *testing.T) {
 	t.Parallel()
 
@@ -398,6 +409,37 @@ func TestAlertNotifierImportRejectsInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
+func TestAlertNotifierImportStateSetsAttributes(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	(&AlertNotifierResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: alertNotifierState(t, schemaResp.Schema, AlertNotifierModel{
+		ID:            types.StringValue("old-notifier"),
+		DomainID:      types.StringValue("old-domain"),
+		Name:          types.StringValue("webhook"),
+		Type:          types.StringValue("webhook-notifier"),
+		Configuration: types.StringValue(`{"secret":"plain"}`),
+		Enabled:       types.BoolValue(true),
+	})}
+
+	(&AlertNotifierResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/notifier-123",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state AlertNotifierModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.DomainID.ValueString(), "domain-123"; got != want {
+		t.Fatalf("domain_id = %q, want %q", got, want)
+	}
+	if got, want := state.ID.ValueString(), "notifier-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 

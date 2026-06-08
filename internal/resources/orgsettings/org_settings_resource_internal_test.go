@@ -57,6 +57,17 @@ func TestConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	}
 }
 
+func TestConfigureAllowsNilProviderData(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.ConfigureResponse
+	(&OrgSettingsResource{}).Configure(context.Background(), resource.ConfigureRequest{}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected configure diagnostics: %#v", resp.Diagnostics)
+	}
+}
+
 func TestBuildPatchBodyIncludesIdentities(t *testing.T) {
 	t.Parallel()
 
@@ -407,6 +418,32 @@ func TestOrgSettingsReadAndUpdateReportReadErrors(t *testing.T) {
 	}
 }
 
+func TestOrgSettingsImportStateSetsSettingsID(t *testing.T) {
+	t.Parallel()
+
+	var schemaResp resource.SchemaResponse
+	(&OrgSettingsResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: orgSettingsState(t, schemaResp.Schema, OrgSettingsModel{
+		ID:         types.StringValue("old"),
+		Identities: types.ListValueMust(types.StringType, []attr.Value{}),
+	})}
+
+	(&OrgSettingsResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "anything",
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("import diagnostics: %#v", resp.Diagnostics)
+	}
+	var state OrgSettingsModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("get import state: %#v", diags)
+	}
+	if got, want := state.ID.ValueString(), "settings"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+}
+
 func orgSettingsPlan(t *testing.T, schema resourceschema.Schema, model OrgSettingsModel) tfsdk.Plan {
 	t.Helper()
 
@@ -415,6 +452,16 @@ func orgSettingsPlan(t *testing.T, schema resourceschema.Schema, model OrgSettin
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func orgSettingsState(t *testing.T, schema resourceschema.Schema, model OrgSettingsModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func listStrings(t *testing.T, list types.List) []string {
