@@ -128,6 +128,10 @@ func (r *ThemeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	result, err := r.client.GetTheme(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading theme", err.Error())
 		return
 	}

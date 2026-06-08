@@ -306,6 +306,112 @@ func TestUserCertificateCredentialReadRemovesMissingResource(t *testing.T) {
 	}
 }
 
+func TestUserCertificateCredentialReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/cert-credentials", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/cert-credentials/credential-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			http.Error(w, "read failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserCertificateCredentialResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := userCertificateCredentialPlan(t, schemaResp.Schema, UserCertificateCredentialModel{
+		DomainID:       types.StringValue("domain-123"),
+		UserID:         types.StringValue("user-123"),
+		CertificatePEM: types.StringValue("pem"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := userCertificateCredentialState(t, schemaResp.Schema, UserCertificateCredentialModel{
+		ID:             types.StringValue("credential-123"),
+		DomainID:       types.StringValue("domain-123"),
+		UserID:         types.StringValue("user-123"),
+		CertificatePEM: types.StringValue("pem"),
+	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected read diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestUserCertificateCredentialDeleteIgnores404(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123/cert-credentials/credential-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("item method = %s, want DELETE", r.Method)
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserCertificateCredentialResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := userCertificateCredentialState(t, schemaResp.Schema, UserCertificateCredentialModel{
+		ID:             types.StringValue("credential-123"),
+		DomainID:       types.StringValue("domain-123"),
+		UserID:         types.StringValue("user-123"),
+		CertificatePEM: types.StringValue("pem"),
+	})
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("delete diagnostics: %#v", deleteResp.Diagnostics)
+	}
+}
+
+func TestUserCertificateCredentialImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&UserCertificateCredentialResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "domain-123/user-123",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func certificateCredentialResponse(id, certificatePEM string) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                      id,
@@ -327,6 +433,16 @@ func userCertificateCredentialPlan(t *testing.T, schema resourceschema.Schema, m
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func userCertificateCredentialState(t *testing.T, schema resourceschema.Schema, model UserCertificateCredentialModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
 
 func assertStringAttr(t *testing.T, got types.String, name, want string) {

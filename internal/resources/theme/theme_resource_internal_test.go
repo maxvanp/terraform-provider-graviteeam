@@ -367,6 +367,182 @@ func TestThemeCRUDMergesCurrentThemeOnUpdate(t *testing.T) {
 	}
 }
 
+func TestThemeReadRemovesMissingThemeAndReportsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantRemove bool
+	}{
+		{
+			name:       "missing theme",
+			statusCode: http.StatusNotFound,
+			wantRemove: true,
+		},
+		{
+			name:       "server error",
+			statusCode: http.StatusInternalServerError,
+			wantRemove: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes/theme-123", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Fatalf("method = %s, want GET", r.Method)
+				}
+				http.Error(w, "read failed", tt.statusCode)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &ThemeResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			state := themeState(t, schemaResp.Schema, ThemeModel{
+				ID:       types.StringValue("theme-123"),
+				DomainID: types.StringValue("domain-123"),
+				LogoURL:  types.StringValue("https://example.test/logo.png"),
+			})
+
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if tt.wantRemove {
+				if readResp.Diagnostics.HasError() {
+					t.Fatalf("read diagnostics: %#v", readResp.Diagnostics)
+				}
+				if !readResp.State.Raw.IsNull() {
+					t.Fatalf("expected missing theme to remove state, got %#v", readResp.State.Raw)
+				}
+				return
+			}
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal("expected read diagnostics")
+			}
+		})
+	}
+}
+
+func TestThemeReportsLifecycleErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		http.Error(w, "create failed", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes/theme-123", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":      "theme-123",
+				"logoUrl": "https://example.test/logo.png",
+			})
+		case http.MethodPut:
+			http.Error(w, "update failed", http.StatusInternalServerError)
+		case http.MethodDelete:
+			http.Error(w, "delete failed", http.StatusInternalServerError)
+		default:
+			t.Fatalf("item method = %s", r.Method)
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ThemeResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := themePlan(t, schemaResp.Schema, ThemeModel{
+		DomainID: types.StringValue("domain-123"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected create diagnostics")
+	}
+
+	state := themeState(t, schemaResp.Schema, ThemeModel{
+		ID:       types.StringValue("theme-123"),
+		DomainID: types.StringValue("domain-123"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected update diagnostics")
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete diagnostics")
+	}
+}
+
+func TestThemeUpdateReportsPreReadError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/themes/theme-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		http.Error(w, "read before update failed", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &ThemeResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := themePlan(t, schemaResp.Schema, ThemeModel{
+		DomainID: types.StringValue("domain-123"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})
+	state := themeState(t, schemaResp.Schema, ThemeModel{
+		ID:       types.StringValue("theme-123"),
+		DomainID: types.StringValue("domain-123"),
+		LogoURL:  types.StringValue("https://example.test/logo.png"),
+	})
+
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Update(context.Background(), resource.UpdateRequest{Plan: plan, State: state}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected update pre-read diagnostics")
+	}
+}
+
+func TestThemeImportRejectsInvalidID(t *testing.T) {
+	var resp resource.ImportStateResponse
+	(&ThemeResource{}).ImportState(context.Background(), resource.ImportStateRequest{
+		ID: "missing-separator",
+	}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid import id diagnostics")
+	}
+}
+
 func themePlan(t *testing.T, schema resourceschema.Schema, model ThemeModel) tfsdk.Plan {
 	t.Helper()
 
@@ -375,4 +551,14 @@ func themePlan(t *testing.T, schema resourceschema.Schema, model ThemeModel) tfs
 		t.Fatalf("set plan: %#v", diags)
 	}
 	return plan
+}
+
+func themeState(t *testing.T, schema resourceschema.Schema, model ThemeModel) tfsdk.State {
+	t.Helper()
+
+	state := tfsdk.State{Schema: schema}
+	if diags := state.Set(context.Background(), &model); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+	return state
 }
