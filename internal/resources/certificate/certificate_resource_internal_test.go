@@ -79,6 +79,23 @@ func TestCertificateConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestCertificateConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &CertificateResource{}
+	var resp resource.ConfigureResponse
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestParseImportID(t *testing.T) {
 	t.Parallel()
 
