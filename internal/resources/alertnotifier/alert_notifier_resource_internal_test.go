@@ -451,6 +451,14 @@ func TestAlertNotifierUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 	if !updateResp.Diagnostics.HasError() {
 		t.Fatal("expected invalid state diagnostics")
 	}
+
+	deleteResp := &resource.DeleteResponse{}
+	resourceUnderTest.Delete(context.Background(), resource.DeleteRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: raw},
+	}, deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected delete state diagnostics")
+	}
 }
 
 func TestAlertNotifierImportRejectsInvalidID(t *testing.T) {
