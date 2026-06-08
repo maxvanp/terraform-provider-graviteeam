@@ -80,14 +80,52 @@ func TestGeneratedCertificateConfigureAllowsNilProviderData(t *testing.T) {
 	}
 }
 
+func TestGeneratedCertificateConfigureAcceptsClient(t *testing.T) {
+	t.Parallel()
+
+	resourceUnderTest := &GeneratedCertificateResource{}
+	var resp resource.ConfigureResponse
+
+	resourceUnderTest.Configure(context.Background(), resource.ConfigureRequest{
+		ProviderData: client.New("http://example.test", "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %#v", resp.Diagnostics)
+	}
+	if resourceUnderTest.client == nil {
+		t.Fatal("expected client to be configured")
+	}
+}
+
 func TestGeneratedCertificateUpdateIsNoOp(t *testing.T) {
 	t.Parallel()
 
-	var resp resource.UpdateResponse
-	NewGeneratedCertificateResource().Update(context.Background(), resource.UpdateRequest{}, &resp)
+	var schemaResp resource.SchemaResponse
+	NewGeneratedCertificateResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &GeneratedCertificateModel{
+		ID:              types.StringValue("cert-123"),
+		DomainID:        types.StringValue("domain-123"),
+		RotationTrigger: types.StringValue("initial"),
+		Name:            types.StringValue("generated-cert"),
+		Type:            types.StringValue("pem"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	resp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	NewGeneratedCertificateResource().Update(context.Background(), resource.UpdateRequest{State: state}, &resp)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected update diagnostics: %#v", resp.Diagnostics)
+	}
+	var updated GeneratedCertificateModel
+	if diags := resp.State.Get(context.Background(), &updated); diags.HasError() {
+		t.Fatalf("get update state: %#v", diags)
+	}
+	if got, want := updated.ID.ValueString(), "cert-123"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
 	}
 }
 
