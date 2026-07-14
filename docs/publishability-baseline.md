@@ -43,9 +43,24 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Release artifacts | A clean snapshot build produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and detached checksum signature configuration. | `goreleaser check`, successful unsigned snapshot, and artifact/hash inspection without publishing. | `PASS` |
 | Platforms | Release artifacts include at least Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64; Linux AMD64 is CGO-free and self-contained for HCP Terraform. | GoReleaser configuration and dry-run artifact inventory. | `PASS` |
 | Versioning | The first release version and changelog accurately describe compatibility and breaking-change expectations; released artifacts are immutable. | Changelog and release workflow review. | `PASS` |
-| CI | Tests, workflow lint, lint, build, acceptance, generated docs, and vulnerability scans pass for the exact final pull-request SHA. | Green GitHub checks associated with the final commit. | `PENDING` |
-| Change review | The unpublished work is preserved on a review branch with no accidental files, unresolved conflicts, or unexplained generated changes. | Clean worktree, reviewed diff, intentional commits, and pull request. | `PENDING` |
-| Final report | Every row in this table is updated with direct evidence and no `FAIL` or `PENDING` remains. Publication-only prerequisites are listed separately. | Final readiness report committed on the candidate branch. | `PENDING` |
+| CI | Tests, workflow lint, lint, build, acceptance, generated docs, vulnerability scans, and secret scans pass for the exact final pull-request head. | Green GitHub checks on draft PR #22. | `PASS` |
+| Change review | The unpublished work is preserved on a review branch with no accidental files, unresolved conflicts, or unexplained generated changes. | Clean `codex/publishable-baseline` worktree, reviewed diff, intentional commits, and draft PR #22. | `PASS` |
+| Final report | Every row in this table is updated with direct evidence and no `FAIL` or `PENDING` remains. Publication-only prerequisites are listed separately. | This report on the candidate branch and the PR #22 check suite. | `PASS` |
+
+## Final Evidence
+
+| Requirement group | Result |
+|-------------------|--------|
+| Supported API | Gravitee AM `4.12.1` is pinned in Compose, documentation, changelog, and the bundled upstream OpenAPI snapshot; the complete acceptance suite passes against its exact images. |
+| API classification | `205` paths form `135` audited families. All `12` uncovered writable families are classified; there are `0` unclassified durable candidates and `0` uncovered read-only families. |
+| Provider surface | `53` resources and `20` data sources are registered. All `73` types have test, example, generated-documentation, and client/API coverage artifacts. |
+| Resource and state semantics | All `53` import-capable resources have import tests. CRUD, missing-object removal, update preservation, drift, sensitive state, stable IDs, and schema behavior are covered by acceptance and targeted tests. |
+| Test evidence | `73/73` Terraform types have acceptance artifacts, `72/73` execute against stock Compose, and the sole exclusion is the documented Enterprise/technical-preview OpenFGA engine. Total statement coverage is `98.1%`. |
+| Quality and security | Formatting, lint, vet, build, module verification, unit tests, schema/API audits, generated docs, `govulncheck`, Actionlint, and full-history plus working-tree Gitleaks scans pass. |
+| Release engineering | GoReleaser validates and produces six expected ZIP archives for Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64. Archive hashes and the Registry manifest hash match the generated SHA256SUMS; detached checksum signing is configured. |
+| Repository and CI | The 306 unpublished commits and readiness changes are preserved on `codex/publishable-baseline`; draft PR #22 runs green Documentation, Security, and Tests workflows on its final head. |
+
+No code, test, documentation, dependency, CI, or release-configuration remediation remains. The only remaining actions are the maintainer-owned publication steps below.
 
 ## Required Verification
 
