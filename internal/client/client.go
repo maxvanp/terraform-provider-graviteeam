@@ -221,6 +221,60 @@ func (c *Client) DeleteApplication(ctx context.Context, domainID, id string) err
 	return err
 }
 
+func (c *Client) SearchApplications(ctx context.Context, domainID string, cursorMode bool, query url.Values) ([]byte, error) {
+	path := "/domains/" + domainID + "/applications/search"
+	if cursorMode {
+		path += "/_cursor"
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.DoRequest(ctx, http.MethodGet, path, nil)
+}
+
+// Trust Domain operations
+
+func (c *Client) CreateTrustDomain(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/trust-domains", body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) GetTrustDomain(ctx context.Context, domainID, id string) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/trust-domains/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) UpdateTrustDomain(ctx context.Context, domainID, id string, body map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/trust-domains/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) DeleteTrustDomain(ctx context.Context, domainID, id string) error {
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/trust-domains/"+id, nil)
+	return err
+}
+
 // Application Secret operations
 
 func (c *Client) ListApplicationSecrets(ctx context.Context, domainID, applicationID string) ([]map[string]interface{}, error) {

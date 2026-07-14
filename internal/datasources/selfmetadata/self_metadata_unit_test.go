@@ -57,7 +57,7 @@ func TestSelfMetadataKindListIsSorted(t *testing.T) {
 	t.Parallel()
 
 	got := selfMetadataKindList()
-	want := "current_user, newsletter_taglines, notifications"
+	want := "current_user, notifications"
 	if got != want {
 		t.Fatalf("kind list = %q, want %q", got, want)
 	}

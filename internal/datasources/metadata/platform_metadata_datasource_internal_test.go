@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -603,12 +602,12 @@ func metadataStringConfigValue(value types.String) tftypes.Value {
 	return tftypes.NewValue(tftypes.String, value.ValueString())
 }
 
-func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+func assertStringAttribute(t *testing.T, attrs map[string]datasourceschema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.StringAttribute)
+	attr, ok := attrs[name].(datasourceschema.StringAttribute)
 	if !ok {
-		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+		t.Fatalf("%s attribute = %T, want datasourceschema.StringAttribute", name, attrs[name])
 	}
 	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
 		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",

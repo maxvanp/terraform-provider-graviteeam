@@ -25,6 +25,8 @@ READ_LIKE_POST_GAPS = {
 }
 
 ACTION_OR_LIFECYCLE_GAPS = {
+    "domain:cimd/applications",
+    "domain:cimd/validate",
     "domain:users/bulk",
     "domain:users/consents",
     "domain:users/credentials",
@@ -32,7 +34,6 @@ ACTION_OR_LIFECYCLE_GAPS = {
     "domain:users/factors",
     "domain:users/identities",
     "org:users/bulk",
-    "self:newsletter/_subscribe",
     "self:notifications/acknowledge",
 }
 

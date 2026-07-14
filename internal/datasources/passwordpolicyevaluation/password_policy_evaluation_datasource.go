@@ -43,7 +43,7 @@ func (d *PasswordPolicyEvaluationDataSource) Schema(_ context.Context, _ datasou
 			},
 			"policy_id": schema.StringAttribute{
 				Required:    true,
-				Description: "The ID of the password policy to evaluate. The local 4.11.4 API accepts concrete policy IDs; the default policy alias is not reliable for this endpoint.",
+				Description: "The ID of the password policy to evaluate. Use a concrete policy ID; the default policy alias is not reliable for this endpoint.",
 			},
 			"password": schema.StringAttribute{
 				Required:    true,

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Align README/CONTRIBUTING with the current Go 1.26.4 toolchain requirement and full resource inventory
+- Align README/CONTRIBUTING with the current Go 1.26.5 toolchain requirement and full resource inventory
 - Add `group_mapper` support to `graviteeam_identity_provider`
 - Add an OpenAPI coverage audit script and document the current resource/data source gaps
 - Add `graviteeam_org_group` for organization-level group management
@@ -39,7 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `graviteeam_permissions_metadata` for environment, domain, application, and protected resource member permission metadata
 - Add `graviteeam_admin_metadata` for organization audits, organization environments, domain HRID lookup, and user audits
 - Add `graviteeam_application_metadata` for application analytics and UMA resources
-- Add `graviteeam_self_metadata` for authenticated user metadata, newsletter taglines, and notifications
+- Add `graviteeam_self_metadata` for authenticated user profile and notifications
+- Add `graviteeam_trust_domain` for workload identity trust domains backed by a JWKS URL
+- Add `graviteeam_applications` for page and cursor application search
 - Add `graviteeam_form_preview` and `graviteeam_password_policy_evaluation` read-like POST data sources
 - Add policy plugin documentation support to `graviteeam_plugins`
 - Add `metadata_json` support to `graviteeam_application`
@@ -47,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.11.4
-- Refreshed the bundled Gravitee AM Management API reference from the 4.11.4 upstream tag
+- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.1
+- Refreshed the bundled Gravitee AM Management API reference from the 4.12.1 upstream tag
 - Updated Go module dependencies to their latest compatible versions
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
 - Use the dedicated i18n dictionary entries endpoint when managing dictionary entries
@@ -59,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add explicit reset password triggers to `graviteeam_user` and `graviteeam_org_user`, and a registration confirmation trigger to `graviteeam_user`
 - Use the dedicated application type endpoint when updating `graviteeam_application.type`
 - Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
+- Add application `kind` support and avoid re-sending incompatible API default settings after application creation
+- Preserve server-derived user display names after creation and hydrate typed application settings during import
+- Harden CI and release engineering with current pinned actions, full-history secret scanning, Terraform 1.15.8 acceptance tests, and the Registry platform artifact matrix
 - Update indirect Go dependencies
 
 ## [0.1.0] - TBD
@@ -66,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
-- 52 resources:
+- 53 resources:
   - `graviteeam_domain` — Security domain (equivalent Keycloak Realm)
   - `graviteeam_domain_certificate_settings` — Domain fallback certificate settings
   - `graviteeam_generated_certificate` — Generated system certificate
@@ -93,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_group_members` — Group membership management
   - `graviteeam_group_roles` — Group role assignments
   - `graviteeam_theme` — UI branding (colors, CSS, logo)
+  - `graviteeam_trust_domain` — Workload identity trust domain backed by a JWKS URL
   - `graviteeam_form` — Custom page template (LOGIN, REGISTRATION, etc.)
   - `graviteeam_email_template` — Custom email template
   - `graviteeam_extension_grant` — Custom grant type (JWT Bearer)
@@ -118,7 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_alert_notifier` — Alert webhook notifier
   - `graviteeam_alert_trigger` — Domain alert trigger configuration
   - `graviteeam_user_role` — User role assignments
-- 19 data sources:
+- 20 data sources:
+  - `graviteeam_applications` — Search applications with page or cursor pagination
   - `graviteeam_analytics` — Read analytics data
   - `graviteeam_audits` — Read audit logs
   - `graviteeam_entrypoints` — Read domain entrypoints

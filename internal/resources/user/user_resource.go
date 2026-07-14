@@ -69,6 +69,7 @@ func (r *UserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"display_name": schema.StringAttribute{
 				Optional:    true,
+				Computed:    true,
 				Description: "The display name",
 			},
 			"force_reset_password": schema.BoolAttribute{
@@ -175,13 +176,14 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 			resp.Diagnostics.AddError("Error locking user", err.Error())
 			return
 		}
-		result, err = r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Error reading user after lock", err.Error())
-			return
-		}
-		r.readIntoModel(&plan, result)
 	}
+
+	result, err = r.client.GetUser(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading user after creation", err.Error())
+		return
+	}
+	r.readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

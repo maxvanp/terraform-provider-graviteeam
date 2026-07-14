@@ -325,6 +325,80 @@ func TestReadIntoModelClearsMissingOptionalStrings(t *testing.T) {
 	}
 }
 
+func TestDisplayNameIsComputedWhenOmitted(t *testing.T) {
+	t.Parallel()
+
+	var resp resource.SchemaResponse
+	NewUserResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	attribute, ok := resp.Schema.Attributes["display_name"]
+	if !ok || !attribute.IsOptional() || !attribute.IsComputed() {
+		t.Fatalf("display_name schema = %#v, want optional+computed", attribute)
+	}
+}
+
+func TestUserCreateReadsServerDerivedDisplayName(t *testing.T) {
+	var methods []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("collection method = %s, want POST", r.Method)
+		}
+		methods = append(methods, "create")
+		_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+			"username": "alice",
+		}))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/users/user-123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("item method = %s, want GET", r.Method)
+		}
+		methods = append(methods, "read")
+		_ = json.NewEncoder(w).Encode(userResponse("user-123", map[string]interface{}{
+			"username":           "alice",
+			"displayName":        "Certificate Credential",
+			"enabled":            true,
+			"accountNonLocked":   true,
+			"forceResetPassword": false,
+			"preRegistration":    true,
+		}))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &UserResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	plan := baseUserModel()
+	plan.ID = types.StringUnknown()
+	plan.DisplayName = types.StringUnknown()
+
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	resourceUnderTest.Create(context.Background(), resource.CreateRequest{
+		Plan: userPlan(t, schemaResp.Schema, plan),
+	}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf("create diagnostics: %#v", createResp.Diagnostics)
+	}
+	if !reflect.DeepEqual(methods, []string{"create", "read"}) {
+		t.Fatalf("methods = %#v, want create then read", methods)
+	}
+
+	var created UserModel
+	if diags := createResp.State.Get(context.Background(), &created); diags.HasError() {
+		t.Fatalf("get create state: %#v", diags)
+	}
+	if got, want := created.DisplayName.ValueString(), "Certificate Credential"; got != want {
+		t.Fatalf("display_name = %q, want %q", got, want)
+	}
+}
+
 func TestUserCRUDUsesMergedProfileUpdateAndSeparateActions(t *testing.T) {
 	var bodies []map[string]interface{}
 	var methods []string

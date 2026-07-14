@@ -10,7 +10,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -634,12 +633,12 @@ func stringSlice(values []types.String) []string {
 	return result
 }
 
-func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+func assertStringAttribute(t *testing.T, attrs map[string]resourceschema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.StringAttribute)
+	attr, ok := attrs[name].(resourceschema.StringAttribute)
 	if !ok {
-		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+		t.Fatalf("%s attribute = %T, want resourceschema.StringAttribute", name, attrs[name])
 	}
 	if attr.Required != required || attr.Optional != optional || attr.Computed != computed {
 		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want required:%t optional:%t computed:%t",
@@ -647,12 +646,12 @@ func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name
 	}
 }
 
-func assertListAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, elemType attr.Type) {
+func assertListAttribute(t *testing.T, attrs map[string]resourceschema.Attribute, name string, elemType attr.Type) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.ListAttribute)
+	attr, ok := attrs[name].(resourceschema.ListAttribute)
 	if !ok {
-		t.Fatalf("%s attribute = %T, want schema.ListAttribute", name, attrs[name])
+		t.Fatalf("%s attribute = %T, want resourceschema.ListAttribute", name, attrs[name])
 	}
 	if !attr.Optional || attr.Required || attr.Computed {
 		t.Fatalf("%s flags = required:%t optional:%t computed:%t, want optional only",

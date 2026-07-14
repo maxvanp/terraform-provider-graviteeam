@@ -13,6 +13,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/adminmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/analytics"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/applicationmetadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/applications"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/audits"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/domainmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
@@ -73,6 +74,7 @@ import (
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/scope"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/serviceresource"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/theme"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/trustdomain"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/user"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/usercertificatecredential"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/userrole"
@@ -213,6 +215,7 @@ func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Reso
 		scope.NewScopeResource,
 		serviceresource.NewServiceResourceResource,
 		theme.NewThemeResource,
+		trustdomain.NewTrustDomainResource,
 		user.NewUserResource,
 		usercertificatecredential.NewUserCertificateCredentialResource,
 		userrole.NewUserRoleResource,
@@ -223,6 +226,7 @@ func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		adminmetadata.NewAdminMetadataDataSource,
 		analytics.NewAnalyticsDataSource,
+		applications.NewApplicationsDataSource,
 		applicationmetadata.NewApplicationMetadataDataSource,
 		audits.NewAuditsDataSource,
 		domainmetadata.NewDomainMetadataDataSource,

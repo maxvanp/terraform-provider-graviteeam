@@ -9,6 +9,7 @@ type ApplicationModel struct {
 	DomainID              types.String                `tfsdk:"domain_id"`
 	Name                  types.String                `tfsdk:"name"`
 	Type                  types.String                `tfsdk:"type"`
+	Kind                  types.String                `tfsdk:"kind"`
 	Description           types.String                `tfsdk:"description"`
 	ClientID              types.String                `tfsdk:"client_id"`
 	ClientSecret          types.String                `tfsdk:"client_secret"`

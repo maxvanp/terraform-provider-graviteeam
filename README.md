@@ -5,12 +5,12 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.26.4 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.26.5 (for building from source)
 - [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.11.4** Management API. Acceptance tests are run against Gravitee AM 4.11.4.
+This provider targets the **Gravitee AM 4.12.1** Management API. Acceptance tests are run against Gravitee AM 4.12.1.
 
 The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM version.
 
@@ -24,9 +24,7 @@ Until `v1.0.0`, compatibility may still evolve as the Gravitee AM API changes. A
 
 ## Installation
 
-### From GitHub Releases
-
-Download the appropriate binary for your platform from the [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases) page, then place it in your Terraform plugins directory.
+No public release is available yet. Until the first signed release is published, use a local development build with Terraform CLI `dev_overrides`.
 
 ### Local Development (dev_overrides)
 
@@ -85,7 +83,7 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (52)
+### Resources (53)
 
 | Resource | Description |
 |----------|-------------|
@@ -113,6 +111,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_group_members` | Group membership management |
 | `graviteeam_group_roles` | Group role assignments |
 | `graviteeam_theme` | UI branding (colors, CSS, logo) |
+| `graviteeam_trust_domain` | Workload identity trust domain backed by a JWKS URL |
 | `graviteeam_form` | Custom page template (LOGIN, REGISTRATION, etc.) |
 | `graviteeam_email_template` | Custom email template |
 | `graviteeam_extension_grant` | Custom grant type (JWT Bearer) |
@@ -142,13 +141,14 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (19)
+### Data Sources (20)
 
 | Data Source | Description |
 |-------------|-------------|
 | `graviteeam_admin_metadata` | Read administrative metadata such as organization audits, environments, domain HRID lookups, and user audits |
 | `graviteeam_analytics` | Read analytics data (DATE_HISTO, COUNT, GROUP_BY) |
 | `graviteeam_application_metadata` | Read application analytics and UMA resources |
+| `graviteeam_applications` | Search applications with page or cursor pagination |
 | `graviteeam_audits` | Read audit logs for a domain |
 | `graviteeam_domain_metadata` | Read domain metadata such as active password policy and certificate public keys |
 | `graviteeam_entrypoints` | Read domain entrypoints |
@@ -159,7 +159,7 @@ resource "graviteeam_domain" "example" {
 | `graviteeam_permissions_metadata` | Read member permission metadata |
 | `graviteeam_platform_metadata` | Read platform metadata and configuration schemas |
 | `graviteeam_plugins` | Read platform plugin catalogs, plugin details, and plugin schemas |
-| `graviteeam_self_metadata` | Read authenticated user metadata, newsletter taglines, and notifications |
+| `graviteeam_self_metadata` | Read authenticated user profile and notifications |
 | `graviteeam_user_consents` | Read OAuth consent approvals for a user |
 | `graviteeam_user_credentials` | Read credentials for a user |
 | `graviteeam_user_devices` | Read registered devices for a user |

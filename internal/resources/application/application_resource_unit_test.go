@@ -45,7 +45,7 @@ func TestSchemaAttributes(t *testing.T) {
 			t.Fatalf("attribute %q should be required", name)
 		}
 	}
-	for _, name := range []string{"description", "metadata_json", "settings_json", "identity_providers", "factors"} {
+	for _, name := range []string{"kind", "description", "metadata_json", "settings_json", "identity_providers", "factors"} {
 		attr, ok := resp.Schema.Attributes[name]
 		if !ok {
 			t.Fatalf("missing schema attribute %q", name)
@@ -53,6 +53,9 @@ func TestSchemaAttributes(t *testing.T) {
 		if !attr.IsOptional() {
 			t.Fatalf("attribute %q should be optional", name)
 		}
+	}
+	if !resp.Schema.Attributes["kind"].IsComputed() {
+		t.Fatal("kind should be computed when omitted")
 	}
 	for _, name := range []string{"id", "client_id", "client_secret"} {
 		attr, ok := resp.Schema.Attributes[name]
@@ -185,6 +188,20 @@ func TestApplicationBuildUpdateBodyMergesSettingsJSONWithTypedBlocks(t *testing.
 	}
 }
 
+func TestRequiresPostCreateUpdate(t *testing.T) {
+	t.Parallel()
+
+	if requiresPostCreateUpdate(ApplicationModel{}) {
+		t.Fatal("plain application should not need a post-create update")
+	}
+	if !requiresPostCreateUpdate(ApplicationModel{OAuthSettings: &OAuthSettingsModel{}}) {
+		t.Fatal("OAuth settings should need a post-create update")
+	}
+	if !requiresPostCreateUpdate(ApplicationModel{SettingsJSON: types.StringValue(`{}`)}) {
+		t.Fatal("settings_json should need a post-create update")
+	}
+}
+
 func TestMergeStringInterfaceMapRecursesAndOverwritesValues(t *testing.T) {
 	t.Parallel()
 
@@ -314,6 +331,7 @@ func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
 	plan := ApplicationModel{
 		Name: types.StringValue("test-app"),
 		Type: types.StringValue("WEB"),
+		Kind: types.StringValue("HOSTED_DELEGATED"),
 		SettingsJSON: types.StringValue(`{
 			"oauth": {
 				"redirectUris": ["https://example.com/callback"]
@@ -328,6 +346,9 @@ func TestApplicationBuildCreateBodyUsesSettingsJSONRedirectURIs(t *testing.T) {
 
 	if !reflect.DeepEqual(body["redirectUris"], []string{"https://example.com/callback"}) {
 		t.Fatalf("expected redirect URIs from settings_json, got %#v", body["redirectUris"])
+	}
+	if body["kind"] != "HOSTED_DELEGATED" {
+		t.Fatalf("kind = %#v, want HOSTED_DELEGATED", body["kind"])
 	}
 }
 
@@ -470,6 +491,59 @@ func TestApplicationReadIntoModelPreservesUnownedMetadata(t *testing.T) {
 
 	if !model.MetadataJSON.IsNull() {
 		t.Fatalf("expected metadata_json to remain null when not configured, got %s", model.MetadataJSON.ValueString())
+	}
+}
+
+func TestApplicationReadIntoModelHydratesTypedSettingsAfterImport(t *testing.T) {
+	t.Parallel()
+
+	resource := &ApplicationResource{}
+	model := &ApplicationModel{Name: types.StringNull()}
+
+	resource.readIntoModel(model, map[string]interface{}{
+		"name": "imported-app",
+		"settings": map[string]interface{}{
+			"oauth": map[string]interface{}{
+				"redirectUris":                []interface{}{"https://app.example.test/callback"},
+				"grantTypes":                  []interface{}{"authorization_code"},
+				"responseTypes":               []interface{}{"code"},
+				"scopeSettings":               []interface{}{map[string]interface{}{"scope": "openid"}},
+				"accessTokenValiditySeconds":  float64(3600),
+				"refreshTokenValiditySeconds": float64(7200),
+				"idTokenValiditySeconds":      float64(3600),
+			},
+			"mfa": map[string]interface{}{
+				"enroll":    map[string]interface{}{"type": "optional"},
+				"challenge": map[string]interface{}{"type": "required"},
+			},
+		},
+	})
+
+	if model.OAuthSettings == nil || model.MFASettings == nil {
+		t.Fatalf("imported typed settings were not hydrated: %#v", model)
+	}
+	if got, want := model.OAuthSettings.RedirectURIs[0].ValueString(), "https://app.example.test/callback"; got != want {
+		t.Fatalf("redirect URI = %q, want %q", got, want)
+	}
+	if got, want := model.MFASettings.Challenge.ValueString(), "REQUIRED"; got != want {
+		t.Fatalf("MFA challenge = %q, want %q", got, want)
+	}
+}
+
+func TestApplicationReadIntoModelNormalizesKind(t *testing.T) {
+	t.Parallel()
+
+	resource := &ApplicationResource{}
+	model := &ApplicationModel{Kind: types.StringUnknown()}
+
+	resource.readIntoModel(model, map[string]interface{}{})
+	if !model.Kind.IsNull() {
+		t.Fatalf("kind = %#v, want null when the API omits it", model.Kind)
+	}
+
+	resource.readIntoModel(model, map[string]interface{}{"kind": "autonomous"})
+	if model.Kind.ValueString() != "AUTONOMOUS" {
+		t.Fatalf("kind = %q, want AUTONOMOUS", model.Kind.ValueString())
 	}
 }
 
@@ -959,12 +1033,13 @@ func TestApplicationCRUDReportsInvalidRequestData(t *testing.T) {
 		Type:     types.StringValue("WEB"),
 	})
 	validState := applicationState(t, schemaResp.Schema, ApplicationModel{
-		ID:           types.StringValue("app-123"),
-		DomainID:     types.StringValue("domain-123"),
-		Name:         types.StringValue("app"),
-		Type:         types.StringValue("WEB"),
-		ClientID:     types.StringValue("client-123"),
-		ClientSecret: types.StringValue("clear-secret"),
+		ID:            types.StringValue("app-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("app"),
+		Type:          types.StringValue("WEB"),
+		ClientID:      types.StringValue("client-123"),
+		ClientSecret:  types.StringValue("clear-secret"),
+		OAuthSettings: &OAuthSettingsModel{},
 	})
 
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -1035,12 +1110,13 @@ func TestApplicationReadMapsRemoteApplication(t *testing.T) {
 	var schemaResp resource.SchemaResponse
 	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
 	state := applicationState(t, schemaResp.Schema, ApplicationModel{
-		ID:           types.StringValue("app-123"),
-		DomainID:     types.StringValue("domain-123"),
-		Name:         types.StringValue("old-app"),
-		Type:         types.StringValue("WEB"),
-		ClientID:     types.StringValue("client-123"),
-		ClientSecret: types.StringValue("clear-secret"),
+		ID:            types.StringValue("app-123"),
+		DomainID:      types.StringValue("domain-123"),
+		Name:          types.StringValue("old-app"),
+		Type:          types.StringValue("WEB"),
+		ClientID:      types.StringValue("client-123"),
+		ClientSecret:  types.StringValue("clear-secret"),
+		OAuthSettings: &OAuthSettingsModel{},
 	})
 
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -1288,6 +1364,9 @@ func TestApplicationCRUDReportsRemoteErrors(t *testing.T) {
 				Description:  types.StringValue("updated"),
 				ClientID:     types.StringValue("client-123"),
 				ClientSecret: types.StringValue("clear-secret"),
+				OAuthSettings: &OAuthSettingsModel{
+					RedirectURIs: []types.String{types.StringValue("https://app.example.test/callback")},
+				},
 			}
 			stateModel := planModel
 			stateModel.Name = types.StringValue("app")

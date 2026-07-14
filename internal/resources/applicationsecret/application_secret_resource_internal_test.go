@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -649,12 +648,12 @@ func applicationSecretInvalidState(schema resourceschema.Schema) tfsdk.State {
 	}
 }
 
-func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed, sensitive bool) {
+func assertStringAttribute(t *testing.T, attrs map[string]resourceschema.Attribute, name string, required, optional, computed, sensitive bool) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.StringAttribute)
+	attr, ok := attrs[name].(resourceschema.StringAttribute)
 	if !ok {
-		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
+		t.Fatalf("%s attribute = %T, want resourceschema.StringAttribute", name, attrs[name])
 	}
 	if attr.Required != required || attr.Optional != optional || attr.Computed != computed || attr.Sensitive != sensitive {
 		t.Fatalf("%s flags = required:%t optional:%t computed:%t sensitive:%t, want required:%t optional:%t computed:%t sensitive:%t",

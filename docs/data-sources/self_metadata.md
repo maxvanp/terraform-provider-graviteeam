@@ -3,22 +3,18 @@
 page_title: "graviteeam_self_metadata Data Source - graviteeam"
 subcategory: ""
 description: |-
-  Reads Gravitee AM metadata for the authenticated user such as profile, newsletter taglines, and notifications
+  Reads Gravitee AM metadata for the authenticated user such as profile and notifications
 ---
 
 # graviteeam_self_metadata (Data Source)
 
-Reads Gravitee AM metadata for the authenticated user such as profile, newsletter taglines, and notifications
+Reads Gravitee AM metadata for the authenticated user such as profile and notifications
 
 ## Example Usage
 
 ```terraform
 data "graviteeam_self_metadata" "current_user" {
   kind = "current_user"
-}
-
-data "graviteeam_self_metadata" "newsletter_taglines" {
-  kind = "newsletter_taglines"
 }
 
 data "graviteeam_self_metadata" "notifications" {
@@ -31,7 +27,7 @@ data "graviteeam_self_metadata" "notifications" {
 
 ### Required
 
-- `kind` (String) Self metadata kind. Supported values: current_user, newsletter_taglines, notifications
+- `kind` (String) Self metadata kind. Supported values: current_user, notifications
 
 ### Read-Only
 

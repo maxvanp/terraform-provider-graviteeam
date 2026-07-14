@@ -2,9 +2,11 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-|---------|--------------------|
-| latest  | :white_check_mark: |
+| Version    | Supported          |
+|------------|--------------------|
+| Unreleased | :white_check_mark: |
+
+There is no public provider release yet. Security fixes are applied to the active development branch until the initial release is published.
 
 ## Reporting a Vulnerability
 

@@ -6,13 +6,13 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM version | `4.11.4` |
+| Target Gravitee AM version | `4.12.1` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.11.4` |
-| OpenAPI path entries | `201` |
-| Path entries with at least one write verb | `123` |
-| Terraform resources registered | `52` |
-| Terraform data sources registered | `19` |
+| Bundled OpenAPI version | `4.12.1` |
+| OpenAPI path entries | `205` |
+| Path entries with at least one write verb | `126` |
+| Terraform resources registered | `53` |
+| Terraform data sources registered | `20` |
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -42,10 +42,10 @@ Current automated audit summary:
 
 | Item | Value |
 |------|-------|
-| OpenAPI families | `132` |
-| Writable families | `77` |
-| Read-only families | `55` |
-| Uncovered writable families without Terraform resource | `11` |
+| OpenAPI families | `135` |
+| Writable families | `79` |
+| Read-only families | `56` |
+| Uncovered writable families without Terraform resource | `12` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `7` |
 | Uncovered read-only families | `0` |
@@ -58,13 +58,13 @@ Current test coverage baseline:
 
 | Item | Value |
 |------|-------|
-| Terraform types with acceptance coverage | `71/71` |
-| Terraform types executable in stock local compose acceptance | `70/71` |
-| Import-capable resources with import tests | `52/52` |
+| Terraform types with acceptance coverage | `73/73` |
+| Terraform types executable in stock local compose acceptance | `72/73` |
+| Import-capable resources with import tests | `53/53` |
 | Resources with disabled import verification | `0` |
-| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `100.0%` total statement coverage |
+| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.1%` total statement coverage |
 
-The remaining local compose acceptance gap is `graviteeam_authorization_engine`. The bundled Gravitee AM 4.11.4 image loads the `openfga` authorization engine zip, but the local API reports it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint does not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
+The remaining local compose acceptance gap is `graviteeam_authorization_engine`. The bundled Gravitee AM 4.12.1 image loads the `openfga` authorization engine zip, but the local API reports it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint does not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
 
 ## Covered Resources
 
@@ -111,6 +111,7 @@ The remaining local compose acceptance gap is `graviteeam_authorization_engine`.
 | `domain:roles` | `graviteeam_role` |
 | `domain:scopes` | `graviteeam_scope` |
 | `domain:themes` | `graviteeam_theme` |
+| `domain:trust-domains` | `graviteeam_trust_domain` |
 | `domain:users` | `graviteeam_user` |
 | `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/lock` | `graviteeam_user` |
@@ -147,6 +148,8 @@ The remaining local compose acceptance gap is `graviteeam_authorization_engine`.
 | `domain:applications/members/permissions` | `graviteeam_permissions_metadata` |
 | `domain:applications/resources` | `graviteeam_application_metadata` |
 | `domain:applications/resources/policies` | `graviteeam_application_metadata` |
+| `domain:applications/search` | `graviteeam_applications` |
+| `domain:applications/search/_cursor` | `graviteeam_applications` |
 | `domain:audits` | `graviteeam_audits` |
 | `domain:certificates/key` | `graviteeam_domain_metadata` |
 | `domain:certificates/keys` | `graviteeam_domain_metadata` |
@@ -197,7 +200,6 @@ The remaining local compose acceptance gap is `graviteeam_authorization_engine`.
 | `platform:plugins/resources/schema` | `graviteeam_plugins` |
 | `platform:roles` | `graviteeam_platform_metadata` |
 | `self:_root` | `graviteeam_self_metadata` |
-| `self:newsletter/taglines` | `graviteeam_self_metadata` |
 | `self:notifications` | `graviteeam_self_metadata` |
 | `domain:users/consents` | `graviteeam_user_consents` |
 | `domain:users/credentials` | `graviteeam_user_credentials` |
@@ -211,7 +213,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-None currently identified in the local 4.11.4 OpenAPI audit.
+None currently identified in the local 4.12.1 OpenAPI audit.
 
 ### Read-Like POST Endpoints Not Covered
 
@@ -220,7 +222,7 @@ These endpoints look closer to calculated reads than durable Terraform resources
 | API family | Notes |
 |------------|-------|
 | `domain:forms/preview` | Template preview operation exposed by `graviteeam_form_preview`; the local API requires lower-case template names for preview even though CRUD form resources use upper-case template names. |
-| `domain:password-policies/evaluate` | Password policy evaluation operation exposed by `graviteeam_password_policy_evaluation`; local 4.11.4 accepts concrete policy IDs but the `default` alias timed out. |
+| `domain:password-policies/evaluate` | Password policy evaluation operation exposed by `graviteeam_password_policy_evaluation`; local 4.12.1 accepts concrete policy IDs. |
 
 ### Action or Lifecycle Endpoints
 
@@ -229,13 +231,14 @@ These endpoints may be better represented as explicit resources, one-shot action
 | API family | Notes |
 |------------|-------|
 | `domain:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_user` create/update/delete rather than a distinct durable object. |
+| `domain:cimd/applications` | CIMD creates an application from external metadata rather than a distinct durable object; it is an alternate application lifecycle operation. |
+| `domain:cimd/validate` | CIMD validation is an operational preview/validation request and has no durable Terraform state. |
 | `domain:users/consents` | User consent lifecycle; read-only state is exposed by `graviteeam_user_consents`, revocation remains unmanaged until a consent fixture can prove safe desired-state semantics; local gap probe covers both collection delete by `clientId` and item revoke behavior. |
 | `domain:users/credentials` | User credential lifecycle; read-only state is exposed by `graviteeam_user_credentials`, revocation remains unmanaged until a credential fixture can prove safe desired-state semantics. |
 | `domain:users/devices` | User device lifecycle; read-only state is exposed by `graviteeam_user_devices`, deletion remains unmanaged until a device fixture can prove safe desired-state semantics. |
 | `domain:users/factors` | User factor lifecycle; read-only state is exposed by `graviteeam_user_factors`, revocation remains unmanaged; local gap probe returned `204` for a missing factor id. |
 | `domain:users/identities` | User identity lifecycle; read-only state is exposed by `graviteeam_user_identities`, unlink remains unmanaged; local gap probe returned `204` for a missing identity id. |
 | `org:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_org_user` create/update/delete rather than a distinct durable object. |
-| `self:newsletter/_subscribe` | Current-user newsletter subscription operation; reachable in local gap probe and reflected by `current_user.email` / `newsletter_enabled`, but scoped to the provider credential principal, not a Terraform-managed object. |
 | `self:notifications/acknowledge` | Current-user notification acknowledgement operation; reachable in local gap probe but scoped to ephemeral current-user notification state. |
 
 ### Read-Only and Admin Metadata Not Covered

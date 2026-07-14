@@ -41,7 +41,7 @@ data "graviteeam_password_policy_evaluation" "example" {
 
 - `domain_id` (String) The ID of the domain.
 - `password` (String, Sensitive) Password value to evaluate.
-- `policy_id` (String) The ID of the password policy to evaluate. The local 4.11.4 API accepts concrete policy IDs; the default policy alias is not reliable for this endpoint.
+- `policy_id` (String) The ID of the password policy to evaluate. Use a concrete policy ID; the default policy alias is not reliable for this endpoint.
 
 ### Optional
 

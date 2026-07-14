@@ -25,9 +25,8 @@ type SelfMetadataModel struct {
 }
 
 var selfMetadataPaths = map[string]string{
-	"current_user":        "",
-	"newsletter_taglines": "/newsletter/taglines",
-	"notifications":       "/notifications",
+	"current_user":  "",
+	"notifications": "/notifications",
 }
 
 func NewSelfMetadataDataSource() datasource.DataSource {
@@ -40,7 +39,7 @@ func (d *SelfMetadataDataSource) Metadata(_ context.Context, req datasource.Meta
 
 func (d *SelfMetadataDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Reads Gravitee AM metadata for the authenticated user such as profile, newsletter taglines, and notifications",
+		Description: "Reads Gravitee AM metadata for the authenticated user such as profile and notifications",
 		Attributes: map[string]schema.Attribute{
 			"kind": schema.StringAttribute{
 				Required:    true,

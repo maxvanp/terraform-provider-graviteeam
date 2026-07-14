@@ -79,7 +79,7 @@ resource "graviteeam_identity_provider" "inline" {
         lastname  = "Doe"
         username  = "jdoe@example.com"
         email     = "jdoe@example.com"
-        password  = "password123"
+        password  = "password123" # gitleaks:allow - synthetic example credential
       }
     ]
   })

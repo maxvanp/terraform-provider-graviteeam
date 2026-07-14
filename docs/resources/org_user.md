@@ -24,7 +24,7 @@ resource "graviteeam_org_user" "example" {
   pre_registration     = true
 
   reset_password         = "NewSecurePass123!"
-  reset_password_trigger = "rotation-2026-01"
+  reset_password_trigger = "rotation-2026-01" # gitleaks:allow - synthetic example trigger
 }
 ```
 

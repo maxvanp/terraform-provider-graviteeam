@@ -18,17 +18,12 @@ data "graviteeam_self_metadata" "current_user" {
   kind = "current_user"
 }
 
-data "graviteeam_self_metadata" "newsletter_taglines" {
-  kind = "newsletter_taglines"
-}
-
 data "graviteeam_self_metadata" "notifications" {
   kind = "notifications"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.graviteeam_self_metadata.current_user", "result_json"),
-					resource.TestCheckResourceAttrSet("data.graviteeam_self_metadata.newsletter_taglines", "result_json"),
 					resource.TestCheckResourceAttrSet("data.graviteeam_self_metadata.notifications", "result_json"),
 				),
 			},

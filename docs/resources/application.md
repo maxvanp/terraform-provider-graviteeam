@@ -75,7 +75,7 @@ resource "graviteeam_application" "example" {
 
 - `domain_id` (String) The ID of the domain this application belongs to
 - `name` (String) The name of the application
-- `type` (String) The type of the application (WEB, NATIVE, BROWSER, SERVICE, RESOURCE_SERVER)
+- `type` (String) The type of the application (WEB, NATIVE, BROWSER, SERVICE, RESOURCE_SERVER, AGENT)
 
 ### Optional
 
@@ -83,6 +83,7 @@ resource "graviteeam_application" "example" {
 - `factors` (List of String) List of MFA factor IDs to associate with the application
 - `identity_provider_rule` (Block List) Identity provider with selection rule for identifier-first login routing (see [below for nested schema](#nestedblock--identity_provider_rule))
 - `identity_providers` (List of String) List of identity provider IDs to associate with the application
+- `kind` (String) The application deployment kind (USER_EMBEDDED, HOSTED_DELEGATED, or AUTONOMOUS)
 - `metadata_json` (String) JSON object for application metadata. Object values are sent to the Gravitee AM metadata payload.
 - `mfa_settings` (Block, Optional) MFA settings (see [below for nested schema](#nestedblock--mfa_settings))
 - `oauth_settings` (Block, Optional) OAuth2/OIDC settings (see [below for nested schema](#nestedblock--oauth_settings))

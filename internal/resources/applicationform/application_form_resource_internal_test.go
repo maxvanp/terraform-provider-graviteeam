@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -736,10 +735,10 @@ func applicationFormInvalidRaw() tftypes.Value {
 	)
 }
 
-func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+func assertStringAttribute(t *testing.T, attrs map[string]resourceschema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.StringAttribute)
+	attr, ok := attrs[name].(resourceschema.StringAttribute)
 	if !ok {
 		t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, attrs[name])
 	}
@@ -749,10 +748,10 @@ func assertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name
 	}
 }
 
-func assertBoolAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
+func assertBoolAttribute(t *testing.T, attrs map[string]resourceschema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
 
-	attr, ok := attrs[name].(schema.BoolAttribute)
+	attr, ok := attrs[name].(resourceschema.BoolAttribute)
 	if !ok {
 		t.Fatalf("%s attribute = %T, want schema.BoolAttribute", name, attrs[name])
 	}

@@ -65,13 +65,6 @@ func TestSelfMetadataReadResolvesSupportedKinds(t *testing.T) {
 		paths = append(paths, r.URL.Path)
 		_, _ = w.Write([]byte(`{"id":"admin"}`))
 	})
-	mux.HandleFunc("/management/user/newsletter/taglines", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Fatalf("method = %s, want GET", r.Method)
-		}
-		paths = append(paths, r.URL.Path)
-		_, _ = w.Write([]byte(`["tagline-1"]`))
-	})
 	mux.HandleFunc("/management/user/notifications", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Fatalf("method = %s, want GET", r.Method)
@@ -99,13 +92,6 @@ func TestSelfMetadataReadResolvesSupportedKinds(t *testing.T) {
 				Kind: types.StringValue("current_user"),
 			},
 			want: "{\n  \"id\": \"admin\"\n}",
-		},
-		{
-			name: "newsletter taglines",
-			model: SelfMetadataModel{
-				Kind: types.StringValue("newsletter_taglines"),
-			},
-			want: "[\n  \"tagline-1\"\n]",
 		},
 		{
 			name: "notifications",
@@ -138,7 +124,6 @@ func TestSelfMetadataReadResolvesSupportedKinds(t *testing.T) {
 
 	wantPaths := []string{
 		"/management/user",
-		"/management/user/newsletter/taglines",
 		"/management/user/notifications",
 	}
 	if strings.Join(paths, "\n") != strings.Join(wantPaths, "\n") {

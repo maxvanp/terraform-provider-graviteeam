@@ -57,7 +57,6 @@ EXPECTED_RESULTS = [
     Expectation("user factors delete", "domain:users/factors", "DELETE", "/factors/gap-probe-missing", {204}, {"reachable"}),
     Expectation("user identities delete", "domain:users/identities", "DELETE", "/identities/gap-probe-missing", {204}, {"reachable"}),
     Expectation("org user bulk create", "org:users/bulk", "POST", "/users/bulk", {200}, {"reachable"}),
-    Expectation("current user newsletter subscribe", "self:newsletter/_subscribe", "POST", "/newsletter/_subscribe", {200}, {"reachable"}),
     Expectation("current user notification acknowledge", "self:notifications/acknowledge", "POST", "/notifications/gap-probe-missing/acknowledge", {204}, {"reachable"}),
 ]
 
@@ -360,17 +359,6 @@ def run_probe(probe: AMProbe) -> list[Result]:
                     }
                 ],
             },
-        ),
-    )
-    add_result(
-        results,
-        "self:newsletter/_subscribe",
-        "POST",
-        "/user/newsletter/_subscribe",
-        *probe.json_request(
-            "POST",
-            probe.user("/newsletter/_subscribe"),
-            {"email": probe.current_user_email()},
         ),
     )
     add_result(
