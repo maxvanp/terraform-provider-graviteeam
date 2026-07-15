@@ -4,6 +4,16 @@ resource "graviteeam_application" "example" {
   type        = "WEB"
   description = "My Web Application"
 
+  metadata_json = jsonencode({
+    owner = {
+      team = "iam"
+    }
+    tenant = {
+      id   = "tenant-a"
+      name = "Tenant A"
+    }
+  })
+
   oauth_settings {
     redirect_uris                  = ["http://localhost:8080/callback"]
     post_logout_redirect_uris      = ["http://localhost:8080/"]

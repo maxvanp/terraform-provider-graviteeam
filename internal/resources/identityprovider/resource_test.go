@@ -75,6 +75,18 @@ resource "graviteeam_domain" "test" {
   login_settings {}
 }
 
+resource "graviteeam_group" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Group"
+  description = "Group mapped by identity provider test"
+}
+
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Role"
+  description = "Role mapped by identity provider test"
+}
+
 resource "graviteeam_identity_provider" "test" {
   domain_id     = graviteeam_domain.test.id
   name          = "Updated Inline IdP"
@@ -94,12 +106,70 @@ resource "graviteeam_identity_provider" "test" {
     "email"    = "email"
     "username" = "username"
   }
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('test-idp-group')}" = [
+      graviteeam_group.test.id
+    ]
+  }
+  role_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('test-idp-role')}" = [
+      graviteeam_role.test.id
+    ]
+  }
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "name", "Updated Inline IdP"),
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "mappers.email", "email"),
 					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "mappers.username", "username"),
+					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "group_mapper.%", "1"),
+					resource.TestCheckResourceAttr("graviteeam_identity_provider.test", "role_mapper.%", "1"),
+				),
+			},
+			// Update: remove mappers and group mapper to ensure PUT clears API state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-idp"
+  description = "Domain for identity provider acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_group" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Group"
+  description = "Group mapped by identity provider test"
+}
+
+resource "graviteeam_role" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "Test IdP Mapped Role"
+  description = "Role mapped by identity provider test"
+}
+
+resource "graviteeam_identity_provider" "test" {
+  domain_id     = graviteeam_domain.test.id
+  name          = "Updated Inline IdP"
+  type          = "inline-am-idp"
+  configuration = jsonencode({
+    users = [
+      {
+        firstname = "Test"
+        lastname  = "User"
+        username  = "testuser"
+        password  = "Password1!"
+        email     = "testuser@example.com"
+      }
+    ]
+  })
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "mappers.email"),
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "group_mapper.%"),
+					resource.TestCheckNoResourceAttr("graviteeam_identity_provider.test", "role_mapper.%"),
 				),
 			},
 		},

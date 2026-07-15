@@ -93,6 +93,7 @@ resource "graviteeam_application_email" "test" {
   template       = "REGISTRATION_CONFIRMATION"
   enabled        = true
   from           = "updated@test.local"
+  from_name      = "App Support"
   subject        = "Updated confirm"
   content        = "<html><body>Updated confirm</body></html>"
   expires_after  = 86400
@@ -100,7 +101,45 @@ resource "graviteeam_application_email" "test" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_application_email.test", "from", "updated@test.local"),
+					resource.TestCheckResourceAttr("graviteeam_application_email.test", "from_name", "App Support"),
 					resource.TestCheckResourceAttr("graviteeam_application_email.test", "subject", "Updated confirm"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name = "test-acc-app-email"
+  oidc {
+    allow_localhost_redirect_uri   = true
+    allow_http_scheme_redirect_uri = true
+  }
+  login_settings {}
+}
+
+resource "graviteeam_application" "test" {
+  domain_id   = graviteeam_domain.test.id
+  name        = "test-app-email"
+  type        = "WEB"
+  oauth_settings {
+    redirect_uris  = ["http://localhost:5000/callback"]
+    grant_types    = ["authorization_code"]
+    response_types = ["code"]
+  }
+}
+
+resource "graviteeam_application_email" "test" {
+  domain_id      = graviteeam_domain.test.id
+  application_id = graviteeam_application.test.id
+  template       = "REGISTRATION_CONFIRMATION"
+  enabled        = true
+  from           = "updated@test.local"
+  subject        = "Updated confirm"
+  content        = "<html><body>Updated confirm</body></html>"
+  expires_after  = 86400
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_application_email.test", "from_name"),
 				),
 			},
 		},

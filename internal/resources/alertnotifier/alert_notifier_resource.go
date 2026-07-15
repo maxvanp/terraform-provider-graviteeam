@@ -95,14 +95,7 @@ func (r *AlertNotifierResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-		"enabled":       plan.Enabled.ValueBool(),
-	}
-
-	result, err := r.client.CreateAlertNotifier(ctx, plan.DomainID.ValueString(), body)
+	result, err := r.client.CreateAlertNotifier(ctx, plan.DomainID.ValueString(), buildCreateBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating alert notifier", err.Error())
 		return
@@ -121,20 +114,15 @@ func (r *AlertNotifierResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetAlertNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading alert notifier", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	// configuration may contain masked secrets (email password, slack token) — preserve from state
-	if enabled, ok := result["enabled"].(bool); ok {
-		state.Enabled = types.BoolValue(enabled)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -154,14 +142,7 @@ func (r *AlertNotifierResource) Update(ctx context.Context, req resource.UpdateR
 
 	plan.ID = state.ID
 
-	// Alert notifier uses PATCH, not PUT
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-		"enabled":       plan.Enabled.ValueBool(),
-	}
-
-	_, err := r.client.PatchAlertNotifier(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	_, err := r.client.PatchAlertNotifier(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), buildPatchBody(plan))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating alert notifier", err.Error())
 		return
@@ -179,6 +160,9 @@ func (r *AlertNotifierResource) Delete(ctx context.Context, req resource.DeleteR
 
 	err := r.client.DeleteAlertNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting alert notifier", err.Error())
 	}
 }
@@ -191,4 +175,34 @@ func (r *AlertNotifierResource) ImportState(ctx context.Context, req resource.Im
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+}
+
+func buildCreateBody(model AlertNotifierModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          model.Name.ValueString(),
+		"type":          model.Type.ValueString(),
+		"configuration": model.Configuration.ValueString(),
+		"enabled":       model.Enabled.ValueBool(),
+	}
+}
+
+func buildPatchBody(model AlertNotifierModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          model.Name.ValueString(),
+		"configuration": model.Configuration.ValueString(),
+		"enabled":       model.Enabled.ValueBool(),
+	}
+}
+
+func readIntoModel(model *AlertNotifierModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if notifierType, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(notifierType)
+	}
+	// The API may return masked secrets in configuration fields, so preserve configuration from state.
+	if enabled, ok := data["enabled"].(bool); ok {
+		model.Enabled = types.BoolValue(enabled)
+	}
 }

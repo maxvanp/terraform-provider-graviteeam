@@ -15,4 +15,14 @@ resource "graviteeam_identity_provider" "example" {
     username = "username"
     email    = "email"
   }
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('admin-group')}" = [
+      graviteeam_group.example.id
+    ]
+  }
+  role_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('admin-role')}" = [
+      graviteeam_role.example.id
+    ]
+  }
 }

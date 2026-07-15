@@ -71,19 +71,21 @@ func (d *EntrypointsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	// Re-marshal with indentation for consistent output
-	var parsed interface{}
-	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
-		resp.Diagnostics.AddError("Error parsing entrypoints", err.Error())
-		return
-	}
-
-	formatted, err := json.MarshalIndent(parsed, "", "  ")
+	formatted, err := formatEntrypoints(rawJSON)
 	if err != nil {
 		resp.Diagnostics.AddError("Error formatting entrypoints", err.Error())
 		return
 	}
 
-	config.Entrypoints = types.StringValue(string(formatted))
+	config.Entrypoints = types.StringValue(formatted)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func formatEntrypoints(rawJSON []byte) (string, error) {
+	var parsed interface{}
+	if err := json.Unmarshal(rawJSON, &parsed); err != nil {
+		return "", err
+	}
+	formatted, _ := json.MarshalIndent(parsed, "", "  ")
+	return string(formatted), nil
 }

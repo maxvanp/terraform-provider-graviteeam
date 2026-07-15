@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
@@ -57,10 +58,13 @@ func (r *ApplicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"type": schema.StringAttribute{
 				Required:    true,
-				Description: "The type of the application (WEB, NATIVE, BROWSER, SERVICE, RESOURCE_SERVER)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				Description: "The type of the application (WEB, NATIVE, BROWSER, SERVICE, RESOURCE_SERVER, AGENT)",
+			},
+			"kind": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "The application deployment kind (USER_EMBEDDED, HOSTED_DELEGATED, or AUTONOMOUS)",
+				Validators:  []validator.String{applicationKindValidator{}},
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,
@@ -80,6 +84,10 @@ func (r *ApplicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"metadata_json": schema.StringAttribute{
+				Optional:    true,
+				Description: "JSON object for application metadata. Object values are sent to the Gravitee AM metadata payload.",
 			},
 			"settings_json": schema.StringAttribute{
 				Optional:    true,
@@ -223,8 +231,21 @@ func (r *ApplicationResource) Create(ctx context.Context, req resource.CreateReq
 	r.readCredentials(&plan, result)
 	savedSecret := plan.ClientSecret
 
+	if !requiresPostCreateUpdate(plan) {
+		r.readIntoModel(&plan, result)
+		plan.ClientSecret = savedSecret
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
+
+	current, err := r.client.GetApplication(ctx, plan.DomainID.ValueString(), id)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading application before post-create update", err.Error())
+		return
+	}
+
 	// Step 2: Update with full config (identity providers, factors, settings)
-	result, err = r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), id, updateBody)
+	result, err = r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), id, mergeApplicationUpdateBody(current, updateBody))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application after creation", err.Error())
 		return
@@ -246,6 +267,10 @@ func (r *ApplicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading application", err.Error())
 		return
 	}
@@ -268,6 +293,7 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	plan.ID = state.ID
+	plan.ClientSecret = state.ClientSecret
 
 	updateBody, err := r.buildUpdateBody(plan)
 	if err != nil {
@@ -275,10 +301,24 @@ func (r *ApplicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	result, err := r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
+	current, err := r.client.GetApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading application before update", err.Error())
+		return
+	}
+
+	result, err := r.client.UpdateApplication(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), mergeApplicationUpdateBody(current, updateBody))
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application", err.Error())
 		return
+	}
+
+	if !plan.Type.Equal(state.Type) {
+		result, err = r.client.UpdateApplicationType(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), plan.Type.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error updating application type", err.Error())
+			return
+		}
 	}
 
 	// Refresh full state from API response
@@ -297,6 +337,9 @@ func (r *ApplicationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	err := r.client.DeleteApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting application", err.Error())
 	}
 }
@@ -318,9 +361,20 @@ func (r *ApplicationResource) buildCreateBody(plan ApplicationModel) (map[string
 		"name": plan.Name.ValueString(),
 		"type": plan.Type.ValueString(),
 	}
+	if !plan.Kind.IsNull() && !plan.Kind.IsUnknown() && plan.Kind.ValueString() != "" {
+		body["kind"] = plan.Kind.ValueString()
+	}
 
 	if !plan.Description.IsNull() {
 		body["description"] = plan.Description.ValueString()
+	}
+
+	metadata, metadataProvided, err := metadataJSONToAPI(plan.MetadataJSON)
+	if err != nil {
+		return nil, err
+	}
+	if metadataProvided {
+		body["metadata"] = metadata
 	}
 
 	redirectURIs, err := redirectURIsForCreate(plan)
@@ -339,9 +393,20 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) (map[string
 		"name": plan.Name.ValueString(),
 		// DO NOT include "type" in update - it's only valid at creation
 	}
+	if !plan.Kind.IsNull() && !plan.Kind.IsUnknown() && plan.Kind.ValueString() != "" {
+		body["kind"] = plan.Kind.ValueString()
+	}
 
 	if !plan.Description.IsNull() {
 		body["description"] = plan.Description.ValueString()
+	}
+
+	metadata, metadataProvided, err := metadataJSONToAPI(plan.MetadataJSON)
+	if err != nil {
+		return nil, err
+	}
+	if metadataProvided {
+		body["metadata"] = metadata
 	}
 
 	// Identity providers - prefer identity_provider_rule blocks over simple list
@@ -486,6 +551,41 @@ func (r *ApplicationResource) buildUpdateBody(plan ApplicationModel) (map[string
 	return body, nil
 }
 
+func requiresPostCreateUpdate(plan ApplicationModel) bool {
+	return len(plan.IdentityProviderRules) > 0 ||
+		len(plan.IdentityProviders) > 0 ||
+		len(plan.Factors) > 0 ||
+		plan.OAuthSettings != nil ||
+		plan.MFASettings != nil ||
+		(!plan.SettingsJSON.IsNull() && !plan.SettingsJSON.IsUnknown())
+}
+
+func mergeApplicationUpdateBody(current, update map[string]interface{}) map[string]interface{} {
+	allowed := []string{
+		"certificate",
+		"description",
+		"enabled",
+		"factors",
+		"identityProviders",
+		"kind",
+		"metadata",
+		"name",
+		"requiredPermissions",
+		"settings",
+		"template",
+	}
+	body := make(map[string]interface{}, len(allowed))
+	for _, field := range allowed {
+		if value, ok := current[field]; ok {
+			body[field] = value
+		}
+	}
+	for field, value := range update {
+		body[field] = value
+	}
+	return body
+}
+
 func (r *ApplicationResource) readCredentials(model *ApplicationModel, data map[string]interface{}) {
 	if settings, ok := data["settings"].(map[string]interface{}); ok {
 		if oauth, ok := settings["oauth"].(map[string]interface{}); ok {
@@ -500,6 +600,8 @@ func (r *ApplicationResource) readCredentials(model *ApplicationModel, data map[
 }
 
 func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[string]interface{}) {
+	hydrateImportedSettings := model.Name.IsNull() || model.Name.IsUnknown()
+
 	if id, ok := data["id"].(string); ok {
 		model.ID = types.StringValue(id)
 	}
@@ -508,6 +610,10 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 	}
 	if appType, ok := data["type"].(string); ok {
 		model.Type = types.StringValue(strings.ToUpper(appType))
+	}
+	model.Kind = types.StringNull()
+	if kind, ok := data["kind"].(string); ok && kind != "" {
+		model.Kind = types.StringValue(strings.ToUpper(kind))
 	}
 	if desc, ok := data["description"].(string); ok {
 		model.Description = types.StringValue(desc)
@@ -567,11 +673,12 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 		}
 	}
 
-	// Read OAuth settings. If settings_json is configured without the typed
-	// block, keep ownership in the raw JSON attribute to avoid synthetic diffs.
+	// Typed OAuth settings are configuration-owned. Do not synthesize this block
+	// from API defaults when it was absent from the Terraform configuration. The
+	// first read after import is the exception: required fields are still null, so
+	// hydrate the remote settings to produce a complete imported state.
 	if settings, ok := data["settings"].(map[string]interface{}); ok {
-		if oauth, ok := settings["oauth"].(map[string]interface{}); ok &&
-			(model.OAuthSettings != nil || model.SettingsJSON.IsNull() || model.SettingsJSON.IsUnknown()) {
+		if oauth, ok := settings["oauth"].(map[string]interface{}); ok && (model.OAuthSettings != nil || hydrateImportedSettings) {
 			if model.OAuthSettings == nil {
 				model.OAuthSettings = &OAuthSettingsModel{}
 			}
@@ -605,8 +712,11 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 			model.OAuthSettings.IDTokenValiditySeconds = readOptionalInt64(oauth, "idTokenValiditySeconds")
 		}
 
-		// Read MFA settings (only if already present in model/plan)
-		if mfa, ok := settings["mfa"].(map[string]interface{}); ok && model.MFASettings != nil {
+		// Read MFA settings when configured, or during the first read after import.
+		if mfa, ok := settings["mfa"].(map[string]interface{}); ok && (model.MFASettings != nil || hydrateImportedSettings) {
+			if model.MFASettings == nil {
+				model.MFASettings = &MFASettingsModel{}
+			}
 			if enroll, ok := mfa["enroll"].(map[string]interface{}); ok {
 				if t, ok := enroll["type"].(string); ok {
 					model.MFASettings.Enrollment = types.StringValue(strings.ToUpper(t))
@@ -619,6 +729,52 @@ func (r *ApplicationResource) readIntoModel(model *ApplicationModel, data map[st
 			}
 		}
 	}
+
+	if metadata, ok := data["metadata"].(map[string]interface{}); ok &&
+		(!model.MetadataJSON.IsNull() && !model.MetadataJSON.IsUnknown()) {
+		metadataJSON, err := json.Marshal(metadata)
+		if err == nil {
+			model.MetadataJSON = types.StringValue(string(metadataJSON))
+		}
+	}
+}
+
+type applicationKindValidator struct{}
+
+func (applicationKindValidator) Description(_ context.Context) string {
+	return "kind must be one of: USER_EMBEDDED, HOSTED_DELEGATED, AUTONOMOUS"
+}
+
+func (applicationKindValidator) MarkdownDescription(_ context.Context) string {
+	return "kind must be one of: `USER_EMBEDDED`, `HOSTED_DELEGATED`, `AUTONOMOUS`"
+}
+
+func (applicationKindValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	switch req.ConfigValue.ValueString() {
+	case "USER_EMBEDDED", "HOSTED_DELEGATED", "AUTONOMOUS":
+		return
+	default:
+		resp.Diagnostics.AddError("Invalid application kind", "kind must be one of: USER_EMBEDDED, HOSTED_DELEGATED, AUTONOMOUS")
+	}
+}
+
+func metadataJSONToAPI(value types.String) (map[string]interface{}, bool, error) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, false, nil
+	}
+
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(value.ValueString()), &metadata); err != nil {
+		return nil, false, fmt.Errorf("metadata_json must be a valid JSON object: %w", err)
+	}
+	if metadata == nil {
+		return nil, false, fmt.Errorf("metadata_json must be a valid JSON object")
+	}
+	return metadata, true, nil
 }
 
 func settingsJSONToAPI(value types.String) (map[string]interface{}, bool, error) {

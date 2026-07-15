@@ -18,6 +18,15 @@ resource "graviteeam_domain" "example" {
   description = "My Security Domain"
   enabled     = true
 
+  settings_json = jsonencode({
+    tags = ["iam", "production"]
+    oidc = {
+      securityProfileSettings = {
+        enablePlainFapi = true
+      }
+    }
+  })
+
   oidc {
     allow_localhost_redirect_uri   = true
     allow_http_scheme_redirect_uri = true
@@ -44,6 +53,7 @@ resource "graviteeam_domain" "example" {
 - `enabled` (Boolean) Whether the domain is enabled
 - `login_settings` (Block, Optional) Login page settings (see [below for nested schema](#nestedblock--login_settings))
 - `oidc` (Block, Optional) OIDC client registration settings (see [below for nested schema](#nestedblock--oidc))
+- `settings_json` (String) JSON object for advanced domain patch settings. The value is merged into the Gravitee AM domain payload; typed attributes and blocks override matching keys.
 
 ### Read-Only
 

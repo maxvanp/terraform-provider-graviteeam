@@ -2,6 +2,9 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -72,6 +75,10 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"settings_json": schema.StringAttribute{
+				Optional:    true,
+				Description: "JSON object for advanced domain patch settings. The value is merged into the Gravitee AM domain payload; typed attributes and blocks override matching keys.",
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -170,7 +177,11 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 	plan.DefaultIdpID = types.StringValue("default-idp-" + id)
 
 	// Step 2: Update immediately with full config (enabled, oidc, loginSettings)
-	updateBody := r.buildUpdateBody(plan)
+	updateBody, err := r.buildUpdateBody(plan, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid domain configuration", err.Error())
+		return
+	}
 	result, err = r.client.UpdateDomain(ctx, id, updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating domain after creation", err.Error())
@@ -190,6 +201,10 @@ func (r *DomainResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	result, err := r.client.GetDomain(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading domain", err.Error())
 		return
 	}
@@ -214,7 +229,17 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 	plan.ID = state.ID
 	plan.DefaultIdpID = state.DefaultIdpID
 
-	updateBody := r.buildUpdateBody(plan)
+	current, err := r.client.GetDomain(ctx, plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading domain before update", err.Error())
+		return
+	}
+
+	updateBody, err := r.buildUpdateBody(plan, current)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid domain configuration", err.Error())
+		return
+	}
 	result, err := r.client.UpdateDomain(ctx, plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating domain", err.Error())
@@ -242,10 +267,28 @@ func (r *DomainResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *DomainResource) buildUpdateBody(plan DomainModel) map[string]interface{} {
-	body := map[string]interface{}{
-		"name":    plan.Name.ValueString(),
-		"enabled": plan.Enabled.ValueBool(),
+func (r *DomainResource) buildUpdateBody(plan DomainModel, current map[string]interface{}) (map[string]interface{}, error) {
+	body := copyPatchDomainFields(current)
+
+	if current == nil {
+		body = map[string]interface{}{
+			"dataPlaneId": plan.DataPlaneID.ValueString(),
+		}
+	}
+
+	settings, settingsProvided, err := domainSettingsJSONToAPI(plan.SettingsJSON)
+	if err != nil {
+		return nil, err
+	}
+	if settingsProvided {
+		mergeStringInterfaceMap(body, settings)
+	}
+
+	body["name"] = plan.Name.ValueString()
+	body["enabled"] = plan.Enabled.ValueBool()
+
+	if plan.DataPlaneID.ValueString() != "" {
+		body["dataPlaneId"] = plan.DataPlaneID.ValueString()
 	}
 
 	if !plan.Description.IsNull() {
@@ -253,30 +296,34 @@ func (r *DomainResource) buildUpdateBody(plan DomainModel) map[string]interface{
 	}
 
 	// OIDC settings
-	oidcSettings := map[string]interface{}{
-		"clientRegistrationSettings": map[string]interface{}{
+	oidcSettings := nestedMap(body["oidc"])
+	clientRegistrationSettings := nestedMap(oidcSettings["clientRegistrationSettings"])
+	if current == nil {
+		clientRegistrationSettings = map[string]interface{}{
 			"allowLocalhostRedirectUri":          false,
 			"allowHttpSchemeRedirectUri":         false,
 			"allowWildCardRedirectUri":           false,
 			"isDynamicClientRegistrationEnabled": false,
-		},
+		}
 	}
 
 	if plan.OIDC != nil {
-		oidcSettings["clientRegistrationSettings"] = map[string]interface{}{
-			"allowLocalhostRedirectUri":          plan.OIDC.AllowLocalhostRedirectURI.ValueBool(),
-			"allowHttpSchemeRedirectUri":         plan.OIDC.AllowHTTPSchemeRedirectURI.ValueBool(),
-			"allowWildCardRedirectUri":           plan.OIDC.AllowWildcardRedirectURI.ValueBool(),
-			"isDynamicClientRegistrationEnabled": plan.OIDC.DynamicClientRegistrationEnabled.ValueBool(),
-		}
+		clientRegistrationSettings["allowLocalhostRedirectUri"] = plan.OIDC.AllowLocalhostRedirectURI.ValueBool()
+		clientRegistrationSettings["allowHttpSchemeRedirectUri"] = plan.OIDC.AllowHTTPSchemeRedirectURI.ValueBool()
+		clientRegistrationSettings["allowWildCardRedirectUri"] = plan.OIDC.AllowWildcardRedirectURI.ValueBool()
+		clientRegistrationSettings["isDynamicClientRegistrationEnabled"] = plan.OIDC.DynamicClientRegistrationEnabled.ValueBool()
 	}
+	oidcSettings["clientRegistrationSettings"] = clientRegistrationSettings
 	body["oidc"] = oidcSettings
 
 	// Login settings
-	loginSettings := map[string]interface{}{
-		"registerEnabled":        false,
-		"forgotPasswordEnabled":  false,
-		"identifierFirstEnabled": false,
+	loginSettings := nestedMap(body["loginSettings"])
+	if current == nil {
+		loginSettings = map[string]interface{}{
+			"registerEnabled":        false,
+			"forgotPasswordEnabled":  false,
+			"identifierFirstEnabled": false,
+		}
 	}
 	if plan.LoginSettings != nil {
 		loginSettings["registerEnabled"] = plan.LoginSettings.RegisterEnabled.ValueBool()
@@ -285,7 +332,82 @@ func (r *DomainResource) buildUpdateBody(plan DomainModel) map[string]interface{
 	}
 	body["loginSettings"] = loginSettings
 
+	return body, nil
+}
+
+func copyPatchDomainFields(current map[string]interface{}) map[string]interface{} {
+	allowed := []string{
+		"accountSettings",
+		"alertEnabled",
+		"certificateSettings",
+		"corsSettings",
+		"dataPlaneId",
+		"description",
+		"enabled",
+		"loginSettings",
+		"master",
+		"name",
+		"oidc",
+		"passwordSettings",
+		"path",
+		"requiredPermissions",
+		"saml",
+		"scim",
+		"secretSettings",
+		"secretExpirationSettings",
+		"selfServiceAccountManagementSettings",
+		"tags",
+		"tokenExchangeSettings",
+		"uma",
+		"vhostMode",
+		"vhosts",
+		"webAuthnSettings",
+	}
+	body := make(map[string]interface{}, len(allowed))
+	for _, field := range allowed {
+		if value, ok := current[field]; ok {
+			body[field] = value
+		}
+	}
 	return body
+}
+
+func nestedMap(value interface{}) map[string]interface{} {
+	if existing, ok := value.(map[string]interface{}); ok {
+		copy := make(map[string]interface{}, len(existing))
+		for key, child := range existing {
+			copy[key] = child
+		}
+		return copy
+	}
+	return map[string]interface{}{}
+}
+
+func domainSettingsJSONToAPI(value types.String) (map[string]interface{}, bool, error) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, false, nil
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal([]byte(value.ValueString()), &settings); err != nil {
+		return nil, false, fmt.Errorf("settings_json must be a valid JSON object: %w", err)
+	}
+	if settings == nil {
+		return nil, false, fmt.Errorf("settings_json must be a valid JSON object")
+	}
+	return settings, true, nil
+}
+
+func mergeStringInterfaceMap(dst, src map[string]interface{}) {
+	for key, value := range src {
+		srcMap, srcIsMap := value.(map[string]interface{})
+		dstMap, dstIsMap := dst[key].(map[string]interface{})
+		if srcIsMap && dstIsMap {
+			mergeStringInterfaceMap(dstMap, srcMap)
+			continue
+		}
+		dst[key] = value
+	}
 }
 
 func (r *DomainResource) readIntoModel(model *DomainModel, data map[string]interface{}) {

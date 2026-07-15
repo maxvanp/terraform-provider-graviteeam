@@ -29,11 +29,12 @@ resource "graviteeam_role" "test" {
 }
 
 resource "graviteeam_user" "test" {
-  domain_id  = graviteeam_domain.test.id
-  username   = "test-user-role-user"
-  email      = "user-role-test@example.com"
-  first_name = "Test"
-  last_name  = "User"
+  domain_id    = graviteeam_domain.test.id
+  username     = "test-user-role-user"
+  email        = "user-role-test@example.com"
+  first_name   = "Test"
+  last_name    = "User"
+  display_name = "Test User"
 }
 
 resource "graviteeam_user_role" "test" {
@@ -47,9 +48,11 @@ resource "graviteeam_user_role" "test" {
 				),
 			},
 			{
-				ResourceName:      "graviteeam_user_role.test",
-				ImportState:       true,
-				ImportStateVerify: false, // set resource has no id attribute, roles may differ in format
+				ResourceName:                         "graviteeam_user_role.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "user_id",
+				ImportStateVerifyIgnore:              []string{"roles"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs, ok := s.RootModule().Resources["graviteeam_user_role.test"]
 					if !ok {

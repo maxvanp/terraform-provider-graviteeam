@@ -102,7 +102,8 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 	plan.ID = types.StringValue(result["id"].(string))
 
 	// Create-then-update: if permissions are set, do an update
-	if len(plan.Permissions) > 0 {
+	hasPermissions := len(plan.Permissions) > 0
+	if hasPermissions {
 		updateBody := map[string]interface{}{
 			"name": plan.Name.ValueString(),
 		}
@@ -124,7 +125,7 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 
 	readIntoModel(&plan, result)
 	// Re-read to get the full state after potential update
-	if len(plan.Permissions) > 0 {
+	if hasPermissions {
 		readResult, err := r.client.GetOrgRole(ctx, plan.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error reading organization role after creation", err.Error())
@@ -145,6 +146,10 @@ func (r *OrgRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgRole(ctx, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading organization role", err.Error())
 		return
 	}
@@ -168,19 +173,7 @@ func (r *OrgRoleResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	}
-	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		body["description"] = plan.Description.ValueString()
-	}
-	if len(plan.Permissions) > 0 {
-		perms := make([]string, len(plan.Permissions))
-		for i, p := range plan.Permissions {
-			perms[i] = p.ValueString()
-		}
-		body["permissions"] = perms
-	}
+	body := buildUpdateBody(plan, state)
 
 	_, err := r.client.UpdateOrgRole(ctx, plan.ID.ValueString(), body)
 	if err != nil {
@@ -199,7 +192,7 @@ func (r *OrgRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	err := r.client.DeleteOrgRole(ctx, state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting organization role", err.Error())
 	}
 }
@@ -208,12 +201,35 @@ func (r *OrgRoleResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+func buildUpdateBody(plan, state OrgRoleModel) map[string]interface{} {
+	body := map[string]interface{}{
+		"name": plan.Name.ValueString(),
+	}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		body["description"] = plan.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
+	}
+	if plan.Permissions != nil {
+		perms := make([]string, len(plan.Permissions))
+		for i, p := range plan.Permissions {
+			perms[i] = p.ValueString()
+		}
+		body["permissions"] = perms
+	} else if state.Permissions != nil {
+		body["permissions"] = []string{}
+	}
+	return body
+}
+
 func readIntoModel(model *OrgRoleModel, result map[string]interface{}) {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := result["description"].(string); ok {
+	if desc, ok := result["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
+	} else {
+		model.Description = types.StringNull()
 	}
 	if at, ok := result["assignableType"].(string); ok {
 		model.AssignableType = types.StringValue(strings.ToUpper(at))

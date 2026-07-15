@@ -120,7 +120,7 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	// Step 2: Update with full config (permissions, oauthScopes)
 	if len(plan.Permissions) > 0 || len(plan.OAuthScopes) > 0 {
-		updateBody := r.buildUpdateBody(plan)
+		updateBody := r.buildUpdateBody(plan, nil)
 		result, err = r.client.UpdateRole(ctx, plan.DomainID.ValueString(), id, updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating role after creation", err.Error())
@@ -141,6 +141,10 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	result, err := r.client.GetRole(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading role", err.Error())
 		return
 	}
@@ -164,7 +168,7 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody := r.buildUpdateBody(plan, &state)
 	result, err := r.client.UpdateRole(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating role", err.Error())
@@ -183,7 +187,7 @@ func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 
 	err := r.client.DeleteRole(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting role", err.Error())
 	}
 }
@@ -199,7 +203,7 @@ func (r *RoleResource) ImportState(ctx context.Context, req resource.ImportState
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *RoleResource) buildUpdateBody(plan RoleModel) map[string]interface{} {
+func (r *RoleResource) buildUpdateBody(plan RoleModel, state *RoleModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name": plan.Name.ValueString(),
 	}
@@ -214,6 +218,8 @@ func (r *RoleResource) buildUpdateBody(plan RoleModel) map[string]interface{} {
 			perms[i] = p.ValueString()
 		}
 		body["permissions"] = perms
+	} else if state != nil && state.Permissions != nil {
+		body["permissions"] = []string{}
 	}
 
 	if plan.OAuthScopes != nil {
@@ -222,6 +228,8 @@ func (r *RoleResource) buildUpdateBody(plan RoleModel) map[string]interface{} {
 			scopes[i] = s.ValueString()
 		}
 		body["oauthScopes"] = scopes
+	} else if state != nil && state.OAuthScopes != nil {
+		body["oauthScopes"] = []string{}
 	}
 
 	return body

@@ -14,11 +14,13 @@ Manages a Gravitee AM OAuth2 Scope
 
 ```terraform
 resource "graviteeam_scope" "example" {
-  domain_id   = graviteeam_domain.example.id
-  key         = "roles"
-  name        = "User Roles"
-  description = "Access to user roles"
-  discovery   = true
+  domain_id     = graviteeam_domain.example.id
+  key           = "roles"
+  name          = "User Roles"
+  description   = "Access to user roles"
+  discovery     = true
+  icon_uri      = "https://example.com/icons/roles.svg"
+  parameterized = false
 }
 ```
 
@@ -36,6 +38,8 @@ resource "graviteeam_scope" "example" {
 - `description` (String) The description of the scope
 - `discovery` (Boolean) Whether the scope is visible in the discovery endpoint
 - `expires_in` (Number) Scope expiration in seconds
+- `icon_uri` (String) URI of the icon associated with the scope
+- `parameterized` (Boolean) Whether the scope is parameterized
 
 ### Read-Only
 

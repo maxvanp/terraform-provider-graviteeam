@@ -11,4 +11,5 @@ type ReporterModel struct {
 	Type          types.String `tfsdk:"type"`
 	Configuration types.String `tfsdk:"configuration"`
 	Enabled       types.Bool   `tfsdk:"enabled"`
+	Inherited     types.Bool   `tfsdk:"inherited"`
 }

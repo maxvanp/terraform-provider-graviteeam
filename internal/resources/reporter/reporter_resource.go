@@ -72,6 +72,12 @@ func (r *ReporterResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether the reporter is enabled",
 			},
+			"inherited": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the reporter inherits its configuration",
+			},
 		},
 	}
 }
@@ -100,6 +106,7 @@ func (r *ReporterResource) Create(ctx context.Context, req resource.CreateReques
 		"type":          plan.Type.ValueString(),
 		"configuration": plan.Configuration.ValueString(),
 		"enabled":       plan.Enabled.ValueBool(),
+		"inherited":     plan.Inherited.ValueBool(),
 	}
 
 	result, err := r.client.CreateReporter(ctx, plan.DomainID.ValueString(), body)
@@ -121,20 +128,15 @@ func (r *ReporterResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading reporter", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	// configuration may contain masked secrets for some reporter types — preserve from state
-	if enabled, ok := result["enabled"].(bool); ok {
-		state.Enabled = types.BoolValue(enabled)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -154,20 +156,52 @@ func (r *ReporterResource) Update(ctx context.Context, req resource.UpdateReques
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-		"enabled":       plan.Enabled.ValueBool(),
+	current, err := r.client.GetReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading reporter before update", err.Error())
+		return
 	}
 
-	_, err := r.client.UpdateReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	body := buildBody(plan, current)
+
+	_, err = r.client.UpdateReporter(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating reporter", err.Error())
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func buildBody(plan ReporterModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+		"enabled":       plan.Enabled.ValueBool(),
+		"inherited":     plan.Inherited.ValueBool(),
+	}
+	if plan.Inherited.IsUnknown() {
+		if inherited, ok := current["inherited"]; ok {
+			body["inherited"] = inherited
+		}
+	}
+	return body
+}
+
+func readIntoModel(model *ReporterModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if reporterType, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(reporterType)
+	}
+	if enabled, ok := data["enabled"].(bool); ok {
+		model.Enabled = types.BoolValue(enabled)
+	}
+	if inherited, ok := data["inherited"].(bool); ok {
+		model.Inherited = types.BoolValue(inherited)
+	}
 }
 
 func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -178,7 +212,7 @@ func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting reporter", err.Error())
 	}
 }

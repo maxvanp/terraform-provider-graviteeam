@@ -60,12 +60,12 @@ func (r *GroupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"members": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of user IDs that are members of this group",
+				Description: "List of user IDs that are members of this group. Do not manage this attribute together with graviteeam_group_members for the same group.",
 				ElementType: types.StringType,
 			},
 			"roles": schema.ListAttribute{
 				Optional:    true,
-				Description: "List of role IDs assigned to this group",
+				Description: "List of role IDs assigned to this group. Do not manage this attribute together with graviteeam_group_roles for the same group.",
 				ElementType: types.StringType,
 			},
 		},
@@ -117,7 +117,7 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Step 2: Update with roles (create-then-update pattern)
 	if len(plan.Roles) > 0 {
-		updateBody := r.buildUpdateBody(plan)
+		updateBody := r.buildUpdateBody(plan, nil)
 		result, err = r.client.UpdateGroup(ctx, plan.DomainID.ValueString(), id, updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating group after creation", err.Error())
@@ -127,9 +127,13 @@ func (r *GroupResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Preserve plan values for fields the API may not return
 	savedRoles := plan.Roles
+	savedMembers := plan.Members
 	r.readIntoModel(&plan, result)
 	if savedRoles != nil {
 		plan.Roles = savedRoles
+	}
+	if savedMembers != nil {
+		plan.Members = savedMembers
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -143,6 +147,10 @@ func (r *GroupResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	result, err := r.client.GetGroup(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading group", err.Error())
 		return
 	}
@@ -182,7 +190,7 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody := r.buildUpdateBody(plan, &state)
 	result, err := r.client.UpdateGroup(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating group", err.Error())
@@ -191,9 +199,13 @@ func (r *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Preserve plan values for fields the API may not return
 	savedRoles := plan.Roles
+	savedMembers := plan.Members
 	r.readIntoModel(&plan, result)
 	if savedRoles != nil {
 		plan.Roles = savedRoles
+	}
+	if savedMembers != nil {
+		plan.Members = savedMembers
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -206,7 +218,7 @@ func (r *GroupResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	err := r.client.DeleteGroup(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting group", err.Error())
 	}
 }
@@ -222,7 +234,7 @@ func (r *GroupResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} {
+func (r *GroupResource) buildUpdateBody(plan GroupModel, state *GroupModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name": plan.Name.ValueString(),
 	}
@@ -237,6 +249,8 @@ func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} 
 			members[i] = m.ValueString()
 		}
 		body["members"] = members
+	} else if state != nil && state.Members != nil {
+		body["members"] = []string{}
 	}
 
 	if plan.Roles != nil {
@@ -245,6 +259,8 @@ func (r *GroupResource) buildUpdateBody(plan GroupModel) map[string]interface{} 
 			roles[i] = r.ValueString()
 		}
 		body["roles"] = roles
+	} else if state != nil && state.Roles != nil {
+		body["roles"] = []string{}
 	}
 
 	return body

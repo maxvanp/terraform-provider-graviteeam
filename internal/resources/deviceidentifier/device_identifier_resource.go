@@ -88,11 +88,7 @@ func (r *DeviceIdentifierResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	result, err := r.client.CreateDeviceIdentifier(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -113,17 +109,15 @@ func (r *DeviceIdentifierResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading device identifier", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	// configuration may contain masked secrets — preserve from state
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -143,10 +137,7 @@ func (r *DeviceIdentifierResource) Update(ctx context.Context, req resource.Upda
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	_, err := r.client.UpdateDeviceIdentifier(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -165,17 +156,43 @@ func (r *DeviceIdentifierResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	err := r.client.DeleteDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting device identifier", err.Error())
 	}
 }
 
 func (r *DeviceIdentifierResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, deviceIdentifierID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/device_identifier_id, got: %s", req.ID))
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), deviceIdentifierID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func buildBody(plan DeviceIdentifierModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+	}
+}
+
+func readIntoModel(model *DeviceIdentifierModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if t, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(t)
+	}
+	// Configuration may contain masked secrets, so preserve it from state.
 }

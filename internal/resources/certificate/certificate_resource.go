@@ -89,11 +89,7 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          plan.Type.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	result, err := r.client.CreateCertificate(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -114,17 +110,15 @@ func (r *CertificateResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetCertificate(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading certificate", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	// configuration may be masked by API — preserve from state
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -144,10 +138,7 @@ func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateReq
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"configuration": plan.Configuration.ValueString(),
-	}
+	body := buildBody(plan)
 
 	_, err := r.client.UpdateCertificate(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -172,11 +163,37 @@ func (r *CertificateResource) Delete(ctx context.Context, req resource.DeleteReq
 }
 
 func (r *CertificateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, certificateID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/certificate_id, got: %s", req.ID))
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), certificateID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func buildBody(plan CertificateModel) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          plan.Type.ValueString(),
+		"configuration": plan.Configuration.ValueString(),
+	}
+}
+
+func readIntoModel(model *CertificateModel, data map[string]interface{}) {
+	if name, ok := data["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if t, ok := data["type"].(string); ok {
+		model.Type = types.StringValue(t)
+	}
+	// Configuration may contain masked secrets, so preserve it from state.
 }

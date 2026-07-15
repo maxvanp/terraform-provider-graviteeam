@@ -149,12 +149,11 @@ func (r *PasswordPolicyResource) Create(ctx context.Context, req resource.Create
 	id := result["id"].(string)
 	plan.ID = types.StringValue(id)
 
-	// Step 2: PUT with defaultPolicy if set
+	// Step 2: call the dedicated default endpoint if set.
 	if !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && plan.DefaultPolicy.ValueBool() {
-		updateBody := r.buildBody(plan, true)
-		result, err = r.client.UpdatePasswordPolicy(ctx, plan.DomainID.ValueString(), id, updateBody)
+		result, err = r.client.SetDefaultPasswordPolicy(ctx, plan.DomainID.ValueString(), id)
 		if err != nil {
-			resp.Diagnostics.AddError("Error updating password policy after creation", err.Error())
+			resp.Diagnostics.AddError("Error setting default password policy after creation", err.Error())
 			return
 		}
 	}
@@ -172,6 +171,10 @@ func (r *PasswordPolicyResource) Read(ctx context.Context, req resource.ReadRequ
 
 	result, err := r.client.GetPasswordPolicy(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading password policy", err.Error())
 		return
 	}
@@ -195,12 +198,21 @@ func (r *PasswordPolicyResource) Update(ctx context.Context, req resource.Update
 
 	plan.ID = state.ID
 
-	body := r.buildBody(plan, true)
+	includeDefaultPolicy := !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && !plan.DefaultPolicy.ValueBool()
+	body := r.buildBody(plan, includeDefaultPolicy)
 
 	result, err := r.client.UpdatePasswordPolicy(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating password policy", err.Error())
 		return
+	}
+
+	if !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() && plan.DefaultPolicy.ValueBool() {
+		result, err = r.client.SetDefaultPasswordPolicy(ctx, plan.DomainID.ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error setting default password policy", err.Error())
+			return
+		}
 	}
 
 	r.readIntoModel(&plan, result)
@@ -215,20 +227,28 @@ func (r *PasswordPolicyResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeletePasswordPolicy(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting password policy", err.Error())
 	}
 }
 
 func (r *PasswordPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	domainID, passwordPolicyID, ok := parseImportID(req.ID)
+	if !ok {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/password_policy_id, got: %s", req.ID))
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), domainID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), passwordPolicyID)...)
+}
+
+func parseImportID(id string) (string, string, bool) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func (r *PasswordPolicyResource) buildBody(plan PasswordPolicyModel, includeDefaultPolicy bool) map[string]interface{} {
@@ -269,7 +289,7 @@ func (r *PasswordPolicyResource) buildBody(plan PasswordPolicyModel, includeDefa
 	if !plan.PasswordHistoryEnabled.IsNull() && !plan.PasswordHistoryEnabled.IsUnknown() {
 		body["passwordHistoryEnabled"] = plan.PasswordHistoryEnabled.ValueBool()
 	}
-	// defaultPolicy is only accepted on PUT, not POST
+	// defaultPolicy is only accepted on PUT, not POST. Setting true uses the dedicated default endpoint.
 	if includeDefaultPolicy && !plan.DefaultPolicy.IsNull() && !plan.DefaultPolicy.IsUnknown() {
 		body["defaultPolicy"] = plan.DefaultPolicy.ValueBool()
 	}

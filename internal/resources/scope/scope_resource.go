@@ -76,6 +76,16 @@ func (r *ScopeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:    true,
 				Description: "Scope expiration in seconds",
 			},
+			"icon_uri": schema.StringAttribute{
+				Optional:    true,
+				Description: "URI of the icon associated with the scope",
+			},
+			"parameterized": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether the scope is parameterized",
+			},
 		},
 	}
 }
@@ -122,6 +132,10 @@ func (r *ScopeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	result, err := r.client.GetScope(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading scope", err.Error())
 		return
 	}
@@ -145,7 +159,7 @@ func (r *ScopeResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = state.ID
 
-	body := r.buildUpdateBody(plan)
+	body := r.buildUpdateBody(plan, state)
 
 	result, err := r.client.UpdateScope(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -166,6 +180,9 @@ func (r *ScopeResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	err := r.client.DeleteScope(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting scope", err.Error())
 	}
 }
@@ -183,9 +200,10 @@ func (r *ScopeResource) ImportState(ctx context.Context, req resource.ImportStat
 
 func (r *ScopeResource) buildBody(plan ScopeModel) map[string]interface{} {
 	body := map[string]interface{}{
-		"key":       plan.Key.ValueString(),
-		"name":      plan.Name.ValueString(),
-		"discovery": plan.Discovery.ValueBool(),
+		"key":           plan.Key.ValueString(),
+		"name":          plan.Name.ValueString(),
+		"discovery":     plan.Discovery.ValueBool(),
+		"parameterized": plan.Parameterized.ValueBool(),
 	}
 
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
@@ -193,22 +211,35 @@ func (r *ScopeResource) buildBody(plan ScopeModel) map[string]interface{} {
 	}
 	if !plan.ExpiresIn.IsNull() && !plan.ExpiresIn.IsUnknown() {
 		body["expiresIn"] = plan.ExpiresIn.ValueInt64()
+	}
+	if !plan.IconURI.IsNull() && !plan.IconURI.IsUnknown() {
+		body["iconUri"] = plan.IconURI.ValueString()
 	}
 
 	return body
 }
 
-func (r *ScopeResource) buildUpdateBody(plan ScopeModel) map[string]interface{} {
+func (r *ScopeResource) buildUpdateBody(plan, state ScopeModel) map[string]interface{} {
 	body := map[string]interface{}{
-		"name":      plan.Name.ValueString(),
-		"discovery": plan.Discovery.ValueBool(),
+		"name":          plan.Name.ValueString(),
+		"discovery":     plan.Discovery.ValueBool(),
+		"parameterized": plan.Parameterized.ValueBool(),
 	}
 
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		body["description"] = plan.Description.ValueString()
+	} else if !state.Description.IsNull() {
+		body["description"] = ""
 	}
 	if !plan.ExpiresIn.IsNull() && !plan.ExpiresIn.IsUnknown() {
 		body["expiresIn"] = plan.ExpiresIn.ValueInt64()
+	} else if !state.ExpiresIn.IsNull() {
+		body["expiresIn"] = 0
+	}
+	if !plan.IconURI.IsNull() && !plan.IconURI.IsUnknown() {
+		body["iconUri"] = plan.IconURI.ValueString()
+	} else if !state.IconURI.IsNull() {
+		body["iconUri"] = nil
 	}
 
 	return body
@@ -224,7 +255,7 @@ func (r *ScopeResource) readIntoModel(model *ScopeModel, data map[string]interfa
 	if name, ok := data["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
-	if desc, ok := data["description"].(string); ok {
+	if desc, ok := data["description"].(string); ok && desc != "" {
 		model.Description = types.StringValue(desc)
 	} else {
 		model.Description = types.StringNull()
@@ -235,11 +266,27 @@ func (r *ScopeResource) readIntoModel(model *ScopeModel, data map[string]interfa
 	if v, ok := data["expiresIn"]; ok {
 		switch n := v.(type) {
 		case float64:
-			model.ExpiresIn = types.Int64Value(int64(n))
+			if n == 0 && model.ExpiresIn.IsNull() {
+				model.ExpiresIn = types.Int64Null()
+			} else {
+				model.ExpiresIn = types.Int64Value(int64(n))
+			}
 		case int64:
-			model.ExpiresIn = types.Int64Value(n)
+			if n == 0 && model.ExpiresIn.IsNull() {
+				model.ExpiresIn = types.Int64Null()
+			} else {
+				model.ExpiresIn = types.Int64Value(n)
+			}
 		}
 	} else {
 		model.ExpiresIn = types.Int64Null()
+	}
+	if iconURI, ok := data["iconUri"].(string); ok && iconURI != "" {
+		model.IconURI = types.StringValue(iconURI)
+	} else {
+		model.IconURI = types.StringNull()
+	}
+	if parameterized, ok := data["parameterized"].(bool); ok {
+		model.Parameterized = types.BoolValue(parameterized)
 	}
 }

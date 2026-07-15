@@ -75,6 +75,7 @@ resource "graviteeam_email_template" "test" {
   template      = "REGISTRATION_CONFIRMATION"
   enabled       = true
   from          = "support@test.local"
+  from_name     = "Support Team"
   subject       = "Please confirm your account"
   content       = "<html><body><h1>Welcome</h1><p>Please confirm your email.</p></body></html>"
   expires_after = 86400
@@ -82,7 +83,33 @@ resource "graviteeam_email_template" "test" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_email_template.test", "from", "support@test.local"),
+					resource.TestCheckResourceAttr("graviteeam_email_template.test", "from_name", "Support Team"),
 					resource.TestCheckResourceAttr("graviteeam_email_template.test", "subject", "Please confirm your account"),
+				),
+			},
+			// Update: remove optional from_name and verify it is cleared remotely
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-emailtpl"
+  description = "Acceptance test domain for email template"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_email_template" "test" {
+  domain_id     = graviteeam_domain.test.id
+  template      = "REGISTRATION_CONFIRMATION"
+  enabled       = true
+  from          = "support@test.local"
+  subject       = "Please confirm your account"
+  content       = "<html><body><h1>Welcome</h1><p>Please confirm your email.</p></body></html>"
+  expires_after = 86400
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("graviteeam_email_template.test", "from_name"),
 				),
 			},
 		},

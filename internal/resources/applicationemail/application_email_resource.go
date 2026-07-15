@@ -125,7 +125,7 @@ func (r *ApplicationEmailResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	body := r.buildBody(plan)
+	body := r.buildBody(plan, nil)
 	body["template"] = plan.Template.ValueString()
 
 	result, err := r.client.CreateEmail(ctx, plan.DomainID.ValueString(), plan.ApplicationID.ValueString(), body)
@@ -176,7 +176,7 @@ func (r *ApplicationEmailResource) Update(ctx context.Context, req resource.Upda
 
 	plan.ID = state.ID
 
-	body := r.buildBody(plan)
+	body := r.buildBody(plan, &state)
 
 	result, err := r.client.UpdateEmail(ctx, plan.DomainID.ValueString(), plan.ApplicationID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -197,6 +197,9 @@ func (r *ApplicationEmailResource) Delete(ctx context.Context, req resource.Dele
 
 	err := r.client.DeleteEmail(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting application email template", err.Error())
 	}
 }
@@ -214,7 +217,7 @@ func (r *ApplicationEmailResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("template"), parts[2])...)
 }
 
-func (r *ApplicationEmailResource) buildBody(plan ApplicationEmailModel) map[string]interface{} {
+func (r *ApplicationEmailResource) buildBody(plan ApplicationEmailModel, state *ApplicationEmailModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"enabled":      plan.Enabled.ValueBool(),
 		"from":         plan.From.ValueString(),
@@ -225,6 +228,8 @@ func (r *ApplicationEmailResource) buildBody(plan ApplicationEmailModel) map[str
 
 	if !plan.FromName.IsNull() && !plan.FromName.IsUnknown() {
 		body["fromName"] = plan.FromName.ValueString()
+	} else if state != nil && !state.FromName.IsNull() && !state.FromName.IsUnknown() {
+		body["fromName"] = ""
 	}
 
 	return body

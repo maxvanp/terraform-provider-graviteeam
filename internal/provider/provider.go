@@ -10,41 +10,73 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/adminmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/analytics"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/applicationmetadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/applications"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/audits"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/domainmetadata"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/entrypoints"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/flows"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/formpreview"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/metadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/passwordpolicyevaluation"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/permissionsmetadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/plugins"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/selfmetadata"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/usercollections"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/alertnotifier"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/alerttrigger"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/application"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationemail"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationflow"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationform"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationmember"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/applicationsecret"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/authdevicenotifier"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/authorizationengine"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/botdetection"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/certificate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/deviceidentifier"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domain"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domaincertificatesettings"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainflow"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/domainmember"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/emailtemplate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/extensiongrant"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/factor"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/form"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/generatedcertificate"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/group"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/groupmembers"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/grouproles"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/i18ndictionary"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/identityprovider"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/identityproviderpasswordpolicy"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgentrypoint"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgform"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orggroup"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orggroupmembers"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgidentityprovider"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgmember"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgreporter"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgrole"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgsettings"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgtag"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orguser"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/orgusertoken"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/passwordpolicy"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresource"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresourcemember"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/protectedresourcesecret"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reporter"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/role"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/scope"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/serviceresource"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/theme"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/trustdomain"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/user"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/usercertificatecredential"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/userrole"
 )
 
@@ -135,45 +167,82 @@ func (p *GraviteeAMProvider) Configure(ctx context.Context, req provider.Configu
 func (p *GraviteeAMProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		alertnotifier.NewAlertNotifierResource,
+		alerttrigger.NewAlertTriggerResource,
 		application.NewApplicationResource,
 		applicationemail.NewApplicationEmailResource,
 		applicationflow.NewApplicationFlowResource,
 		applicationform.NewApplicationFormResource,
+		applicationmember.NewApplicationMemberResource,
+		applicationsecret.NewApplicationSecretResource,
+		authorizationengine.NewAuthorizationEngineResource,
 		authdevicenotifier.NewAuthDeviceNotifierResource,
 		botdetection.NewBotDetectionResource,
 		certificate.NewCertificateResource,
 		deviceidentifier.NewDeviceIdentifierResource,
+		domaincertificatesettings.NewDomainCertificateSettingsResource,
 		domain.NewDomainResource,
+		domainflow.NewDomainFlowResource,
+		domainmember.NewDomainMemberResource,
 		emailtemplate.NewEmailTemplateResource,
 		extensiongrant.NewExtensionGrantResource,
 		factor.NewFactorResource,
 		form.NewFormResource,
+		generatedcertificate.NewGeneratedCertificateResource,
 		group.NewGroupResource,
 		groupmembers.NewGroupMembersResource,
 		grouproles.NewGroupRolesResource,
 		i18ndictionary.NewI18nDictionaryResource,
 		identityprovider.NewIdentityProviderResource,
+		identityproviderpasswordpolicy.NewIdentityProviderPasswordPolicyResource,
+		orgentrypoint.NewOrgEntrypointResource,
+		orgform.NewOrgFormResource,
+		orggroup.NewOrgGroupResource,
+		orggroupmembers.NewOrgGroupMembersResource,
 		orgidentityprovider.NewOrgIdentityProviderResource,
+		orgmember.NewOrgMemberResource,
+		orgreporter.NewOrgReporterResource,
 		orgrole.NewOrgRoleResource,
 		orgsettings.NewOrgSettingsResource,
 		orgtag.NewOrgTagResource,
+		orguser.NewOrgUserResource,
+		orgusertoken.NewOrgUserTokenResource,
 		passwordpolicy.NewPasswordPolicyResource,
 		protectedresource.NewProtectedResourceResource,
+		protectedresourcemember.NewProtectedResourceMemberResource,
+		protectedresourcesecret.NewProtectedResourceSecretResource,
 		reporter.NewReporterResource,
 		role.NewRoleResource,
 		scope.NewScopeResource,
 		serviceresource.NewServiceResourceResource,
 		theme.NewThemeResource,
+		trustdomain.NewTrustDomainResource,
 		user.NewUserResource,
+		usercertificatecredential.NewUserCertificateCredentialResource,
 		userrole.NewUserRoleResource,
 	}
 }
 
 func (p *GraviteeAMProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		adminmetadata.NewAdminMetadataDataSource,
 		analytics.NewAnalyticsDataSource,
+		applications.NewApplicationsDataSource,
+		applicationmetadata.NewApplicationMetadataDataSource,
 		audits.NewAuditsDataSource,
+		domainmetadata.NewDomainMetadataDataSource,
 		entrypoints.NewEntrypointsDataSource,
+		formpreview.NewFormPreviewDataSource,
+		metadata.NewEnvironmentMetadataDataSource,
+		metadata.NewPlatformMetadataDataSource,
+		passwordpolicyevaluation.NewPasswordPolicyEvaluationDataSource,
+		permissionsmetadata.NewPermissionsMetadataDataSource,
 		flows.NewFlowsDataSource,
+		plugins.NewPluginsDataSource,
+		selfmetadata.NewSelfMetadataDataSource,
+		usercollections.NewUserConsentsDataSource,
+		usercollections.NewUserCredentialsDataSource,
+		usercollections.NewUserDevicesDataSource,
+		usercollections.NewUserFactorsDataSource,
+		usercollections.NewUserIdentitiesDataSource,
 	}
 }

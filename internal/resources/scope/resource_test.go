@@ -30,6 +30,9 @@ resource "graviteeam_scope" "test" {
   key         = "test_scope"
   name        = "Test Scope"
   description = "A test scope"
+  expires_in  = 3600
+  icon_uri    = "https://example.com/icon.svg"
+  parameterized = true
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -39,6 +42,9 @@ resource "graviteeam_scope" "test" {
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Test Scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "description", "A test scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "true"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "expires_in", "3600"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "icon_uri", "https://example.com/icon.svg"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "parameterized", "true"),
 				),
 			},
 			// ImportState
@@ -71,11 +77,42 @@ resource "graviteeam_scope" "test" {
   name        = "Updated Test Scope"
   description = "A test scope"
   discovery   = false
+  icon_uri    = "https://example.com/updated-icon.svg"
+  parameterized = true
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Updated Test Scope"),
 					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "false"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "icon_uri", "https://example.com/updated-icon.svg"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "parameterized", "true"),
+				),
+			},
+			// Update: remove optional fields to ensure empty values clear remote state
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-scope"
+  description = "Domain for scope acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_scope" "test" {
+  domain_id = graviteeam_domain.test.id
+  key       = "test_scope"
+  name      = "Updated Test Scope"
+  discovery = false
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "name", "Updated Test Scope"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "discovery", "false"),
+					resource.TestCheckNoResourceAttr("graviteeam_scope.test", "description"),
+					resource.TestCheckNoResourceAttr("graviteeam_scope.test", "expires_in"),
+					resource.TestCheckNoResourceAttr("graviteeam_scope.test", "icon_uri"),
+					resource.TestCheckResourceAttr("graviteeam_scope.test", "parameterized", "false"),
 				),
 			},
 		},

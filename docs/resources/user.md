@@ -14,12 +14,19 @@ Manages a Gravitee AM User
 
 ```terraform
 resource "graviteeam_user" "example" {
-  domain_id        = graviteeam_domain.example.id
-  username         = "testuser"
-  email            = "test@example.com"
-  first_name       = "Test"
-  last_name        = "User"
-  pre_registration = true
+  domain_id            = graviteeam_domain.example.id
+  username             = "testuser"
+  email                = "test@example.com"
+  first_name           = "Test"
+  last_name            = "User"
+  display_name         = "Test User"
+  enabled              = true
+  force_reset_password = false
+  pre_registration     = true
+
+  reset_password                    = "SecurePass123!"
+  reset_password_trigger            = "rotation-2026-01" # gitleaks:allow - synthetic example trigger
+  registration_confirmation_trigger = "registration-email-2026-01"
 }
 ```
 
@@ -33,10 +40,17 @@ resource "graviteeam_user" "example" {
 
 ### Optional
 
+- `display_name` (String) The display name
 - `email` (String) The email address
+- `enabled` (Boolean) Whether the user is enabled
 - `first_name` (String) The first name
+- `force_reset_password` (Boolean) Whether the user must reset their password at next login
 - `last_name` (String) The last name
+- `locked` (Boolean) Whether the user account is locked
 - `pre_registration` (Boolean) Whether this is a pre-registration (user must set password). Defaults to true.
+- `registration_confirmation_trigger` (String) Arbitrary value used to explicitly send the user registration confirmation email. Changing this value calls the Gravitee AM send registration confirmation endpoint.
+- `reset_password` (String, Sensitive) Password value to send to the Gravitee AM reset password endpoint when reset_password_trigger changes.
+- `reset_password_trigger` (String) Arbitrary value used to explicitly reset the user password. Changing this value calls the Gravitee AM reset password endpoint with reset_password.
 
 ### Read-Only
 

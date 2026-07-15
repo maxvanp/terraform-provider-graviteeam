@@ -186,16 +186,18 @@ func (r *FormResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"enabled": plan.Enabled.ValueBool(),
-		"content": plan.Content.ValueString(),
-	}
-
 	appID := ""
 	if !plan.ApplicationID.IsNull() && !plan.ApplicationID.IsUnknown() {
 		appID = plan.ApplicationID.ValueString()
 	}
 
+	current, err := r.client.GetForm(ctx, plan.DomainID.ValueString(), appID, plan.Template.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading form before update", err.Error())
+		return
+	}
+
+	body := buildUpdateBody(plan, current)
 	result, err := r.client.UpdateForm(ctx, plan.DomainID.ValueString(), appID, plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating form", err.Error())
@@ -220,6 +222,9 @@ func (r *FormResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	err := r.client.DeleteForm(ctx, state.DomainID.ValueString(), appID, state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting form", err.Error())
 	}
 }
@@ -255,6 +260,17 @@ func (r *FormResource) readIntoModel(model *FormModel, data map[string]interface
 	if v, ok := data["content"].(string); ok {
 		model.Content = types.StringValue(v)
 	}
+}
+
+func buildUpdateBody(plan FormModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
+		"enabled": plan.Enabled.ValueBool(),
+		"content": plan.Content.ValueString(),
+	}
+	if assets, ok := current["assets"]; ok {
+		body["assets"] = assets
+	}
+	return body
 }
 
 // Validator for template type

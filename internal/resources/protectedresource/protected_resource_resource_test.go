@@ -99,6 +99,29 @@ resource "graviteeam_protected_resource" "test" {
 					resource.TestCheckResourceAttr("graviteeam_protected_resource.test", "feature.0.description", "Updated list items"),
 				),
 			},
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-protected-resource"
+  description = "Domain for protected resource acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_protected_resource" "test" {
+  domain_id            = graviteeam_domain.test.id
+  name                 = "Updated MCP Server"
+  type                 = "MCP_SERVER"
+  description          = "Updated protected resource"
+  resource_identifiers = ["https://api.example.com/mcp", "https://api.example.com/mcp/secondary"]
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_protected_resource.test", "name", "Updated MCP Server"),
+					resource.TestCheckResourceAttr("graviteeam_protected_resource.test", "feature.#", "0"),
+				),
+			},
 		},
 	})
 }

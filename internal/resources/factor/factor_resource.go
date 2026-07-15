@@ -116,12 +116,7 @@ func (r *FactorResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          pluginType,
-		"factorType":    factorType,
-		"configuration": "{}",
-	}
+	body := buildCreateBody(plan, pluginType)
 
 	result, err := r.client.CreateFactor(ctx, plan.DomainID.ValueString(), body)
 	if err != nil {
@@ -142,24 +137,15 @@ func (r *FactorResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	result, err := r.client.GetFactor(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading factor", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if ft, ok := result["factorType"].(string); ok {
-		if mapped, ok := apiFactorTypeToUserType[ft]; ok {
-			state.FactorType = types.StringValue(mapped)
-		} else {
-			state.FactorType = types.StringValue(ft)
-		}
-	} else if pluginT, ok := result["type"].(string); ok {
-		if ft, ok := pluginTypeToFactorType[pluginT]; ok {
-			state.FactorType = types.StringValue(ft)
-		}
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -186,11 +172,7 @@ func (r *FactorResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	body := map[string]interface{}{
-		"name":          plan.Name.ValueString(),
-		"type":          pluginType,
-		"configuration": "{}",
-	}
+	body := buildUpdateBody(plan, pluginType)
 
 	_, err := r.client.UpdateFactor(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
@@ -210,6 +192,9 @@ func (r *FactorResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	err := r.client.DeleteFactor(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting factor", err.Error())
 	}
 }
@@ -224,6 +209,40 @@ func (r *FactorResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+}
+
+func buildCreateBody(plan FactorModel, pluginType string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          pluginType,
+		"factorType":    plan.FactorType.ValueString(),
+		"configuration": "{}",
+	}
+}
+
+func buildUpdateBody(plan FactorModel, pluginType string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":          plan.Name.ValueString(),
+		"type":          pluginType,
+		"configuration": "{}",
+	}
+}
+
+func readIntoModel(model *FactorModel, result map[string]interface{}) {
+	if name, ok := result["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if ft, ok := result["factorType"].(string); ok {
+		if mapped, ok := apiFactorTypeToUserType[ft]; ok {
+			model.FactorType = types.StringValue(mapped)
+		} else {
+			model.FactorType = types.StringValue(ft)
+		}
+	} else if pluginT, ok := result["type"].(string); ok {
+		if ft, ok := pluginTypeToFactorType[pluginT]; ok {
+			model.FactorType = types.StringValue(ft)
+		}
+	}
 }
 
 // Validator for factor_type

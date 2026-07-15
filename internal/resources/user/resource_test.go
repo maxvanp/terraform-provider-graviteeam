@@ -31,6 +31,8 @@ resource "graviteeam_user" "test" {
   email            = "acctest@example.com"
   first_name       = "Acc"
   last_name        = "Test"
+  display_name     = "Acc Test"
+  force_reset_password = false
   pre_registration = true
 }
 `,
@@ -41,6 +43,10 @@ resource "graviteeam_user" "test" {
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "acctest@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Acc"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "Test"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "display_name", "Acc Test"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "force_reset_password", "false"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "false"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "false"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "pre_registration", "true"),
 				),
 			},
@@ -70,17 +76,62 @@ resource "graviteeam_domain" "test" {
 
 resource "graviteeam_user" "test" {
   domain_id        = graviteeam_domain.test.id
-  username         = "acctest-user"
+  username         = "acctest-user-updated"
   email            = "updated@example.com"
   first_name       = "Updated"
   last_name        = "User"
+  display_name     = "Updated User"
+  force_reset_password = true
+  enabled          = true
+  locked           = true
   pre_registration = true
+  registration_confirmation_trigger = "confirmation-1"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_user.test", "username", "acctest-user-updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "email", "updated@example.com"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "first_name", "Updated"),
 					resource.TestCheckResourceAttr("graviteeam_user.test", "last_name", "User"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "display_name", "Updated User"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "force_reset_password", "true"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "true"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "registration_confirmation_trigger", "confirmation-1"),
+				),
+			},
+			// Update: unlock through the dedicated endpoint
+			{
+				Config: acctest.ProviderConfig + `
+resource "graviteeam_domain" "test" {
+  name        = "test-acc-user"
+  description = "Domain for user acceptance test"
+
+  oidc {}
+  login_settings {}
+}
+
+resource "graviteeam_user" "test" {
+  domain_id        = graviteeam_domain.test.id
+  username         = "acctest-user-updated"
+  email            = "updated@example.com"
+  first_name       = "Updated"
+  last_name        = "User"
+  display_name     = "Updated User"
+  force_reset_password = true
+  enabled          = true
+  locked           = false
+  pre_registration = true
+  reset_password   = "SecurePass123!"
+  reset_password_trigger = "reset-1"
+  registration_confirmation_trigger = "confirmation-1"
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_user.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "locked", "false"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "reset_password_trigger", "reset-1"),
+					resource.TestCheckResourceAttr("graviteeam_user.test", "registration_confirmation_trigger", "confirmation-1"),
 				),
 			},
 		},

@@ -173,8 +173,10 @@ func (r *ProtectedResourceResource) Read(ctx context.Context, req resource.ReadR
 	}
 
 	savedSecret := state.ClientSecret
+	savedSettingsJSON := state.SettingsJSON
 	r.readIntoModel(&state, result)
 	state.ClientSecret = savedSecret
+	state.SettingsJSON = savedSettingsJSON
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -194,7 +196,7 @@ func (r *ProtectedResourceResource) Update(ctx context.Context, req resource.Upd
 	plan.ID = state.ID
 	plan.ClientSecret = state.ClientSecret
 
-	body, err := r.buildUpdateBody(plan)
+	body, err := r.buildUpdateBody(plan, &state)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid protected resource configuration", err.Error())
 		return
@@ -206,8 +208,10 @@ func (r *ProtectedResourceResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
+	savedSettingsJSON := plan.SettingsJSON
 	r.readIntoModel(&plan, result)
 	plan.ClientSecret = state.ClientSecret
+	plan.SettingsJSON = savedSettingsJSON
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -236,7 +240,7 @@ func (r *ProtectedResourceResource) ImportState(ctx context.Context, req resourc
 }
 
 func (r *ProtectedResourceResource) buildCreateBody(plan ProtectedResourceModel) (map[string]interface{}, error) {
-	body, err := r.buildUpdateBody(plan)
+	body, err := r.buildUpdateBody(plan, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +248,7 @@ func (r *ProtectedResourceResource) buildCreateBody(plan ProtectedResourceModel)
 	return body, nil
 }
 
-func (r *ProtectedResourceResource) buildUpdateBody(plan ProtectedResourceModel) (map[string]interface{}, error) {
+func (r *ProtectedResourceResource) buildUpdateBody(plan ProtectedResourceModel, state *ProtectedResourceModel) (map[string]interface{}, error) {
 	body := map[string]interface{}{
 		"name":                plan.Name.ValueString(),
 		"resourceIdentifiers": toStringValues(plan.ResourceIdentifiers),
@@ -256,6 +260,8 @@ func (r *ProtectedResourceResource) buildUpdateBody(plan ProtectedResourceModel)
 
 	if plan.Features != nil {
 		body["features"] = featuresToAPI(plan.Features)
+	} else if state != nil && state.Features != nil {
+		body["features"] = []map[string]interface{}{}
 	}
 
 	settings, ok, err := settingsJSONToAPI(plan.SettingsJSON)
@@ -264,6 +270,8 @@ func (r *ProtectedResourceResource) buildUpdateBody(plan ProtectedResourceModel)
 	}
 	if ok {
 		body["settings"] = settings
+	} else if state != nil && !state.SettingsJSON.IsNull() && !state.SettingsJSON.IsUnknown() {
+		body["settings"] = map[string]interface{}{}
 	}
 
 	return body, nil

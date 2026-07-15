@@ -142,35 +142,15 @@ func (r *ExtensionGrantResource) Read(ctx context.Context, req resource.ReadRequ
 
 	result, err := r.client.GetExtensionGrant(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading extension grant", err.Error())
 		return
 	}
 
-	if name, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(name)
-	}
-	if t, ok := result["type"].(string); ok {
-		state.Type = types.StringValue(t)
-	}
-	if gt, ok := result["grantType"].(string); ok {
-		state.GrantType = types.StringValue(gt)
-	}
-	if cfg, ok := result["configuration"].(string); ok {
-		state.Configuration = types.StringValue(cfg)
-	}
-	if idp, ok := result["identityProvider"].(string); ok && idp != "" {
-		state.IdentityProvider = types.StringValue(idp)
-	} else if state.IdentityProvider.IsNull() {
-		// keep null
-	} else {
-		state.IdentityProvider = types.StringNull()
-	}
-	if cu, ok := result["createUser"].(bool); ok {
-		state.CreateUser = types.BoolValue(cu)
-	}
-	if ue, ok := result["userExists"].(bool); ok {
-		state.UserExists = types.BoolValue(ue)
-	}
+	readIntoModel(&state, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -190,6 +170,18 @@ func (r *ExtensionGrantResource) Update(ctx context.Context, req resource.Update
 
 	plan.ID = state.ID
 
+	body := buildUpdateBody(plan, state)
+
+	_, err := r.client.UpdateExtensionGrant(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
+	if err != nil {
+		resp.Diagnostics.AddError("Error updating extension grant", err.Error())
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func buildUpdateBody(plan, state ExtensionGrantModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
 		"type":          plan.Type.ValueString(),
@@ -201,15 +193,37 @@ func (r *ExtensionGrantResource) Update(ctx context.Context, req resource.Update
 
 	if !plan.IdentityProvider.IsNull() && !plan.IdentityProvider.IsUnknown() {
 		body["identityProvider"] = plan.IdentityProvider.ValueString()
+	} else if !state.IdentityProvider.IsNull() {
+		body["identityProvider"] = ""
 	}
 
-	_, err := r.client.UpdateExtensionGrant(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), body)
-	if err != nil {
-		resp.Diagnostics.AddError("Error updating extension grant", err.Error())
-		return
-	}
+	return body
+}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+func readIntoModel(model *ExtensionGrantModel, result map[string]interface{}) {
+	if name, ok := result["name"].(string); ok {
+		model.Name = types.StringValue(name)
+	}
+	if extensionType, ok := result["type"].(string); ok {
+		model.Type = types.StringValue(extensionType)
+	}
+	if grantType, ok := result["grantType"].(string); ok {
+		model.GrantType = types.StringValue(grantType)
+	}
+	if configuration, ok := result["configuration"].(string); ok {
+		model.Configuration = types.StringValue(configuration)
+	}
+	if identityProvider, ok := result["identityProvider"].(string); ok && identityProvider != "" {
+		model.IdentityProvider = types.StringValue(identityProvider)
+	} else if !model.IdentityProvider.IsNull() {
+		model.IdentityProvider = types.StringNull()
+	}
+	if createUser, ok := result["createUser"].(bool); ok {
+		model.CreateUser = types.BoolValue(createUser)
+	}
+	if userExists, ok := result["userExists"].(bool); ok {
+		model.UserExists = types.BoolValue(userExists)
+	}
 }
 
 func (r *ExtensionGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -220,7 +234,7 @@ func (r *ExtensionGrantResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeleteExtensionGrant(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "404") {
 		resp.Diagnostics.AddError("Error deleting extension grant", err.Error())
 	}
 }

@@ -32,7 +32,7 @@ resource "graviteeam_bot_detection" "test" {
   detection_type = "CAPTCHA"
   configuration  = jsonencode({
     siteKey   = "6LeDummy_sitekey"
-    secretKey = "6LeDummy_secretkey"
+    secretKey = "6LeDummy_secretkey" # gitleaks:allow - synthetic acceptance fixture
   })
 }
 `,
@@ -75,7 +75,7 @@ resource "graviteeam_bot_detection" "test" {
   detection_type = "CAPTCHA"
   configuration  = jsonencode({
     siteKey   = "6LeDummy_sitekey"
-    secretKey = "6LeDummy_secretkey"
+    secretKey = "6LeDummy_secretkey" # gitleaks:allow - synthetic acceptance fixture
   })
 }
 `,

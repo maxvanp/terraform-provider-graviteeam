@@ -5,12 +5,12 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.26.4 (for building from source)
+- [Go](https://golang.org/doc/install) >= 1.26.5 (for building from source)
 - [Gravitee Access Management](https://www.gravitee.io/platform/access-management) >= 4.x
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.11.4** Management API. Acceptance tests are run against Gravitee AM 4.11.4.
+This provider targets the **Gravitee AM 4.12.1** Management API. Acceptance tests are run against Gravitee AM 4.12.1.
 
 The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM version.
 
@@ -24,9 +24,7 @@ Until `v1.0.0`, compatibility may still evolve as the Gravitee AM API changes. A
 
 ## Installation
 
-### From GitHub Releases
-
-Download the appropriate binary for your platform from the [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases) page, then place it in your Terraform plugins directory.
+No public release is available yet. Until the first signed release is published, use a local development build with Terraform CLI `dev_overrides`.
 
 ### Local Development (dev_overrides)
 
@@ -85,51 +83,88 @@ resource "graviteeam_domain" "example" {
 
 ## Resources and Data Sources
 
-### Resources (32)
+### Resources (53)
 
 | Resource | Description |
 |----------|-------------|
+| `graviteeam_alert_trigger` | Domain alert trigger configuration |
 | `graviteeam_domain` | Security domain (equivalent Keycloak Realm) |
+| `graviteeam_domain_certificate_settings` | Domain fallback certificate settings |
 | `graviteeam_application` | OAuth2/OIDC application with IdP rules, MFA, OAuth settings, and raw advanced settings JSON |
 | `graviteeam_application_email` | Application email templates and overrides |
 | `graviteeam_application_flow` | Application-specific flows |
 | `graviteeam_application_form` | Application-specific forms |
+| `graviteeam_application_member` | Application membership role assignment |
+| `graviteeam_application_secret` | Application client secret |
 | `graviteeam_identity_provider` | Identity provider (inline, JDBC, HTTP, OAuth2) with mappers |
+| `graviteeam_identity_provider_password_policy` | Identity provider password policy assignment |
 | `graviteeam_factor` | MFA factor (TOTP, EMAIL, SMS) |
 | `graviteeam_user` | Domain user with pre-registration support |
+| `graviteeam_user_certificate_credential` | Domain user certificate credential |
 | `graviteeam_password_policy` | Password complexity rules |
 | `graviteeam_protected_resource` | Protected MCP server resource with generated OAuth credentials |
+| `graviteeam_protected_resource_member` | Protected resource membership role assignment |
+| `graviteeam_protected_resource_secret` | Protected resource client secret |
 | `graviteeam_scope` | OAuth2 scope |
 | `graviteeam_role` | Domain-level role with OAuth scopes |
 | `graviteeam_group` | User group with roles and members |
 | `graviteeam_group_members` | Group membership management |
 | `graviteeam_group_roles` | Group role assignments |
 | `graviteeam_theme` | UI branding (colors, CSS, logo) |
+| `graviteeam_trust_domain` | Workload identity trust domain backed by a JWKS URL |
 | `graviteeam_form` | Custom page template (LOGIN, REGISTRATION, etc.) |
 | `graviteeam_email_template` | Custom email template |
 | `graviteeam_extension_grant` | Custom grant type (JWT Bearer) |
 | `graviteeam_certificate` | Certificate for JWT signing (PKCS12) |
+| `graviteeam_generated_certificate` | Generated system certificate |
 | `graviteeam_reporter` | Audit reporter plugin |
 | `graviteeam_service_resource` | Shared resource plugin (SMTP, etc.) |
+| `graviteeam_authorization_engine` | Authorization engine plugin |
 | `graviteeam_bot_detection` | Bot detection plugin |
 | `graviteeam_device_identifier` | Device fingerprinting plugin |
+| `graviteeam_domain_flow` | Domain authentication flow list |
+| `graviteeam_domain_member` | Domain membership role assignment |
 | `graviteeam_auth_device_notifier` | CIBA auth device notifier |
 | `graviteeam_i18n_dictionary` | Internationalization dictionary |
+| `graviteeam_org_entrypoint` | Organization-level entrypoint |
+| `graviteeam_org_form` | Organization-level form template |
+| `graviteeam_org_group` | Organization-level group |
+| `graviteeam_org_group_members` | Organization-level group membership management |
 | `graviteeam_org_identity_provider` | Organization-level identity provider |
+| `graviteeam_org_member` | Organization-level membership role assignment |
+| `graviteeam_org_reporter` | Organization-level reporter |
 | `graviteeam_org_role` | Organization-level role |
 | `graviteeam_org_settings` | Organization settings singleton |
 | `graviteeam_org_tag` | Organization tag |
+| `graviteeam_org_user` | Organization-level user |
+| `graviteeam_org_user_token` | Organization user account token |
 | `graviteeam_alert_notifier` | Alert webhook notifier |
 | `graviteeam_user_role` | User role assignments |
 
-### Data Sources (4)
+### Data Sources (20)
 
 | Data Source | Description |
 |-------------|-------------|
+| `graviteeam_admin_metadata` | Read administrative metadata such as organization audits, environments, domain HRID lookups, and user audits |
 | `graviteeam_analytics` | Read analytics data (DATE_HISTO, COUNT, GROUP_BY) |
+| `graviteeam_application_metadata` | Read application analytics and UMA resources |
+| `graviteeam_applications` | Search applications with page or cursor pagination |
 | `graviteeam_audits` | Read audit logs for a domain |
+| `graviteeam_domain_metadata` | Read domain metadata such as active password policy and certificate public keys |
 | `graviteeam_entrypoints` | Read domain entrypoints |
+| `graviteeam_environment_metadata` | Read environment metadata |
 | `graviteeam_flows` | Read domain flows |
+| `graviteeam_form_preview` | Render a domain form or email template preview |
+| `graviteeam_password_policy_evaluation` | Evaluate a password against a domain password policy |
+| `graviteeam_permissions_metadata` | Read member permission metadata |
+| `graviteeam_platform_metadata` | Read platform metadata and configuration schemas |
+| `graviteeam_plugins` | Read platform plugin catalogs, plugin details, and plugin schemas |
+| `graviteeam_self_metadata` | Read authenticated user profile and notifications |
+| `graviteeam_user_consents` | Read OAuth consent approvals for a user |
+| `graviteeam_user_credentials` | Read credentials for a user |
+| `graviteeam_user_devices` | Read registered devices for a user |
+| `graviteeam_user_factors` | Read enrolled MFA factors for a user |
+| `graviteeam_user_identities` | Read linked identities for a user |
 
 All resources support `terraform import`. See the [documentation](docs/) for details on each resource.
 

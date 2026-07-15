@@ -88,6 +88,11 @@ func (r *IdentityProviderResource) Schema(_ context.Context, _ resource.SchemaRe
 				Optional:    true,
 				Description: "The ID of the password policy to associate with this identity provider",
 			},
+			"group_mapper": schema.MapAttribute{
+				Optional:    true,
+				Description: "Group mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of group IDs",
+				ElementType: types.ListType{ElemType: types.StringType},
+			},
 			"role_mapper": schema.MapAttribute{
 				Optional:    true,
 				Description: "Role mapping rules: key is an EL condition (e.g. \"{true}\"), value is a list of role IDs",
@@ -133,14 +138,15 @@ func (r *IdentityProviderResource) Create(ctx context.Context, req resource.Crea
 	id := result["id"].(string)
 	plan.ID = types.StringValue(id)
 
-	// Step 2: Update with full config (mappers, domainWhitelist, passwordPolicy, roleMapper)
+	// Step 2: Update with full config (mappers, domainWhitelist, passwordPolicy, groupMapper, roleMapper)
 	needsUpdate := len(plan.Mappers) > 0 ||
 		len(plan.DomainWhitelist) > 0 ||
 		(!plan.PasswordPolicyID.IsNull() && !plan.PasswordPolicyID.IsUnknown()) ||
+		(!plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown()) ||
 		(!plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown())
 
 	if needsUpdate {
-		updateBody := r.buildUpdateBody(plan)
+		updateBody := r.buildUpdateBody(plan, nil)
 		result, err = r.client.UpdateIdentityProvider(ctx, plan.DomainID.ValueString(), id, updateBody)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating identity provider after creation", err.Error())
@@ -166,6 +172,10 @@ func (r *IdentityProviderResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetIdentityProvider(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error reading identity provider", err.Error())
 		return
 	}
@@ -194,7 +204,7 @@ func (r *IdentityProviderResource) Update(ctx context.Context, req resource.Upda
 
 	plan.ID = state.ID
 
-	updateBody := r.buildUpdateBody(plan)
+	updateBody := r.buildUpdateBody(plan, &state)
 	result, err := r.client.UpdateIdentityProvider(ctx, plan.DomainID.ValueString(), plan.ID.ValueString(), updateBody)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating identity provider", err.Error())
@@ -219,6 +229,9 @@ func (r *IdentityProviderResource) Delete(ctx context.Context, req resource.Dele
 
 	err := r.client.DeleteIdentityProvider(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting identity provider", err.Error())
 	}
 }
@@ -234,7 +247,7 @@ func (r *IdentityProviderResource) ImportState(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) map[string]interface{} {
+func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel, state *IdentityProviderModel) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":          plan.Name.ValueString(),
 		"type":          plan.Type.ValueString(),
@@ -247,6 +260,8 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 			mappers[k] = v.ValueString()
 		}
 		body["mappers"] = mappers
+	} else if state != nil && len(state.Mappers) > 0 {
+		body["mappers"] = map[string]string{}
 	}
 
 	if plan.DomainWhitelist != nil {
@@ -255,30 +270,24 @@ func (r *IdentityProviderResource) buildUpdateBody(plan IdentityProviderModel) m
 			wl[i] = d.ValueString()
 		}
 		body["domainWhitelist"] = wl
+	} else if state != nil && state.DomainWhitelist != nil {
+		body["domainWhitelist"] = []string{}
 	}
 
 	if !plan.PasswordPolicyID.IsNull() && !plan.PasswordPolicyID.IsUnknown() {
 		body["passwordPolicy"] = plan.PasswordPolicyID.ValueString()
 	}
 
+	if !plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown() {
+		body["groupMapper"] = invertConditionMapperToAPI(plan.GroupMapper)
+	} else if state != nil && !state.GroupMapper.IsNull() && !state.GroupMapper.IsUnknown() {
+		body["groupMapper"] = map[string][]string{}
+	}
+
 	if !plan.RoleMapper.IsNull() && !plan.RoleMapper.IsUnknown() {
-		// HCL format: condition => [roleIds]
-		// API format: roleId => [conditions]
-		// We need to invert the map
-		apiRM := make(map[string][]string)
-		for condition, v := range plan.RoleMapper.Elements() {
-			listVal, ok := v.(types.List)
-			if !ok {
-				continue
-			}
-			for _, elem := range listVal.Elements() {
-				if s, ok := elem.(types.String); ok {
-					roleID := s.ValueString()
-					apiRM[roleID] = append(apiRM[roleID], condition)
-				}
-			}
-		}
-		body["roleMapper"] = apiRM
+		body["roleMapper"] = invertConditionMapperToAPI(plan.RoleMapper)
+	} else if state != nil && !state.RoleMapper.IsNull() && !state.RoleMapper.IsUnknown() {
+		body["roleMapper"] = map[string][]string{}
 	}
 
 	return body
@@ -316,6 +325,8 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 				model.Mappers[k] = types.StringValue(s)
 			}
 		}
+	} else {
+		model.Mappers = nil
 	}
 
 	// Domain whitelist
@@ -326,6 +337,8 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 				model.DomainWhitelist[i] = types.StringValue(s)
 			}
 		}
+	} else {
+		model.DomainWhitelist = nil
 	}
 
 	// Password policy
@@ -335,34 +348,56 @@ func (r *IdentityProviderResource) readIntoModel(model *IdentityProviderModel, d
 		model.PasswordPolicyID = types.StringNull()
 	}
 
-	// Role mapper: API format is roleId => [conditions], HCL format is condition => [roleIds]
-	// Invert from API to HCL format
+	// API format is targetId => [conditions], HCL format is condition => [targetIds].
 	listType := types.ListType{ElemType: types.StringType}
-	if rm, ok := data["roleMapper"].(map[string]interface{}); ok && len(rm) > 0 {
-		// First invert: roleId => [conditions] → condition => [roleIds]
-		inverted := make(map[string][]string)
-		for roleID, v := range rm {
-			if conditions, ok := v.([]interface{}); ok {
-				for _, c := range conditions {
-					if cond, ok := c.(string); ok {
-						inverted[cond] = append(inverted[cond], roleID)
-					}
+	model.GroupMapper = readAPIConditionMapper(data, "groupMapper", listType)
+	model.RoleMapper = readAPIConditionMapper(data, "roleMapper", listType)
+}
+
+func invertConditionMapperToAPI(tfMap types.Map) map[string][]string {
+	apiMapper := make(map[string][]string)
+	for condition, v := range tfMap.Elements() {
+		listVal, ok := v.(types.List)
+		if !ok {
+			continue
+		}
+		for _, elem := range listVal.Elements() {
+			if s, ok := elem.(types.String); ok {
+				id := s.ValueString()
+				apiMapper[id] = append(apiMapper[id], condition)
+			}
+		}
+	}
+	return apiMapper
+}
+
+func readAPIConditionMapper(data map[string]interface{}, key string, listType types.ListType) types.Map {
+	mapper, ok := data[key].(map[string]interface{})
+	if !ok || len(mapper) == 0 {
+		return types.MapNull(listType)
+	}
+
+	inverted := make(map[string][]string)
+	for id, v := range mapper {
+		if conditions, ok := v.([]interface{}); ok {
+			for _, c := range conditions {
+				if cond, ok := c.(string); ok {
+					inverted[cond] = append(inverted[cond], id)
 				}
 			}
 		}
-		// Convert to Terraform types
-		elems := make(map[string]attr.Value, len(inverted))
-		for condition, roleIDs := range inverted {
-			roleVals := make([]attr.Value, len(roleIDs))
-			for i, r := range roleIDs {
-				roleVals[i] = types.StringValue(r)
-			}
-			listVal, _ := types.ListValue(types.StringType, roleVals)
-			elems[condition] = listVal
-		}
-		mapVal, _ := types.MapValue(listType, elems)
-		model.RoleMapper = mapVal
-	} else {
-		model.RoleMapper = types.MapNull(listType)
 	}
+
+	elems := make(map[string]attr.Value, len(inverted))
+	for condition, ids := range inverted {
+		values := make([]attr.Value, len(ids))
+		for i, id := range ids {
+			values[i] = types.StringValue(id)
+		}
+		listVal, _ := types.ListValue(types.StringType, values)
+		elems[condition] = listVal
+	}
+
+	mapVal, _ := types.MapValue(listType, elems)
+	return mapVal
 }

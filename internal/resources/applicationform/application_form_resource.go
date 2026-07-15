@@ -176,11 +176,13 @@ func (r *ApplicationFormResource) Update(ctx context.Context, req resource.Updat
 
 	plan.ID = state.ID
 
-	body := map[string]interface{}{
-		"enabled": plan.Enabled.ValueBool(),
-		"content": plan.Content.ValueString(),
+	current, err := r.client.GetForm(ctx, plan.DomainID.ValueString(), plan.ApplicationID.ValueString(), plan.Template.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading application form before update", err.Error())
+		return
 	}
 
+	body := buildUpdateBody(plan, current)
 	result, err := r.client.UpdateForm(ctx, plan.DomainID.ValueString(), plan.ApplicationID.ValueString(), plan.ID.ValueString(), body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating application form", err.Error())
@@ -200,6 +202,9 @@ func (r *ApplicationFormResource) Delete(ctx context.Context, req resource.Delet
 
 	err := r.client.DeleteForm(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return
+		}
 		resp.Diagnostics.AddError("Error deleting application form", err.Error())
 	}
 }
@@ -230,6 +235,17 @@ func (r *ApplicationFormResource) readIntoModel(model *ApplicationFormModel, dat
 	if v, ok := data["content"].(string); ok {
 		model.Content = types.StringValue(v)
 	}
+}
+
+func buildUpdateBody(plan ApplicationFormModel, current map[string]interface{}) map[string]interface{} {
+	body := map[string]interface{}{
+		"enabled": plan.Enabled.ValueBool(),
+		"content": plan.Content.ValueString(),
+	}
+	if assets, ok := current["assets"]; ok {
+		body["assets"] = assets
+	}
+	return body
 }
 
 // Validator for form template type

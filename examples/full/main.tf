@@ -57,7 +57,16 @@ resource "graviteeam_role" "admin" {
   oauth_scopes    = ["openid", "profile", "email"]
 }
 
-# --- Identity Provider (Inline with role_mapper) ---
+# --- Group ---
+
+resource "graviteeam_group" "admins" {
+  domain_id   = graviteeam_domain.lab.id
+  name        = "Administrators"
+  description = "Mapped administrator group"
+  roles       = [graviteeam_role.admin.id]
+}
+
+# --- Identity Provider (Inline with group_mapper and role_mapper) ---
 
 resource "graviteeam_identity_provider" "inline" {
   domain_id = graviteeam_domain.lab.id
@@ -70,7 +79,7 @@ resource "graviteeam_identity_provider" "inline" {
         lastname  = "Doe"
         username  = "jdoe@example.com"
         email     = "jdoe@example.com"
-        password  = "password123"
+        password  = "password123" # gitleaks:allow - synthetic example credential
       }
     ]
   })
@@ -81,6 +90,11 @@ resource "graviteeam_identity_provider" "inline" {
     lastName  = "lastname"
   }
   password_policy_id = graviteeam_password_policy.strong.id
+  group_mapper = {
+    "{#profile['groups'] != null && #profile['groups'].contains('external-admins')}" = [
+      graviteeam_group.admins.id
+    ]
+  }
   role_mapper = {
     "{#profile['username'] != null}" = [graviteeam_role.admin.id]
   }

@@ -141,10 +141,11 @@ func (r *OrgSettingsResource) Update(ctx context.Context, req resource.UpdateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *OrgSettingsResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
+func (r *OrgSettingsResource) Delete(ctx context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Singleton resource: just remove from Terraform state.
 	// We intentionally do NOT clear identities on the server, because
 	// clearing the identity provider list would lock out admin access.
+	resp.State.RemoveResource(ctx)
 }
 
 func (r *OrgSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -156,7 +157,7 @@ func buildPatchBody(model OrgSettingsModel) map[string]interface{} {
 	body := map[string]interface{}{}
 
 	if !model.Identities.IsNull() && !model.Identities.IsUnknown() {
-		var ids []string
+		ids := make([]string, 0, len(model.Identities.Elements()))
 		for _, v := range model.Identities.Elements() {
 			if sv, ok := v.(types.String); ok {
 				ids = append(ids, sv.ValueString())

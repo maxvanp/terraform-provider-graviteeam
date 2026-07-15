@@ -1,7 +1,9 @@
 package orgrole_test
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
@@ -9,20 +11,23 @@ import (
 )
 
 func TestAccOrgRoleResource_basic(t *testing.T) {
+	name := fmt.Sprintf("test-acc-org-role-%d", time.Now().UnixNano())
+	updatedName := name + "-updated"
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: acctest.ProviderConfig + `
+				Config: acctest.ProviderConfig + fmt.Sprintf(`
 resource "graviteeam_org_role" "test" {
-  name            = "test-acc-org-role"
+  name            = %q
   description     = "Acceptance test org role"
   assignable_type = "DOMAIN"
 }
-`,
+`, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("graviteeam_org_role.test", "id"),
-					resource.TestCheckResourceAttr("graviteeam_org_role.test", "name", "test-acc-org-role"),
+					resource.TestCheckResourceAttr("graviteeam_org_role.test", "name", name),
 					resource.TestCheckResourceAttr("graviteeam_org_role.test", "assignable_type", "DOMAIN"),
 				),
 			},
@@ -32,16 +37,29 @@ resource "graviteeam_org_role" "test" {
 				ImportStateVerify: true,
 			},
 			{
-				Config: acctest.ProviderConfig + `
+				Config: acctest.ProviderConfig + fmt.Sprintf(`
 resource "graviteeam_org_role" "test" {
-  name            = "test-acc-org-role-updated"
+  name            = %q
   description     = "Updated org role"
   assignable_type = "DOMAIN"
 }
-`,
+`, updatedName),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("graviteeam_org_role.test", "name", "test-acc-org-role-updated"),
+					resource.TestCheckResourceAttr("graviteeam_org_role.test", "name", updatedName),
 					resource.TestCheckResourceAttr("graviteeam_org_role.test", "description", "Updated org role"),
+				),
+			},
+			{
+				Config: acctest.ProviderConfig + fmt.Sprintf(`
+resource "graviteeam_org_role" "test" {
+  name            = %q
+  assignable_type = "DOMAIN"
+}
+`, updatedName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("graviteeam_org_role.test", "name", updatedName),
+					resource.TestCheckNoResourceAttr("graviteeam_org_role.test", "description"),
+					resource.TestCheckNoResourceAttr("graviteeam_org_role.test", "permissions.#"),
 				),
 			},
 		},

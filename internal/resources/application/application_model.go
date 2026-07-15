@@ -9,9 +9,11 @@ type ApplicationModel struct {
 	DomainID              types.String                `tfsdk:"domain_id"`
 	Name                  types.String                `tfsdk:"name"`
 	Type                  types.String                `tfsdk:"type"`
+	Kind                  types.String                `tfsdk:"kind"`
 	Description           types.String                `tfsdk:"description"`
 	ClientID              types.String                `tfsdk:"client_id"`
 	ClientSecret          types.String                `tfsdk:"client_secret"`
+	MetadataJSON          types.String                `tfsdk:"metadata_json"`
 	SettingsJSON          types.String                `tfsdk:"settings_json"`
 	IdentityProviders     []types.String              `tfsdk:"identity_providers"`
 	IdentityProviderRules []IdentityProviderRuleModel `tfsdk:"identity_provider_rule"`

@@ -98,13 +98,34 @@ func (d *AnalyticsDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
+	params := buildAnalyticsParams(config, time.Now().UnixMilli())
+
+	result, err := d.client.GetAnalytics(ctx, config.DomainID.ValueString(), params)
+	if err != nil {
+		// Gravitee AM returns 500 when there is no analytics data yet (e.g. freshly created domain).
+		// Treat this as an empty result rather than failing.
+		if strings.Contains(err.Error(), "status 500") {
+			config.Result = types.StringValue("{}")
+			resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+			return
+		}
+		resp.Diagnostics.AddError("Error reading analytics", err.Error())
+		return
+	}
+
+	resultJSON := formatAnalyticsResult(result)
+
+	config.Result = types.StringValue(resultJSON)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+func buildAnalyticsParams(config AnalyticsModel, now int64) map[string]string {
 	params := map[string]string{
 		"type": config.Type.ValueString(),
 	}
 	if !config.Field.IsNull() && !config.Field.IsUnknown() {
 		params["field"] = config.Field.ValueString()
 	}
-	now := time.Now().UnixMilli()
 	if !config.From.IsNull() && !config.From.IsUnknown() {
 		params["from"] = fmt.Sprintf("%d", config.From.ValueInt64())
 	} else {
@@ -121,26 +142,10 @@ func (d *AnalyticsDataSource) Read(ctx context.Context, req datasource.ReadReque
 	if !config.Size.IsNull() && !config.Size.IsUnknown() {
 		params["size"] = fmt.Sprintf("%d", config.Size.ValueInt64())
 	}
+	return params
+}
 
-	result, err := d.client.GetAnalytics(ctx, config.DomainID.ValueString(), params)
-	if err != nil {
-		// Gravitee AM returns 500 when there is no analytics data yet (e.g. freshly created domain).
-		// Treat this as an empty result rather than failing.
-		if strings.Contains(err.Error(), "status 500") {
-			config.Result = types.StringValue("{}")
-			resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
-			return
-		}
-		resp.Diagnostics.AddError("Error reading analytics", err.Error())
-		return
-	}
-
-	resultJSON, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		resp.Diagnostics.AddError("Error marshaling analytics", err.Error())
-		return
-	}
-
-	config.Result = types.StringValue(string(resultJSON))
-	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+func formatAnalyticsResult(value interface{}) string {
+	resultJSON, _ := json.MarshalIndent(value, "", "  ")
+	return string(resultJSON)
 }
