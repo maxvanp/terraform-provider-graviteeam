@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
+- Pin GoReleaser and validate complete unsigned release snapshots in CI
 - Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.1
 - Refreshed the bundled Gravitee AM Management API reference from the 4.12.1 upstream tag
 - Updated Go module dependencies to their latest compatible versions

@@ -39,6 +39,11 @@ coverage-audit:
 local-gap-probe:
 	./scripts/probe-openapi-gaps.py --check
 
+release-check:
+	goreleaser check
+	goreleaser release --snapshot --clean --skip=sign
+	./scripts/verify-release-artifacts.sh
+
 lint:
 	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
 	$(GOLANGCI_LINT) fmt --diff
@@ -82,4 +87,4 @@ docs-check: docs-tool
 	rm -f "$$log"
 	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date; run 'make docs' and commit the generated changes" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline verify-local docs-tool docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe release-check lint test testacc coverage-baseline verify-local docs-tool docs docs-check

@@ -38,14 +38,14 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Repository governance | License, contributing guide, code of conduct, security policy, issue templates, PR template, CODEOWNERS, changelog, and maintenance policy are present and internally consistent. | Repository file audit. | `PASS` |
 | Dependencies | Go uses the current supported patch release; direct dependencies are current; indirect upgrades are reviewed; module files are tidy and verified. | `go list -m -u all`, `go mod tidy`, and `go mod verify`. | `PASS` |
 | Code quality | Formatting, lint, vet, build, unit tests, coverage audits, generated-doc checks, and repository diff checks pass. | `make verify-local`, `make lint`, `make vet`, and `make build`. | `PASS` |
-| Security | The current Go vulnerability database reports no reachable vulnerabilities; no credentials are committed. The final GitHub security workflow result is tracked by the CI row. | `govulncheck ./...` plus Gitleaks history and working-tree scans. | `PASS` |
-| Acceptance | Terraform exercises all supported resource and data-source lifecycles against the exact pinned Gravitee AM images. Any unavailable commercial plugin is explicitly documented and independently covered as far as possible. | Complete local Docker acceptance run; the final GitHub result is tracked by the CI row. | `PASS` |
-| Release artifacts | A clean snapshot build produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and detached checksum signature configuration. | `goreleaser check`, successful unsigned snapshot, and artifact/hash inspection without publishing. | `PASS` |
+| Security | The current Go vulnerability database reports no reachable vulnerabilities; no credentials are committed. The final GitHub security workflow result is tracked by the CI row. | Local `govulncheck ./...` plus Gitleaks history and working-tree scans pass after upgrading `google.golang.org/grpc` to `v1.82.1` for GO-2026-6061. | `PASS` |
+| Acceptance | Terraform exercises all supported resource and data-source lifecycles against the exact pinned Gravitee AM images. Any unavailable commercial plugin is explicitly documented and independently covered as far as possible. | The original baseline passed against Gravitee AM 4.12.1. The remediated commit requires the GitHub acceptance job because Docker is unavailable in the current WSL environment. | `PENDING` |
+| Release artifacts | A clean snapshot build produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and detached checksum signature configuration. | `make release-check` passes with GoReleaser v2.17.1 and the same check runs in the Release Check workflow. | `PASS` |
 | Platforms | Release artifacts include at least Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64; Linux AMD64 is CGO-free and self-contained for HCP Terraform. | GoReleaser configuration and dry-run artifact inventory. | `PASS` |
 | Versioning | The first release version and changelog accurately describe compatibility and breaking-change expectations; released artifacts are immutable. | Changelog and release workflow review. | `PASS` |
-| CI | Tests, workflow lint, lint, build, acceptance, generated docs, vulnerability scans, and secret scans pass for the exact final pull-request head. | Green GitHub checks on draft PR #22. | `PASS` |
-| Change review | The unpublished work is preserved on a review branch with no accidental files, unresolved conflicts, or unexplained generated changes. | Clean `codex/publishable-baseline` worktree, reviewed diff, intentional commits, and draft PR #22. | `PASS` |
-| Final report | Every row in this table is updated with direct evidence and no `FAIL` or `PENDING` remains. Publication-only prerequisites are listed separately. | This report on the candidate branch and the PR #22 check suite. | `PASS` |
+| CI | Tests, workflow lint, lint, build, acceptance, generated docs, vulnerability scans, secret scans, and release snapshot validation pass for the exact final pull-request head. | PR #22 passed on the original baseline commit. A new CI run, including the Release Check workflow, is required for the gRPC security update before release. | `PENDING` |
+| Change review | The unpublished work is preserved on a review branch with no accidental files, unresolved conflicts, or unexplained generated changes. | The gRPC security update is currently an uncommitted local change and still requires review through CI. | `PENDING` |
+| Final report | Every row in this table is updated with direct evidence and no `FAIL` or `PENDING` remains. Publication-only prerequisites are listed separately. | This report must be finalized after the security update passes CI. | `PENDING` |
 
 ## Final Evidence
 
@@ -58,9 +58,9 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Test evidence | `73/73` Terraform types have acceptance artifacts, `72/73` execute against stock Compose, and the sole exclusion is the documented Enterprise/technical-preview OpenFGA engine. Total statement coverage is `98.1%`. |
 | Quality and security | Formatting, lint, vet, build, module verification, unit tests, schema/API audits, generated docs, `govulncheck`, Actionlint, and full-history plus working-tree Gitleaks scans pass. |
 | Release engineering | GoReleaser validates and produces six expected ZIP archives for Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64. Archive hashes and the Registry manifest hash match the generated SHA256SUMS; detached checksum signing is configured. |
-| Repository and CI | The 306 unpublished commits and readiness changes are preserved on `codex/publishable-baseline`; draft PR #22 runs green Documentation, Security, and Tests workflows on its final head. |
+| Repository and CI | PR #22 passed Documentation, Security, and Tests before merge. The scheduled Security run on 2026-08-01 subsequently found GO-2026-6061; the local gRPC remediation passes and now requires a fresh GitHub check suite. |
 
-No code, test, documentation, dependency, CI, or release-configuration remediation remains. The only remaining actions are the maintainer-owned publication steps below.
+The dependency remediation is complete locally. Fresh CI evidence for the remediated commit is still required before the maintainer-owned publication steps below.
 
 ## Required Verification
 
@@ -78,8 +78,7 @@ docker compose -f docker-compose.test.yml up -d
 make local-gap-probe
 TF_ACC=1 make testacc
 docker compose -f docker-compose.test.yml down --remove-orphans
-goreleaser check
-goreleaser release --snapshot --clean --skip=sign
+make release-check
 gitleaks git --no-banner --redact --verbose .
 gitleaks dir --no-banner --redact --verbose .
 git diff --check
