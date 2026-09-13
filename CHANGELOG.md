@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Align README/CONTRIBUTING with the current Go 1.26.5 toolchain requirement and full resource inventory
+- Align README/CONTRIBUTING with the current Go 1.26.8 toolchain requirement and full resource inventory
+- Upgrade Go to 1.26.8 to remediate reachable standard-library vulnerabilities GO-2026-6218, GO-2026-6090, GO-2026-5972, and GO-2026-5026
 - Add `group_mapper` support to `graviteeam_identity_provider`
 - Add an OpenAPI coverage audit script and document the current resource/data source gaps
 - Add `graviteeam_org_group` for organization-level group management
