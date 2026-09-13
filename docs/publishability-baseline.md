@@ -97,7 +97,7 @@ The GitHub `Tests`, `Documentation`, and `Security` workflows must then pass for
 The repository is public and the release signing secrets are configured. The remaining publication steps are:
 
 1. Create the signed GitHub release for `v0.1.0` from the merged `main` commit.
-2. Add [the public signing key](release-signing-key.asc) to the `maxvanp` Terraform Registry namespace, then register `maxvanp/graviteeam` and accept the Registry terms. Signing-key fingerprint: `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`.
+2. Add [the public signing key](release-signing-key.asc) to the `maxvanp` Terraform Registry namespace, then register `maxvanp/graviteeam` and accept the Registry terms. Public OpenPGP fingerprint: `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`.
 3. Verify installation and checksum/signature validation through the Registry.
 
 The private signing material remains outside the repository and is provided to the release workflow through GitHub secrets.

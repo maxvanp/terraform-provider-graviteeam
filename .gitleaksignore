@@ -1,6 +1,3 @@
-acefc9e2177b056a03f04492a36d79027c870abb:examples/resources/graviteeam_user/resource.tf:hashicorp-tf-password:13
-2e8a95c29c1806484ba61a9dd2bbe502e4017096:examples/resources/graviteeam_org_user/resource.tf:hashicorp-tf-password:11
-2e8a95c29c1806484ba61a9dd2bbe502e4017096:examples/resources/graviteeam_user/resource.tf:hashicorp-tf-password:11
-ff403c76ae503686521552c44c6ef2f1d361c261:examples/full/main.tf:hashicorp-tf-password:73
-ff403c76ae503686521552c44c6ef2f1d361c261:internal/resources/botdetection/bot_detection_resource_test.go:generic-api-key:35
-ff403c76ae503686521552c44c6ef2f1d361c261:internal/resources/botdetection/bot_detection_resource_test.go:generic-api-key:78
+# Public OpenPGP fingerprint in release documentation, not an API credential.
+# Scope the exception to the original commit and line; all other findings remain enabled.
+982c2e799a1804fbfc955ab9996cb203db4e4f75:docs/publishability-baseline.md:generic-api-key:100
