@@ -24,7 +24,27 @@ Until `v1.0.0`, compatibility may still evolve as the Gravitee AM API changes. A
 
 ## Installation
 
-No public release is available yet. Until the first signed release is published, use a local development build with Terraform CLI `dev_overrides`.
+Download the signed archives from [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases/tag/v0.1.0). After initial Registry registration, the pinned `required_providers` example below works with `terraform init` directly.
+
+### Install a GitHub release
+
+Before Registry registration, use a filesystem mirror. Download the ZIP for your platform, the `SHA256SUMS` file, and its `.sig` from the release. Verify the signature with the [public signing key](docs/release-signing-key.asc), whose fingerprint is `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`, then verify the ZIP checksum.
+
+Place the ZIP in `/absolute/path/to/mirror/registry.terraform.io/maxvanp/graviteeam/` without renaming it. Save this Terraform CLI configuration as `mirror.tfrc` in your working directory:
+
+```hcl
+provider_installation {
+  filesystem_mirror {
+    path    = "/absolute/path/to/mirror"
+    include = ["registry.terraform.io/maxvanp/graviteeam"]
+  }
+  direct {
+    exclude = ["registry.terraform.io/maxvanp/graviteeam"]
+  }
+}
+```
+
+Use the version-pinned configuration below, then run `TF_CLI_CONFIG_FILE="$PWD/mirror.tfrc" terraform init`. Commit the resulting `.terraform.lock.hcl`. This mirror configuration applies only to this command and does not change your global CLI settings.
 
 ### Local Development (dev_overrides)
 
@@ -53,7 +73,8 @@ provider_installation {
 terraform {
   required_providers {
     graviteeam = {
-      source = "maxvanp/graviteeam"
+      source  = "maxvanp/graviteeam"
+      version = "0.1.0"
     }
   }
 }
@@ -80,6 +101,8 @@ resource "graviteeam_domain" "example" {
   }
 }
 ```
+
+Until Registry registration is complete, use the local `dev_overrides` workflow above or a Terraform CLI filesystem mirror for the signed GitHub archive.
 
 ## Resources and Data Sources
 

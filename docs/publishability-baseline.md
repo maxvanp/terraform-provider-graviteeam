@@ -1,8 +1,8 @@
 # Publishability Baseline
 
-This document defines the evidence required before this provider is considered ready for a first public release. It is a release-readiness contract, not authorization to publish, tag, merge, or create a GitHub release.
+This document records the release-readiness evidence for provider version `v0.1.0`. It is an evidence record, not authorization to publish or modify release credentials.
 
-The initial baseline was merged into `main` through [PR #22](https://github.com/maxvanp/terraform-provider-graviteeam/pull/22) on 2026-07-15 as `7666c79da83facc86aa6e1521ee215a6331d1b2e`. The evidence below tracks the subsequent release candidate in PR #25.
+The initial baseline was merged into `main` through [PR #22](https://github.com/maxvanp/terraform-provider-graviteeam/pull/22) on 2026-07-15. The subsequent release-readiness changes were merged through [PR #25](https://github.com/maxvanp/terraform-provider-graviteeam/pull/25) on 2026-09-13.
 
 ## Scope
 
@@ -20,7 +20,7 @@ The API audit and complete serial acceptance suite pass against those exact imag
 
 | Status | Meaning |
 |--------|---------|
-| `PASS` | Current evidence proves the requirement for the exact candidate commit. |
+| `PASS` | The evidence cited in the row proves the requirement for the reviewed implementation. |
 | `FAIL` | Current evidence contradicts the requirement. |
 | `PENDING` | Evidence is missing or the implementation is still changing. |
 | `USER ACTION` | Publication-time account or secret ownership that cannot be completed safely by repository automation. |
@@ -29,7 +29,7 @@ The API audit and complete serial acceptance suite pass against those exact imag
 
 | Area | Requirement | Evidence required | Current status |
 |------|-------------|-------------------|----------------|
-| Registry eligibility | The repository is owned by the publishing namespace, lowercase, named `terraform-provider-graviteeam`, and public before Registry onboarding. | GitHub repository metadata and Terraform Registry naming rules. The name and ownership pass; visibility is currently private. | `USER ACTION` |
+| Registry eligibility | The repository is owned by the publishing namespace, lowercase, named `terraform-provider-graviteeam`, and public before Registry onboarding. | The name, ownership, and public visibility pass; Registry onboarding and installation verification remain pending. | `PENDING` |
 | Provider protocol | Production server and tests consistently use Terraform Plugin Protocol 6; the Registry manifest declares `6.0`. | `main.go`, acceptance factories, and valid `terraform-registry-manifest.json`. | `PASS` |
 | Compatibility | README, generated provider docs, Compose, OpenAPI snapshot, tests, and changelog name the same exact Gravitee AM version. | Version-reference audit plus acceptance tests against the pinned images. | `PASS` |
 | API coverage | Every OpenAPI family is classified as a resource, data source, read-like operation, operational action, alternate lifecycle, or intentional exclusion. No writable candidate is left unclassified. | `./scripts/audit-openapi-coverage.py --check-doc` passes against the target snapshot. | `PASS` |
@@ -42,12 +42,12 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Code quality | Formatting, lint, vet, build, unit tests, coverage audits, generated-doc checks, and repository diff checks pass. | `make verify-local`, `make lint`, `make vet`, and `make build`. | `PASS` |
 | Security | The current Go vulnerability database reports no reachable vulnerabilities; no credentials are committed. The final GitHub security workflow result is tracked by the CI row. | Local `govulncheck ./...` plus Gitleaks history and working-tree scans pass after upgrading `google.golang.org/grpc` to `v1.82.1` for GO-2026-6061. | `PASS` |
 | Acceptance | Terraform exercises all supported resource and data-source lifecycles against the exact pinned Gravitee AM images. Any unavailable commercial plugin is explicitly documented and independently covered as far as possible. | PR #25 passes the complete GitHub acceptance job against Gravitee AM 4.12.6 on the remediated commit. | `PASS` |
-| Release artifacts | A clean snapshot build produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and detached checksum signature configuration. | `make release-check` passes with GoReleaser v2.17.1 and the same check runs in the Release Check workflow. | `PASS` |
+| Release artifacts | A signed v0.1.0 release produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and a detached checksum signature. | The unsigned snapshot and signing configuration pass validation; the signed GitHub release remains pending. | `PENDING` |
 | Platforms | Release artifacts include at least Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64; Linux AMD64 is CGO-free and self-contained for HCP Terraform. | GoReleaser configuration and dry-run artifact inventory. | `PASS` |
 | Versioning | The first release version and changelog accurately describe compatibility and breaking-change expectations; released artifacts are immutable. | Changelog and release workflow review. | `PASS` |
 | CI | Tests, workflow lint, lint, build, acceptance, generated docs, vulnerability scans, secret scans, and release snapshot validation pass for the exact final pull-request head. | PR #25 passes Documentation, Release Check, Security, and Tests, including the complete acceptance job. | `PASS` |
-| Change review | The unpublished work is preserved on a review branch with no accidental files, unresolved conflicts, or unexplained generated changes. | The security, release-hardening, and AM compatibility changes are preserved on `codex/release-readiness-security` and reviewed in PR #25. | `PASS` |
-| Final report | Every row in this table is updated with direct evidence and no `FAIL` or `PENDING` remains. Publication-only prerequisites are listed separately. | This report and the PR #25 check suite contain the current candidate evidence. | `PASS` |
+| Change review | The release-readiness work is merged with no accidental files, unresolved conflicts, or unexplained generated changes. | The security, release-hardening, and AM compatibility changes were reviewed in PR #25 and merged into `main` on 2026-09-13. | `PASS` |
+| Final report | Every completed readiness row is updated with direct evidence; release and Registry publication prerequisites remain explicit. | This report and the PR #25 check suite contain the merged implementation evidence. | `PASS` |
 
 ## Final Evidence
 
@@ -62,11 +62,11 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Release engineering | GoReleaser validates and produces six expected ZIP archives for Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64. Archive hashes and the Registry manifest hash match the generated SHA256SUMS; detached checksum signing is configured. |
 | Repository and CI | PR #25 passes Documentation, Release Check, Security, and Tests after remediating GO-2026-6061; the acceptance job passes against Gravitee AM 4.12.6 and the release snapshot validates all six target archives. |
 
-No code, test, documentation, dependency, CI, or release-configuration remediation remains. The only remaining actions are the maintainer-owned publication steps below.
+No code, test, documentation, dependency, CI, or release-configuration remediation remains. The remaining work is the maintainer-owned signed release and Registry onboarding below.
 
 ## Required Verification
 
-Run these commands from a clean checkout of the final candidate commit:
+Run these commands from a clean checkout of the merged release commit before creating the signed release:
 
 Install GoReleaser `v2.17.1` on `PATH` to match both release workflows.
 `make release-check` also tests that missing or corrupt archive checksums are rejected.
@@ -90,20 +90,17 @@ git diff --check
 git status --short
 ```
 
-The GitHub `Tests`, `Documentation`, and `Security` workflows must then pass for the exact final SHA. A local pass does not substitute for CI, and CI does not substitute for the local release-artifact inspection. The unsigned snapshot uses `--skip=sign` because the maintainer-owned release key is deliberately unavailable locally; `goreleaser check` still validates the detached checksum signature configuration.
+The GitHub `Tests`, `Documentation`, and `Security` workflows must then pass for the exact final SHA. A local pass does not substitute for CI, and CI does not substitute for the local release-artifact inspection. Snapshot checks use `--skip=sign` so routine validation does not require access to signing credentials; the release workflow signs the published checksums.
 
-## Publication-Only User Actions
+## Release and Registry Actions Remaining
 
-These actions are deliberately outside the readiness implementation and must not be performed until publication is discussed:
+The repository is public and the release signing secrets are configured. The remaining publication steps are:
 
-1. Choose or generate a dedicated RSA or DSA GPG signing key and retain its private key securely.
-2. Add the armored public key to the `maxvanp` Terraform Registry namespace.
-3. Configure the GitHub `GPG_PRIVATE_KEY` and `PASSPHRASE` repository secrets.
-4. Change the reviewed repository visibility from private to public.
-5. Sign in to the Terraform Registry with the GitHub account that owns the public repository and accept the Registry terms.
-6. Approve the final version number, merge, tag, GitHub release, and Registry publication.
+1. Create the signed GitHub release for `v0.1.0` from the merged `main` commit.
+2. Add [the public signing key](release-signing-key.asc) to the `maxvanp` Terraform Registry namespace, then register `maxvanp/graviteeam` and accept the Registry terms. Signing-key fingerprint: `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`.
+3. Verify installation and checksum/signature validation through the Registry.
 
-Readiness requires proving that the repository consumes these inputs correctly. It does not require exposing, generating, or uploading the maintainer's private signing material.
+The private signing material remains outside the repository and is provided to the release workflow through GitHub secrets.
 
 ## Primary References
 

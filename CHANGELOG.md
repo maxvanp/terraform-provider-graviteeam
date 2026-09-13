@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-13
+
 ### Added
 
 - Align README/CONTRIBUTING with the current Go 1.26.8 toolchain requirement and full resource inventory
@@ -47,45 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add policy plugin documentation support to `graviteeam_plugins`
 - Add `metadata_json` support to `graviteeam_application`
 - Add `settings_json` support to `graviteeam_domain` for advanced domain patch settings
-
-### Fixed
-
-- Return Terraform diagnostics instead of panicking when creation responses contain missing or malformed resource IDs
-- Report malformed organization-role permission entries without crashing the provider
-- Reject import IDs with empty or whitespace-only components before writing Terraform state
-- Validate provider URLs and nonblank configuration values, and reject unresolved configuration before constructing the API client
-- Preserve Terraform state when an API error body mentions `404` or `not found` without an actual HTTP 404 or confirmed missing object
-- Read every page of domain and organization group members, including groups with more than 100 members
-- Bound OAuth token requests to 30 seconds so an unavailable token endpoint cannot block indefinitely
-- Detect installed documentation tools correctly instead of reinstalling them unnecessarily
-
-### Changed
-
-- Centralize data-source JSON result formatting and make local Go tooling resolve the configured toolchain consistently
-
-- Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
-- Pin GoReleaser and validate complete unsigned release snapshots in CI
-- Reject release archives missing checksum entries and regression-test missing or corrupt checksums
-- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.6
-- Refreshed the bundled Gravitee AM Management API reference from the 4.12.6 upstream tag; its 205 paths and 249 schemas are unchanged from 4.12.1
-- Updated Go module dependencies to their latest compatible versions
-- Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
-- Use the dedicated i18n dictionary entries endpoint when managing dictionary entries
-- Use the dedicated password policy default endpoint when setting a domain default policy
-- Add `enabled` management to `graviteeam_user` through the dedicated user status endpoint
-- Use the dedicated organization user status endpoint when managing `graviteeam_org_user.enabled`
-- Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
-- Add explicit reset password triggers to `graviteeam_user` and `graviteeam_org_user`, and a registration confirmation trigger to `graviteeam_user`
-- Use the dedicated application type endpoint when updating `graviteeam_application.type`
-- Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
-- Add application `kind` support and avoid re-sending incompatible API default settings after application creation
-- Preserve server-derived user display names after creation and hydrate typed application settings during import
-- Harden CI and release engineering with current pinned actions, full-history secret scanning, Terraform 1.15.8 acceptance tests, and the Registry platform artifact matrix
-- Update indirect Go dependencies
-
-## [0.1.0] - TBD
-
-### Added
 
 - Provider configuration with OAuth2 authentication (`api_url`, `client_id`, `client_secret`, `organization_id`, `environment_id`)
 - 53 resources:
@@ -150,3 +113,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graviteeam_form_preview` — Render a domain form or email template preview
   - `graviteeam_password_policy_evaluation` — Evaluate a password against a domain password policy
 - Import support for all resources (`terraform import`)
+
+### Fixed
+
+- Return Terraform diagnostics instead of panicking when creation responses contain missing or malformed resource IDs
+- Report malformed organization-role permission entries without crashing the provider
+- Reject import IDs with empty or whitespace-only components before writing Terraform state
+- Validate provider URLs and nonblank configuration values, and reject unresolved configuration before constructing the API client
+- Preserve Terraform state when an API error body mentions `404` or `not found` without an actual HTTP 404 or confirmed missing object
+- Read every page of domain and organization group members, including groups with more than 100 members
+- Bound OAuth token requests to 30 seconds so an unavailable token endpoint cannot block indefinitely
+- Detect installed documentation tools correctly instead of reinstalling them unnecessarily
+
+### Changed
+
+- Centralize data-source JSON result formatting and make local Go tooling resolve the configured toolchain consistently
+
+- Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
+- Pin GoReleaser and validate complete unsigned release snapshots in CI
+- Reject release archives missing checksum entries and regression-test missing or corrupt checksums
+- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.6
+- Refreshed the bundled Gravitee AM Management API reference from the 4.12.6 upstream tag; its 205 paths and 249 schemas are unchanged from 4.12.1
+- Updated Go module dependencies to their latest compatible versions
+- Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
+- Use the dedicated i18n dictionary entries endpoint when managing dictionary entries
+- Use the dedicated password policy default endpoint when setting a domain default policy
+- Add `enabled` management to `graviteeam_user` through the dedicated user status endpoint
+- Use the dedicated organization user status endpoint when managing `graviteeam_org_user.enabled`
+- Use dedicated username endpoints when updating `graviteeam_user.username` and `graviteeam_org_user.username`
+- Add explicit reset password triggers to `graviteeam_user` and `graviteeam_org_user`, and a registration confirmation trigger to `graviteeam_user`
+- Use the dedicated application type endpoint when updating `graviteeam_application.type`
+- Manage `graviteeam_user.locked` with the dedicated user lock and unlock endpoints
+- Add application `kind` support and avoid re-sending incompatible API default settings after application creation
+- Preserve server-derived user display names after creation and hydrate typed application settings during import
+- Harden CI and release engineering with current pinned actions, full-history secret scanning, Terraform 1.15.8 acceptance tests, and the Registry platform artifact matrix
+- Update indirect Go dependencies
