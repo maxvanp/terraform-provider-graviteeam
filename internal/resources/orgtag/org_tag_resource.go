@@ -80,7 +80,12 @@ func (r *OrgTagResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 	readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

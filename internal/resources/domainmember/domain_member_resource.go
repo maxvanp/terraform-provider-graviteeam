@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -168,7 +169,7 @@ func (r *DomainMemberResource) ImportState(ctx context.Context, req resource.Imp
 
 func parseImportID(id string) (string, string, string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 4 {
+	if len(parts) != 4 || !importid.Valid(parts) {
 		return "", "", "", "", false
 	}
 	return parts[0], parts[1], strings.ToUpper(parts[2]), parts[3], true

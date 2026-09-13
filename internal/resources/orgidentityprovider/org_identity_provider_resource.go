@@ -115,7 +115,12 @@ func (r *OrgIdentityProviderResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	needsUpdate := len(plan.Mappers) > 0 ||
 		(!plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown()) ||

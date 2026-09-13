@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Return Terraform diagnostics instead of panicking when creation responses contain missing or malformed resource IDs
+- Report malformed organization-role permission entries without crashing the provider
+- Reject import IDs with empty or whitespace-only components before writing Terraform state
+- Validate provider URLs and nonblank configuration values, and reject unresolved configuration before constructing the API client
 - Preserve Terraform state when an API error body mentions `404` or `not found` without an actual HTTP 404 or confirmed missing object
 - Read every page of domain and organization group members, including groups with more than 100 members
 - Bound OAuth token requests to 30 seconds so an unavailable token endpoint cannot block indefinitely

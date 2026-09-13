@@ -98,7 +98,12 @@ func (r *OrgGroupResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	if plan.Roles != nil {
 		updateBody := buildBody(plan, OrgGroupModel{})

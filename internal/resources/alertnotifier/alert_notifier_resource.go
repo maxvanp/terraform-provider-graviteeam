@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -101,7 +102,12 @@ func (r *AlertNotifierResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -169,7 +175,7 @@ func (r *AlertNotifierResource) Delete(ctx context.Context, req resource.DeleteR
 
 func (r *AlertNotifierResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/alert_notifier_id, got: %s", req.ID))
 		return
 	}

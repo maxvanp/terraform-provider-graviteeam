@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -25,6 +26,16 @@ var ErrNotFound = errors.New("resource not found")
 type APIError struct {
 	StatusCode int
 	Body       string
+}
+
+// RequiredString returns a required non-empty string from an API response.
+func RequiredString(response map[string]interface{}, field string) (string, error) {
+	value, ok := response[field].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("response field %q must be a non-empty string", field)
+	}
+
+	return value, nil
 }
 
 func (e *APIError) Error() string {

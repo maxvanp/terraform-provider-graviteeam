@@ -171,7 +171,11 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	id := result["id"].(string)
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
 	plan.ID = types.StringValue(id)
 	plan.DefaultIdpID = types.StringValue("default-idp-" + id)
 

@@ -95,6 +95,39 @@ func TestIsNotFoundRecognizesWrappedSentinelOnly(t *testing.T) {
 	}
 }
 
+func TestRequiredStringRejectsInvalidResponseFieldsWithoutEchoingValues(t *testing.T) {
+	tests := map[string]map[string]interface{}{
+		"missing": nil,
+		"null":    {"id": nil},
+		"numeric": {"id": float64(123)},
+		"object":  {"id": map[string]interface{}{"sensitive-value": true}},
+		"empty":   {"id": ""},
+		"blank":   {"id": "   "},
+	}
+
+	for name, response := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := RequiredString(response, "id")
+			if err == nil {
+				t.Fatal("expected invalid response field error")
+			}
+			if strings.Contains(err.Error(), "sensitive-value") {
+				t.Fatalf("error exposed response value: %v", err)
+			}
+		})
+	}
+}
+
+func TestRequiredStringReturnsValidResponseField(t *testing.T) {
+	value, err := RequiredString(map[string]interface{}{"id": "resource-123"}, "id")
+	if err != nil {
+		t.Fatalf("RequiredString: %v", err)
+	}
+	if value != "resource-123" {
+		t.Fatalf("value = %q, want resource-123", value)
+	}
+}
+
 func TestOAuthTokenRequestHasTimeout(t *testing.T) {
 	requestStarted := make(chan struct{})
 	releaseRequest := make(chan struct{})

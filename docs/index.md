@@ -16,6 +16,10 @@ This provider targets the **Gravitee AM 4.12.6** Management API. Acceptance test
 
 The provider authenticates to the Gravitee AM Management API using OAuth2 client credentials.
 
+Set `api_url` to an absolute HTTP or HTTPS URL without embedded credentials, query parameters, or a fragment. A base path is supported. Configuration values must not be empty or contain only whitespace. Omit `organization_id` and `environment_id` (or set them to `null`) to use `DEFAULT`.
+
+Values may be unknown during `terraform validate`, but must be resolved before the provider configures its API client.
+
 ## Example Usage
 
 ```terraform

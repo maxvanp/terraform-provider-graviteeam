@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -166,7 +167,7 @@ func (r *ApplicationMemberResource) Delete(ctx context.Context, req resource.Del
 func (r *ApplicationMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/application_id/member_id/member_type/role_id
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 5 {
+	if len(parts) != 5 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/application_id/member_id/member_type/role_id, got: %s", req.ID))
 		return
 	}

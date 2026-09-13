@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -157,7 +158,7 @@ func (r *GeneratedCertificateResource) Delete(ctx context.Context, req resource.
 
 func (r *GeneratedCertificateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/certificate_id, got: %s", req.ID))
 		return
 	}

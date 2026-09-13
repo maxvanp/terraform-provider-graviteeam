@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -103,7 +104,12 @@ func (r *BotDetectionResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -180,7 +186,7 @@ func (r *BotDetectionResource) ImportState(ctx context.Context, req resource.Imp
 
 func parseImportID(id string) (string, string, bool) {
 	parts := strings.SplitN(id, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

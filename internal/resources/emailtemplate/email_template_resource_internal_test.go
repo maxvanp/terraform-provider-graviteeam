@@ -715,13 +715,12 @@ func TestEmailTemplateUpdateReportsInvalidPlanAndStateData(t *testing.T) {
 }
 
 func TestEmailTemplateImportRejectsInvalidID(t *testing.T) {
-	var resp resource.ImportStateResponse
-	(&EmailTemplateResource{}).ImportState(context.Background(), resource.ImportStateRequest{
-		ID: "domain/app/template/extra",
-	}, &resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected invalid import id diagnostics")
+	for _, id := range []string{"domain/app/template/extra", "/RESET_PASSWORD", "domain-123/ ", "domain-123//RESET_PASSWORD"} {
+		resp := emailTemplateImportResponse(t)
+		(&EmailTemplateResource{}).ImportState(context.Background(), resource.ImportStateRequest{ID: id}, &resp)
+		if !resp.Diagnostics.HasError() {
+			t.Errorf("%q: expected invalid import id diagnostics", id)
+		}
 	}
 }
 

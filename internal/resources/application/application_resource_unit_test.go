@@ -1175,6 +1175,47 @@ func TestApplicationCreateReportsInvalidUpdateBodyConfiguration(t *testing.T) {
 	}
 }
 
+func TestApplicationCreateReportsMalformedSuccessID(t *testing.T) {
+	tests := map[string]map[string]interface{}{
+		"missing": {"name": "app", "type": "WEB"},
+		"null":    {"id": nil, "name": "app", "type": "WEB"},
+		"numeric": {"id": float64(123), "name": "app", "type": "WEB"},
+		"empty":   {"id": "", "name": "app", "type": "WEB"},
+	}
+
+	for name, responseBody := range tests {
+		t.Run(name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+			})
+			mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/applications", func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(responseBody)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resourceUnderTest := &ApplicationResource{
+				client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+			}
+			var schemaResp resource.SchemaResponse
+			resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+			plan := applicationPlan(t, schemaResp.Schema, ApplicationModel{
+				DomainID: types.StringValue("domain-123"),
+				Name:     types.StringValue("app"),
+				Type:     types.StringValue("WEB"),
+			})
+
+			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			resourceUnderTest.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+			if !createResp.Diagnostics.HasError() {
+				t.Fatal("expected malformed success response diagnostics")
+			}
+		})
+	}
+}
+
 func TestApplicationUpdateReportsInvalidUpdateBodyConfiguration(t *testing.T) {
 	resourceUnderTest := &ApplicationResource{}
 	var schemaResp resource.SchemaResponse
@@ -1387,14 +1428,18 @@ func TestApplicationImportStateRejectsInvalidID(t *testing.T) {
 
 	var schemaResp resource.SchemaResponse
 	NewApplicationResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
-	importResp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
-
-	NewApplicationResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{
-		ID: "application-only",
-	}, importResp)
-
-	if !importResp.Diagnostics.HasError() {
-		t.Fatal("expected invalid import diagnostics")
+	for _, id := range []string{"application-only", "/app-1", "domain-1/", "domain-1/ "} {
+		importResp := &resource.ImportStateResponse{State: applicationState(t, schemaResp.Schema, ApplicationModel{
+			ID:          types.StringValue("placeholder"),
+			DomainID:    types.StringValue("placeholder"),
+			Name:        types.StringValue("application"),
+			Type:        types.StringValue("WEB"),
+			Description: types.StringValue("application"),
+		})}
+		NewApplicationResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{ID: id}, importResp)
+		if !importResp.Diagnostics.HasError() {
+			t.Errorf("%q: expected invalid import diagnostics", id)
+		}
 	}
 }
 

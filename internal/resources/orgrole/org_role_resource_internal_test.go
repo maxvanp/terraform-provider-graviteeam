@@ -139,7 +139,7 @@ func TestReadIntoModelMapsOrganizationRoleFields(t *testing.T) {
 
 	model := OrgRoleModel{}
 
-	readIntoModel(&model, map[string]interface{}{
+	err := readIntoModel(&model, map[string]interface{}{
 		"name":           "platform admin",
 		"description":    "Admin role",
 		"assignableType": "organization",
@@ -148,6 +148,9 @@ func TestReadIntoModelMapsOrganizationRoleFields(t *testing.T) {
 			"organization_role_update",
 		},
 	})
+	if err != nil {
+		t.Fatalf("readIntoModel() error = %v", err)
+	}
 
 	if model.Name.ValueString() != "platform admin" ||
 		model.Description.ValueString() != "Admin role" ||
@@ -169,16 +172,30 @@ func TestReadIntoModelClearsEmptyOrganizationRoleOptionals(t *testing.T) {
 		},
 	}
 
-	readIntoModel(&model, map[string]interface{}{
+	err := readIntoModel(&model, map[string]interface{}{
 		"description": "",
 		"permissions": []interface{}{},
 	})
+	if err != nil {
+		t.Fatalf("readIntoModel() error = %v", err)
+	}
 
 	if !model.Description.IsNull() {
 		t.Fatalf("description = %#v, want null", model.Description)
 	}
 	if model.Permissions != nil {
 		t.Fatalf("permissions = %#v, want nil", model.Permissions)
+	}
+}
+
+func TestReadIntoModelRejectsNonStringOrganizationRolePermission(t *testing.T) {
+	t.Parallel()
+
+	err := readIntoModel(&OrgRoleModel{}, map[string]interface{}{
+		"permissions": []interface{}{float64(123)},
+	})
+	if err == nil {
+		t.Fatal("readIntoModel() error = nil, want malformed response error")
 	}
 }
 

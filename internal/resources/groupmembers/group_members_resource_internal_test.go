@@ -51,6 +51,26 @@ func TestGroupMembersSchemaAttributes(t *testing.T) {
 	}
 }
 
+func TestGroupMembersImportRejectsEmptyComponents(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewGroupMembersResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	for _, id := range []string{"/group-1", "domain-1/", "domain-1/ ", "/"} {
+		state := tfsdk.State{Schema: schemaResp.Schema}
+		if diags := state.Set(context.Background(), &GroupMembersModel{
+			DomainID: types.StringValue("placeholder"),
+			GroupID:  types.StringValue("placeholder"),
+			Members:  []types.String{types.StringValue("member-1")},
+		}); diags.HasError() {
+			t.Fatalf("set state: %#v", diags)
+		}
+		resp := &resource.ImportStateResponse{State: state}
+		NewGroupMembersResource().(resource.ResourceWithImportState).ImportState(context.Background(), resource.ImportStateRequest{ID: id}, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Errorf("%q: expected invalid import diagnostics", id)
+		}
+	}
+}
+
 func TestGroupMembersConfigureRejectsUnexpectedProviderData(t *testing.T) {
 	t.Parallel()
 

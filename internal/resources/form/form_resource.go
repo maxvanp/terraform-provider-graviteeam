@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -139,7 +140,12 @@ func (r *FormResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	r.readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -234,6 +240,10 @@ func (r *FormResource) ImportState(ctx context.Context, req resource.ImportState
 	// The API retrieves forms by template type (not by ID),
 	// so the import ID must include the template type.
 	parts := strings.Split(req.ID, "/")
+	if !importid.Valid(parts) {
+		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/template or domain_id/app_id/template, got: %s", req.ID))
+		return
+	}
 	switch len(parts) {
 	case 2:
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)

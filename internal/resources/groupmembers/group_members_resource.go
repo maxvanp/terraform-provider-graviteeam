@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/reconcile"
 )
 
@@ -185,7 +186,7 @@ func (r *GroupMembersResource) ImportState(ctx context.Context, req resource.Imp
 
 func parseImportID(id string) (string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

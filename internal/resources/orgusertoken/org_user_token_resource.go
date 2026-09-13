@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -147,7 +148,7 @@ func (r *OrgUserTokenResource) Delete(ctx context.Context, req resource.DeleteRe
 
 func (r *OrgUserTokenResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: user_id/token_id, got: %s", req.ID))
 		return
 	}
