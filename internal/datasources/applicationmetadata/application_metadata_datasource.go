@@ -2,6 +2,7 @@ package applicationmetadata
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -164,9 +165,8 @@ func (d *ApplicationMetadataDataSource) Read(ctx context.Context, req datasource
 }
 
 func emptyAnalyticsError(err error) bool {
-	message := err.Error()
-	return strings.Contains(message, "status 500") ||
-		(strings.Contains(message, "status 400") && strings.Contains(message, "Malformed json"))
+	return client.IsStatus(err, http.StatusInternalServerError) ||
+		(client.IsStatus(err, http.StatusBadRequest) && strings.Contains(err.Error(), "Malformed json"))
 }
 
 func analyticsQuery(config ApplicationMetadataModel) string {

@@ -149,7 +149,7 @@ func (r *ApplicationFormResource) Read(ctx context.Context, req resource.ReadReq
 
 	result, err := r.client.GetForm(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.Template.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -202,7 +202,7 @@ func (r *ApplicationFormResource) Delete(ctx context.Context, req resource.Delet
 
 	err := r.client.DeleteForm(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application form", err.Error())

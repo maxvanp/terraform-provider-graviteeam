@@ -114,7 +114,7 @@ func (r *AlertNotifierResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetAlertNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -160,7 +160,7 @@ func (r *AlertNotifierResource) Delete(ctx context.Context, req resource.DeleteR
 
 	err := r.client.DeleteAlertNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting alert notifier", err.Error())

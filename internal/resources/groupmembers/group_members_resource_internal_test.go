@@ -274,6 +274,7 @@ func TestGroupMembersReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
+		body       string
 		wantRemove bool
 	}{
 		{
@@ -285,6 +286,11 @@ func TestGroupMembersReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 			name:       "server error",
 			statusCode: http.StatusInternalServerError,
 			wantRemove: false,
+		},
+		{
+			name:       "server error mentioning 404",
+			statusCode: http.StatusInternalServerError,
+			body:       "upstream returned 404",
 		},
 	}
 
@@ -300,7 +306,7 @@ func TestGroupMembersReadRemovesMissingGroupAndReportsErrors(t *testing.T) {
 				if r.Method != http.MethodGet {
 					t.Fatalf("method = %s, want GET", r.Method)
 				}
-				http.Error(w, "read failed", tt.statusCode)
+				http.Error(w, "read failed: "+tt.body, tt.statusCode)
 			})
 			server := httptest.NewServer(mux)
 			defer server.Close()

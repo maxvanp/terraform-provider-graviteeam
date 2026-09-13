@@ -149,7 +149,7 @@ func (r *ApplicationEmailResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetEmail(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.Template.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -197,7 +197,7 @@ func (r *ApplicationEmailResource) Delete(ctx context.Context, req resource.Dele
 
 	err := r.client.DeleteEmail(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application email template", err.Error())

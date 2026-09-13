@@ -2,7 +2,6 @@ package domaincertificatesettings
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -94,7 +93,7 @@ func (r *DomainCertificateSettingsResource) Read(ctx context.Context, req resour
 
 	result, err := r.client.GetDomain(ctx, state.DomainID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -137,7 +136,7 @@ func (r *DomainCertificateSettingsResource) Delete(ctx context.Context, req reso
 	}
 
 	_, err := r.client.UpdateDomainCertificateSettings(ctx, state.DomainID.ValueString(), buildDeleteBody())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting domain certificate settings", err.Error())
 	}
 }

@@ -67,7 +67,7 @@ verify-local: coverage-baseline docs-check coverage-audit
 	git diff --check
 
 docs-tool:
-	@if ! $(TOOL_ENV) command -v $(TFPLUGINDOCS) >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
+	@if ! PATH='$(TOOLS_PATH)' command -v "$(TFPLUGINDOCS)" >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
 		echo "installing tfplugindocs $(TFPLUGINDOCS_VERSION)"; \
 		$(TOOL_ENV) GOBIN="$(HOME)/go/bin" $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION); \
 	fi

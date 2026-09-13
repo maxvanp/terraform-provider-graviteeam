@@ -128,7 +128,7 @@ func (r *ReporterResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -212,7 +212,7 @@ func (r *ReporterResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteReporter(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting reporter", err.Error())
 	}
 }

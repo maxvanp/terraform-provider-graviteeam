@@ -128,7 +128,7 @@ func (r *ProtectedResourceMemberResource) Read(ctx context.Context, req resource
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -152,7 +152,7 @@ func (r *ProtectedResourceMemberResource) Delete(ctx context.Context, req resour
 
 	err := r.client.DeleteProtectedResourceMember(ctx, state.DomainID.ValueString(), state.ProtectedResourceID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting protected resource member", err.Error())
@@ -202,7 +202,7 @@ func (r *ProtectedResourceMemberResource) readMembership(ctx context.Context, mo
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("protected resource member not found")
+	return fmt.Errorf("protected resource member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *ProtectedResourceMemberModel, membership map[string]interface{}) bool {

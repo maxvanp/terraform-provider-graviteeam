@@ -124,7 +124,7 @@ func (r *I18nDictionaryResource) Read(ctx context.Context, req resource.ReadRequ
 
 	result, err := r.client.GetI18nDictionary(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -185,7 +185,7 @@ func (r *I18nDictionaryResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeleteI18nDictionary(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting i18n dictionary", err.Error())
 	}
 }

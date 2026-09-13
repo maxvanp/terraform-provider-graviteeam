@@ -109,7 +109,7 @@ func (r *AuthorizationEngineResource) Read(ctx context.Context, req resource.Rea
 
 	result, err := r.client.GetAuthorizationEngine(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -155,7 +155,7 @@ func (r *AuthorizationEngineResource) Delete(ctx context.Context, req resource.D
 	}
 
 	err := r.client.DeleteAuthorizationEngine(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting authorization engine", err.Error())
 	}
 }

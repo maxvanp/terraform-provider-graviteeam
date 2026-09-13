@@ -132,7 +132,7 @@ func (r *TrustDomainResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetTrustDomain(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -166,7 +166,7 @@ func (r *TrustDomainResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	if err := r.client.DeleteTrustDomain(ctx, state.DomainID.ValueString(), state.ID.ValueString()); err != nil && !strings.Contains(err.Error(), "404") {
+	if err := r.client.DeleteTrustDomain(ctx, state.DomainID.ValueString(), state.ID.ValueString()); err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting trust domain", err.Error())
 	}
 }

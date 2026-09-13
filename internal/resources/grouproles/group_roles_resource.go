@@ -100,7 +100,7 @@ func (r *GroupRolesResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	result, err := r.client.GetGroupRoles(ctx, state.DomainID.ValueString(), state.GroupID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

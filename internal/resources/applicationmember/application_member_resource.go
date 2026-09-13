@@ -132,7 +132,7 @@ func (r *ApplicationMemberResource) Read(ctx context.Context, req resource.ReadR
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -156,7 +156,7 @@ func (r *ApplicationMemberResource) Delete(ctx context.Context, req resource.Del
 
 	err := r.client.DeleteApplicationMember(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application member", err.Error())
@@ -190,7 +190,7 @@ func (r *ApplicationMemberResource) readMembership(ctx context.Context, model *A
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("application member not found")
+	return fmt.Errorf("application member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *ApplicationMemberModel, membership map[string]interface{}) bool {

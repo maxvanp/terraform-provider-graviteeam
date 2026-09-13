@@ -114,7 +114,7 @@ func (r *OrgUserTokenResource) Read(ctx context.Context, req resource.ReadReques
 
 	token, err := r.readToken(ctx, state.UserID.ValueString(), state.TokenID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -140,7 +140,7 @@ func (r *OrgUserTokenResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	err := r.client.DeleteOrgUserToken(ctx, state.UserID.ValueString(), state.TokenID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization user token", err.Error())
 	}
 }
@@ -166,7 +166,7 @@ func (r *OrgUserTokenResource) readToken(ctx context.Context, userID, tokenID st
 			return token, nil
 		}
 	}
-	return nil, fmt.Errorf("organization user token not found")
+	return nil, fmt.Errorf("organization user token not found: %w", client.ErrNotFound)
 }
 
 func readIntoModel(model *OrgUserTokenModel, data map[string]interface{}) {

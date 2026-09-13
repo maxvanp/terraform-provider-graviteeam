@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -104,7 +104,7 @@ func (d *AnalyticsDataSource) Read(ctx context.Context, req datasource.ReadReque
 	if err != nil {
 		// Gravitee AM returns 500 when there is no analytics data yet (e.g. freshly created domain).
 		// Treat this as an empty result rather than failing.
-		if strings.Contains(err.Error(), "status 500") {
+		if client.IsStatus(err, http.StatusInternalServerError) {
 			config.Result = types.StringValue("{}")
 			resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 			return

@@ -109,7 +109,7 @@ func (r *AuthDeviceNotifierResource) Read(ctx context.Context, req resource.Read
 
 	result, err := r.client.GetAuthDeviceNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -156,7 +156,7 @@ func (r *AuthDeviceNotifierResource) Delete(ctx context.Context, req resource.De
 	}
 
 	err := r.client.DeleteAuthDeviceNotifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting auth device notifier", err.Error())
 	}
 }

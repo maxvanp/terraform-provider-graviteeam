@@ -103,7 +103,7 @@ func (r *IdentityProviderPasswordPolicyResource) Read(ctx context.Context, req r
 
 	result, err := r.client.GetIdentityProvider(ctx, state.DomainID.ValueString(), state.IdentityProviderID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -146,7 +146,7 @@ func (r *IdentityProviderPasswordPolicyResource) Delete(ctx context.Context, req
 	}
 
 	err := r.client.ClearIdentityProviderPasswordPolicy(ctx, state.DomainID.ValueString(), state.IdentityProviderID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error clearing identity provider password policy", err.Error())
 	}
 }

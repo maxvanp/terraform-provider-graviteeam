@@ -110,7 +110,7 @@ func (r *ServiceResourceResource) Read(ctx context.Context, req resource.ReadReq
 
 	result, err := r.client.GetServiceResource(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -157,7 +157,7 @@ func (r *ServiceResourceResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	err := r.client.DeleteServiceResource(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting service resource", err.Error())
 	}
 }

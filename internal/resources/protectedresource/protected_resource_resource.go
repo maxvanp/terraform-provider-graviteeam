@@ -164,7 +164,7 @@ func (r *ProtectedResourceResource) Read(ctx context.Context, req resource.ReadR
 
 	result, err := r.client.GetProtectedResource(ctx, state.DomainID.ValueString(), state.ID.ValueString(), state.Type.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -223,7 +223,7 @@ func (r *ProtectedResourceResource) Delete(ctx context.Context, req resource.Del
 	}
 
 	err := r.client.DeleteProtectedResource(ctx, state.DomainID.ValueString(), state.ID.ValueString(), state.Type.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting protected resource", err.Error())
 	}
 }

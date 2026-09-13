@@ -100,7 +100,7 @@ func (r *UserRoleResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetUserRoles(ctx, state.DomainID.ValueString(), state.UserID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

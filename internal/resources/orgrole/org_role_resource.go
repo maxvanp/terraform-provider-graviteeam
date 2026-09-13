@@ -146,7 +146,7 @@ func (r *OrgRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgRole(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -192,7 +192,7 @@ func (r *OrgRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	err := r.client.DeleteOrgRole(ctx, state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization role", err.Error())
 	}
 }

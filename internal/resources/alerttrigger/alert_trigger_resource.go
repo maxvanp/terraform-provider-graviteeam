@@ -118,7 +118,7 @@ func (r *AlertTriggerResource) Read(ctx context.Context, req resource.ReadReques
 
 	triggers, err := r.client.ListAlertTriggers(ctx, state.DomainID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -167,7 +167,7 @@ func (r *AlertTriggerResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	state.AlertNotifierIDs = types.SetNull(types.StringType)
 	_, err := r.patch(ctx, &state, false)
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting alert trigger", err.Error())
 	}
 }

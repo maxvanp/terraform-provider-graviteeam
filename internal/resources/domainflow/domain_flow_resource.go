@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -102,7 +101,7 @@ func (r *DomainFlowResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	result, err := r.client.ListFlows(ctx, state.DomainID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -157,7 +156,7 @@ func (r *DomainFlowResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	_, err := r.client.UpdateDomainFlows(ctx, state.DomainID.ValueString(), []interface{}{})
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting domain flows", err.Error())

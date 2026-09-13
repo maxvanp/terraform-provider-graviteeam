@@ -48,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `metadata_json` support to `graviteeam_application`
 - Add `settings_json` support to `graviteeam_domain` for advanced domain patch settings
 
+### Fixed
+
+- Preserve Terraform state when an API error body mentions `404` or `not found` without an actual HTTP 404 or confirmed missing object
+- Read every page of domain and organization group members, including groups with more than 100 members
+- Bound OAuth token requests to 30 seconds so an unavailable token endpoint cannot block indefinitely
+- Detect installed documentation tools correctly instead of reinstalling them unnecessarily
+
 ### Changed
 
 - Centralize data-source JSON result formatting and make local Go tooling resolve the configured toolchain consistently

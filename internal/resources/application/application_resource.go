@@ -267,7 +267,7 @@ func (r *ApplicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -337,7 +337,7 @@ func (r *ApplicationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	err := r.client.DeleteApplication(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application", err.Error())

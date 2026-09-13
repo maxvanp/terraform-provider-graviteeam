@@ -128,7 +128,7 @@ func (r *ThemeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	result, err := r.client.GetTheme(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -182,7 +182,7 @@ func (r *ThemeResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	err := r.client.DeleteTheme(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting theme", err.Error())

@@ -114,7 +114,7 @@ func (r *OrgMemberResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -138,7 +138,7 @@ func (r *OrgMemberResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	err := r.client.DeleteOrgMember(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization member", err.Error())
@@ -186,7 +186,7 @@ func (r *OrgMemberResource) readMembership(ctx context.Context, model *OrgMember
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("organization member not found")
+	return fmt.Errorf("organization member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *OrgMemberModel, membership map[string]interface{}) bool {

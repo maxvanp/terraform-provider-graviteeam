@@ -2,7 +2,6 @@ package orguser
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -153,7 +152,7 @@ func (r *OrgUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgUser(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -253,7 +252,7 @@ func (r *OrgUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	err := r.client.DeleteOrgUser(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization user", err.Error())

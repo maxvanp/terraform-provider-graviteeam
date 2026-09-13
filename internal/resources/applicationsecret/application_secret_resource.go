@@ -125,7 +125,7 @@ func (r *ApplicationSecretResource) Read(ctx context.Context, req resource.ReadR
 
 	secret, err := r.findSecret(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -176,7 +176,7 @@ func (r *ApplicationSecretResource) Delete(ctx context.Context, req resource.Del
 
 	err := r.client.DeleteApplicationSecret(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application secret", err.Error())
@@ -206,7 +206,7 @@ func (r *ApplicationSecretResource) findSecret(ctx context.Context, domainID, ap
 			return secret, nil
 		}
 	}
-	return nil, fmt.Errorf("application secret not found")
+	return nil, fmt.Errorf("application secret not found: %w", client.ErrNotFound)
 }
 
 func readIntoModel(model *ApplicationSecretModel, data map[string]interface{}, preservedSecret types.String) {

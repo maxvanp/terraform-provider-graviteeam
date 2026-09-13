@@ -109,7 +109,7 @@ func (r *ApplicationFlowResource) Read(ctx context.Context, req resource.ReadReq
 
 	result, err := r.client.GetApplicationFlows(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -165,7 +165,7 @@ func (r *ApplicationFlowResource) Delete(ctx context.Context, req resource.Delet
 	// Reset flows to empty list (flows always exist, we just clear them)
 	_, err := r.client.UpdateApplicationFlows(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), []interface{}{})
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application flows", err.Error())

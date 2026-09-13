@@ -64,7 +64,7 @@ Current test coverage baseline:
 | Terraform types executable in stock local compose acceptance | `72/73` |
 | Import-capable resources with import tests | `53/53` |
 | Resources with disabled import verification | `0` |
-| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.1%` total statement coverage |
+| `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.2%` total statement coverage |
 
 The remaining local compose acceptance gap is `graviteeam_authorization_engine`. In the Gravitee AM 4.12.1 baseline probe, the image loaded the `openfga` authorization engine zip, but the local API reported it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint did not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
 
@@ -224,7 +224,7 @@ These endpoints look closer to calculated reads than durable Terraform resources
 | API family | Notes |
 |------------|-------|
 | `domain:forms/preview` | Template preview operation exposed by `graviteeam_form_preview`; the local API requires lower-case template names for preview even though CRUD form resources use upper-case template names. |
-| `domain:password-policies/evaluate` | Password policy evaluation operation exposed by `graviteeam_password_policy_evaluation`; local 4.12.1 accepts concrete policy IDs. |
+| `domain:password-policies/evaluate` | Password policy evaluation operation exposed by `graviteeam_password_policy_evaluation`; the historical local 4.12.1 baseline probe accepted concrete policy IDs. |
 
 ### Action or Lifecycle Endpoints
 

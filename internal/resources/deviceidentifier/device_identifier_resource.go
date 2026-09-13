@@ -109,7 +109,7 @@ func (r *DeviceIdentifierResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -156,7 +156,7 @@ func (r *DeviceIdentifierResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	err := r.client.DeleteDeviceIdentifier(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting device identifier", err.Error())
 	}
 }

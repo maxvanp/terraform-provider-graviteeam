@@ -2,7 +2,6 @@ package orgentrypoint
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -109,7 +108,7 @@ func (r *OrgEntrypointResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetOrgEntrypoint(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -154,7 +153,7 @@ func (r *OrgEntrypointResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	err := r.client.DeleteOrgEntrypoint(ctx, state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization entrypoint", err.Error())
 	}
 }
