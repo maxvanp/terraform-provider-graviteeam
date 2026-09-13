@@ -24,11 +24,11 @@ Until `v1.0.0`, compatibility may still evolve as the Gravitee AM API changes. A
 
 ## Installation
 
-Download the signed archives from [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases/tag/v0.1.0). After initial Registry registration, the pinned `required_providers` example below works with `terraform init` directly.
+The signed [v0.1.0 GitHub release](https://github.com/maxvanp/terraform-provider-graviteeam/releases/tag/v0.1.0) is published and available from the [Terraform Registry](https://registry.terraform.io/providers/maxvanp/graviteeam/0.1.0). Use the pinned `required_providers` example below, then run `terraform init`.
 
 ### Install a GitHub release
 
-Before Registry registration, use a filesystem mirror. Download the ZIP for your platform, the `SHA256SUMS` file, and its `.sig` from the release. Verify the signature with the [public signing key](docs/release-signing-key.asc), whose fingerprint is `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`, then verify the ZIP checksum.
+For offline installation, use a filesystem mirror. Download the ZIP for your platform, the `SHA256SUMS` file, and its `.sig` from the release. Verify the signature with the [public signing key](docs/release-signing-key.asc), whose fingerprint is `96BE5305AEB21B9D1877B2E40C698A4920F58A9A`, then verify the ZIP checksum.
 
 Place the ZIP in `/absolute/path/to/mirror/registry.terraform.io/maxvanp/graviteeam/` without renaming it. Save this Terraform CLI configuration as `mirror.tfrc` in your working directory:
 
@@ -102,7 +102,7 @@ resource "graviteeam_domain" "example" {
 }
 ```
 
-Until Registry registration is complete, use the local `dev_overrides` workflow above or a Terraform CLI filesystem mirror for the signed GitHub archive.
+For local development, use the `dev_overrides` workflow above or the filesystem mirror for an offline installation.
 
 ## Resources and Data Sources
 
