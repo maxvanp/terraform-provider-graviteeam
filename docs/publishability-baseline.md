@@ -2,6 +2,8 @@
 
 This document defines the evidence required before this provider is considered ready for a first public release. It is a release-readiness contract, not authorization to publish, tag, merge, or create a GitHub release.
 
+The initial baseline was merged into `main` through [PR #22](https://github.com/maxvanp/terraform-provider-graviteeam/pull/22) on 2026-07-15 as `7666c79da83facc86aa6e1521ee215a6331d1b2e`. The evidence below tracks the subsequent release candidate in PR #25.
+
 ## Scope
 
 The intended first release is a community provider at `registry.terraform.io/maxvanp/graviteeam`, built with Terraform Plugin Framework protocol version 6.

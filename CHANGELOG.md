@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Centralize data-source JSON result formatting and make local Go tooling resolve the configured toolchain consistently
+
 - Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
 - Pin GoReleaser and validate complete unsigned release snapshots in CI
 - Reject release archives missing checksum entries and regression-test missing or corrupt checksums

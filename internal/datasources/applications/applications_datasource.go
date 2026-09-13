@@ -2,7 +2,6 @@ package applications
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/datasources/jsonformat"
 )
 
 var _ datasource.DataSource = &ApplicationsDataSource{}
@@ -222,16 +222,7 @@ func addStringValue(query url.Values, key string, value types.String) {
 }
 
 func formatJSON(raw []byte) string {
-	if len(raw) == 0 {
-		return "null"
-	}
-	var parsed interface{}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		formatted, _ := json.Marshal(string(raw))
-		return string(formatted)
-	}
-	formatted, _ := json.MarshalIndent(parsed, "", "  ")
-	return string(formatted)
+	return jsonformat.String(raw)
 }
 
 type enumStringValidator struct {
