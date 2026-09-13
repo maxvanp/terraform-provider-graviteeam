@@ -66,6 +66,9 @@ No code, test, documentation, dependency, CI, or release-configuration remediati
 
 Run these commands from a clean checkout of the final candidate commit:
 
+Install GoReleaser `v2.17.1` on `PATH` to match both release workflows.
+`make release-check` also tests that missing or corrupt archive checksums are rejected.
+
 ```bash
 make fmt
 make lint

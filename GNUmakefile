@@ -43,6 +43,7 @@ release-check:
 	goreleaser check
 	goreleaser release --snapshot --clean --skip=sign
 	./scripts/verify-release-artifacts.sh
+	python3 scripts/test-release-artifacts.py
 
 lint:
 	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)

@@ -42,3 +42,5 @@ jobs:
           args: release --snapshot --clean --skip=sign
       - name: Verify release artifacts
         run: ./scripts/verify-release-artifacts.sh
+      - name: Test release artifact verification
+        run: python3 scripts/test-release-artifacts.py

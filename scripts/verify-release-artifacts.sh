@@ -29,6 +29,11 @@ for platform in "${expected_platforms[@]}"; do
     exit 1
   fi
 
+  if ! awk -v name="$(basename "$archive")" '$2 == name { found = 1 } END { exit !found }' "$checksum_file"; then
+    echo "missing release archive checksum: $archive" >&2
+    exit 1
+  fi
+
   binary_suffix=""
   [[ "$platform" == windows_* ]] && binary_suffix=".exe"
   binary="${project}_v${version}${binary_suffix}"
