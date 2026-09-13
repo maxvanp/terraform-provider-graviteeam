@@ -10,7 +10,7 @@ services:
       retries: 10
 
   am-management-api:
-    image: graviteeio/am-management-api:4.12.1
+    image: graviteeio/am-management-api:4.12.6
     ports:
       - "8093:8093"
     depends_on:
@@ -28,7 +28,7 @@ services:
       start_period: 30s
 
   am-gateway:
-    image: graviteeio/am-gateway:4.12.1
+    image: graviteeio/am-gateway:4.12.6
     ports:
       - "8092:8092"
     depends_on:

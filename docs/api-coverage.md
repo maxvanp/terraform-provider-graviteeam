@@ -6,13 +6,15 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM version | `4.12.1` |
+| Target Gravitee AM version | `4.12.6` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.12.1` |
+| Bundled OpenAPI version | `4.12.6` |
 | OpenAPI path entries | `205` |
 | Path entries with at least one write verb | `126` |
 | Terraform resources registered | `53` |
 | Terraform data sources registered | `20` |
+
+The [AM 4.12 changelog](https://documentation.gravitee.io/am/releases-and-changelog/changelog/am-4.12.x) lists 4.12.2–4.12.6 as bug-fix releases, including user deletion, permission caching, and console login corrections. The upstream 4.12.6 snapshot has no path or schema changes from 4.12.1, so this update changes the tested server version without changing Terraform resource schemas.
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -64,7 +66,7 @@ Current test coverage baseline:
 | Resources with disabled import verification | `0` |
 | `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `98.1%` total statement coverage |
 
-The remaining local compose acceptance gap is `graviteeam_authorization_engine`. The bundled Gravitee AM 4.12.1 image loads the `openfga` authorization engine zip, but the local API reports it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint does not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
+The remaining local compose acceptance gap is `graviteeam_authorization_engine`. In the Gravitee AM 4.12.1 baseline probe, the image loaded the `openfga` authorization engine zip, but the local API reported it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint did not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
 
 ## Covered Resources
 
@@ -213,7 +215,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-None currently identified in the local 4.12.1 OpenAPI audit.
+None currently identified in the 4.12.6 OpenAPI audit. Compared with 4.12.1, all 205 paths and 249 schemas are unchanged; only `info.version` differs in the upstream snapshot.
 
 ### Read-Like POST Endpoints Not Covered
 

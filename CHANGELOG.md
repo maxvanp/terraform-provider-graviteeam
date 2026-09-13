@@ -53,8 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
 - Pin GoReleaser and validate complete unsigned release snapshots in CI
 - Reject release archives missing checksum entries and regression-test missing or corrupt checksums
-- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.1
-- Refreshed the bundled Gravitee AM Management API reference from the 4.12.1 upstream tag
+- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.6
+- Refreshed the bundled Gravitee AM Management API reference from the 4.12.6 upstream tag; its 205 paths and 249 schemas are unchanged from 4.12.1
 - Updated Go module dependencies to their latest compatible versions
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
 - Use the dedicated i18n dictionary entries endpoint when managing dictionary entries

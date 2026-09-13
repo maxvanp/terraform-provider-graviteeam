@@ -6,11 +6,11 @@ This document defines the evidence required before this provider is considered r
 
 The intended first release is a community provider at `registry.terraform.io/maxvanp/graviteeam`, built with Terraform Plugin Framework protocol version 6.
 
-The compatibility target must be a precise Gravitee AM release, not an open-ended `4.x` claim. As of 2026-07-14, the supported target is Gravitee AM `4.12.1` because:
+The compatibility target must be a precise Gravitee AM release, not an open-ended `4.x` claim. As of 2026-09-13, the supported target is Gravitee AM `4.12.6` because:
 
-- `4.12.1` is the latest stable upstream Git tag; `4.13.0` is still alpha.
-- Both `graviteeio/am-management-api:4.12.1` and `graviteeio/am-gateway:4.12.1` publish Linux AMD64 and ARM64 images.
-- The upstream `4.12.1` Management API OpenAPI document is available.
+- `4.12.6` is the latest stable upstream Git tag; `4.13.0` is still alpha.
+- Both `graviteeio/am-management-api:4.12.6` and `graviteeio/am-gateway:4.12.6` publish Linux AMD64 and ARM64 images.
+- The upstream `4.12.6` Management API OpenAPI document is available.
 
 The API audit and complete serial acceptance suite pass against those exact images.
 
@@ -39,7 +39,7 @@ The API audit and complete serial acceptance suite pass against those exact imag
 | Dependencies | Go uses the current supported patch release; direct dependencies are current; indirect upgrades are reviewed; module files are tidy and verified. | `go list -m -u all`, `go mod tidy`, and `go mod verify`. | `PASS` |
 | Code quality | Formatting, lint, vet, build, unit tests, coverage audits, generated-doc checks, and repository diff checks pass. | `make verify-local`, `make lint`, `make vet`, and `make build`. | `PASS` |
 | Security | The current Go vulnerability database reports no reachable vulnerabilities; no credentials are committed. The final GitHub security workflow result is tracked by the CI row. | Local `govulncheck ./...` plus Gitleaks history and working-tree scans pass after upgrading `google.golang.org/grpc` to `v1.82.1` for GO-2026-6061. | `PASS` |
-| Acceptance | Terraform exercises all supported resource and data-source lifecycles against the exact pinned Gravitee AM images. Any unavailable commercial plugin is explicitly documented and independently covered as far as possible. | PR #25 passes the complete GitHub acceptance job against Gravitee AM 4.12.1 on the remediated commit. | `PASS` |
+| Acceptance | Terraform exercises all supported resource and data-source lifecycles against the exact pinned Gravitee AM images. Any unavailable commercial plugin is explicitly documented and independently covered as far as possible. | PR #25 passes the complete GitHub acceptance job against Gravitee AM 4.12.6 on the remediated commit. | `PASS` |
 | Release artifacts | A clean snapshot build produces correctly named ZIP archives, a protocol manifest checksum, SHA256 checksums, and detached checksum signature configuration. | `make release-check` passes with GoReleaser v2.17.1 and the same check runs in the Release Check workflow. | `PASS` |
 | Platforms | Release artifacts include at least Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64; Linux AMD64 is CGO-free and self-contained for HCP Terraform. | GoReleaser configuration and dry-run artifact inventory. | `PASS` |
 | Versioning | The first release version and changelog accurately describe compatibility and breaking-change expectations; released artifacts are immutable. | Changelog and release workflow review. | `PASS` |
@@ -51,14 +51,14 @@ The API audit and complete serial acceptance suite pass against those exact imag
 
 | Requirement group | Result |
 |-------------------|--------|
-| Supported API | Gravitee AM `4.12.1` is pinned in Compose, documentation, changelog, and the bundled upstream OpenAPI snapshot; the complete acceptance suite passes against its exact images. |
+| Supported API | Gravitee AM `4.12.6` is pinned in Compose, documentation, changelog, and the bundled upstream OpenAPI snapshot; the complete acceptance suite passes against its exact images. |
 | API classification | `205` paths form `135` audited families. All `12` uncovered writable families are classified; there are `0` unclassified durable candidates and `0` uncovered read-only families. |
 | Provider surface | `53` resources and `20` data sources are registered. All `73` types have test, example, generated-documentation, and client/API coverage artifacts. |
 | Resource and state semantics | All `53` import-capable resources have import tests. CRUD, missing-object removal, update preservation, drift, sensitive state, stable IDs, and schema behavior are covered by acceptance and targeted tests. |
 | Test evidence | `73/73` Terraform types have acceptance artifacts, `72/73` execute against stock Compose, and the sole exclusion is the documented Enterprise/technical-preview OpenFGA engine. Total statement coverage is `98.1%`. |
 | Quality and security | Formatting, lint, vet, build, module verification, unit tests, schema/API audits, generated docs, `govulncheck`, Actionlint, and full-history plus working-tree Gitleaks scans pass. |
 | Release engineering | GoReleaser validates and produces six expected ZIP archives for Darwin AMD64/ARM64, Linux AMD64/ARM64/ARMv6, and Windows AMD64. Archive hashes and the Registry manifest hash match the generated SHA256SUMS; detached checksum signing is configured. |
-| Repository and CI | PR #25 passes Documentation, Release Check, Security, and Tests after remediating GO-2026-6061; the acceptance job passes against Gravitee AM 4.12.1 and the release snapshot validates all six target archives. |
+| Repository and CI | PR #25 passes Documentation, Release Check, Security, and Tests after remediating GO-2026-6061; the acceptance job passes against Gravitee AM 4.12.6 and the release snapshot validates all six target archives. |
 
 No code, test, documentation, dependency, CI, or release-configuration remediation remains. The only remaining actions are the maintainer-owned publication steps below.
 
@@ -110,5 +110,5 @@ Readiness requires proving that the repository consumes these inputs correctly. 
 - [HashiCorp: Recommended operating systems and architectures](https://developer.hashicorp.com/terraform/registry/providers/os-arch)
 - [HashiCorp: Provider acceptance tests](https://developer.hashicorp.com/terraform/plugin/framework/acctests)
 - [HashiCorp: Provider best practices](https://developer.hashicorp.com/terraform/plugin/best-practices)
-- [Gravitee AM `4.12.1` source tag](https://github.com/gravitee-io/gravitee-access-management/tree/4.12.1)
+- [Gravitee AM `4.12.6` source tag](https://github.com/gravitee-io/gravitee-access-management/tree/4.12.6)
 - [Go releases](https://go.dev/doc/devel/release)
