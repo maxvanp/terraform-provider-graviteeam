@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -121,7 +122,7 @@ func (r *DomainMemberResource) Read(ctx context.Context, req resource.ReadReques
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -145,7 +146,7 @@ func (r *DomainMemberResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	err := r.client.DeleteDomainMember(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting domain member", err.Error())
@@ -168,7 +169,7 @@ func (r *DomainMemberResource) ImportState(ctx context.Context, req resource.Imp
 
 func parseImportID(id string) (string, string, string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 4 {
+	if len(parts) != 4 || !importid.Valid(parts) {
 		return "", "", "", "", false
 	}
 	return parts[0], parts[1], strings.ToUpper(parts[2]), parts[3], true
@@ -194,7 +195,7 @@ func (r *DomainMemberResource) readMembership(ctx context.Context, model *Domain
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("domain member not found")
+	return fmt.Errorf("domain member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *DomainMemberModel, membership map[string]interface{}) bool {

@@ -420,6 +420,47 @@ func TestDomainMemberReadRemovesMissingMembershipAndDeleteIgnores404(t *testing.
 	}
 }
 
+func TestDomainMemberReadDoesNotRemoveOnServerErrorContainingNotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer"}`))
+	})
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/members", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("collection method = %s, want GET", r.Method)
+		}
+		http.Error(w, "not found", http.StatusInternalServerError)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resourceUnderTest := &DomainMemberResource{
+		client: client.New(server.URL, "admin", "adminadmin", "DEFAULT", "DEFAULT"),
+	}
+	var schemaResp resource.SchemaResponse
+	resourceUnderTest.Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), &DomainMemberModel{
+		ID:         types.StringValue("membership-123"),
+		DomainID:   types.StringValue("domain-123"),
+		MemberID:   types.StringValue("user-123"),
+		MemberType: types.StringValue("USER"),
+		RoleID:     types.StringValue("role-123"),
+	}); diags.HasError() {
+		t.Fatalf("set state: %#v", diags)
+	}
+
+	readResp := &resource.ReadResponse{State: state}
+	resourceUnderTest.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal("expected server error diagnostic")
+	}
+	if !readResp.State.Raw.Equal(state.Raw) {
+		t.Fatal("server error must not remove resource state")
+	}
+}
+
 func TestDomainMemberReportsLifecycleErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/management/auth/token", func(w http.ResponseWriter, _ *http.Request) {

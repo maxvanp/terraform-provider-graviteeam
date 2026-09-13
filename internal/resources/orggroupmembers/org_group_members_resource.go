@@ -92,7 +92,7 @@ func (r *OrgGroupMembersResource) Read(ctx context.Context, req resource.ReadReq
 
 	memberIDs, err := r.client.GetOrgGroupMembers(ctx, state.GroupID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

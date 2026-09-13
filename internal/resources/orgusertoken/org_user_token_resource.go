@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -114,7 +115,7 @@ func (r *OrgUserTokenResource) Read(ctx context.Context, req resource.ReadReques
 
 	token, err := r.readToken(ctx, state.UserID.ValueString(), state.TokenID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -140,14 +141,14 @@ func (r *OrgUserTokenResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	err := r.client.DeleteOrgUserToken(ctx, state.UserID.ValueString(), state.TokenID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization user token", err.Error())
 	}
 }
 
 func (r *OrgUserTokenResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: user_id/token_id, got: %s", req.ID))
 		return
 	}
@@ -166,7 +167,7 @@ func (r *OrgUserTokenResource) readToken(ctx context.Context, userID, tokenID st
 			return token, nil
 		}
 	}
-	return nil, fmt.Errorf("organization user token not found")
+	return nil, fmt.Errorf("organization user token not found: %w", client.ErrNotFound)
 }
 
 func readIntoModel(model *OrgUserTokenModel, data map[string]interface{}) {

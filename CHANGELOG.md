@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Align README/CONTRIBUTING with the current Go 1.26.5 toolchain requirement and full resource inventory
+- Align README/CONTRIBUTING with the current Go 1.26.8 toolchain requirement and full resource inventory
+- Upgrade Go to 1.26.8 to remediate reachable standard-library vulnerabilities GO-2026-6218, GO-2026-6090, GO-2026-5972, and GO-2026-5026
 - Add `group_mapper` support to `graviteeam_identity_provider`
 - Add an OpenAPI coverage audit script and document the current resource/data source gaps
 - Add `graviteeam_org_group` for organization-level group management
@@ -47,10 +48,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `metadata_json` support to `graviteeam_application`
 - Add `settings_json` support to `graviteeam_domain` for advanced domain patch settings
 
+### Fixed
+
+- Return Terraform diagnostics instead of panicking when creation responses contain missing or malformed resource IDs
+- Report malformed organization-role permission entries without crashing the provider
+- Reject import IDs with empty or whitespace-only components before writing Terraform state
+- Validate provider URLs and nonblank configuration values, and reject unresolved configuration before constructing the API client
+- Preserve Terraform state when an API error body mentions `404` or `not found` without an actual HTTP 404 or confirmed missing object
+- Read every page of domain and organization group members, including groups with more than 100 members
+- Bound OAuth token requests to 30 seconds so an unavailable token endpoint cannot block indefinitely
+- Detect installed documentation tools correctly instead of reinstalling them unnecessarily
+
 ### Changed
 
-- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.1
-- Refreshed the bundled Gravitee AM Management API reference from the 4.12.1 upstream tag
+- Centralize data-source JSON result formatting and make local Go tooling resolve the configured toolchain consistently
+
+- Update `google.golang.org/grpc` to 1.82.1 to remediate GO-2026-6061
+- Pin GoReleaser and validate complete unsigned release snapshots in CI
+- Reject release archives missing checksum entries and regression-test missing or corrupt checksums
+- Updated the local test stack and compatibility target from Gravitee AM 4.6.x to 4.12.6
+- Refreshed the bundled Gravitee AM Management API reference from the 4.12.6 upstream tag; its 205 paths and 249 schemas are unchanged from 4.12.1
 - Updated Go module dependencies to their latest compatible versions
 - Fixed provider updates for resources that now require plugin `type` or `dataPlaneId` fields with newer Gravitee AM Management API versions
 - Use the dedicated i18n dictionary entries endpoint when managing dictionary entries

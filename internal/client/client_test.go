@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,151 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRequestHelpersReturnTypedStatusErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(*Client) error
+	}{
+		{
+			name: "environment",
+			call: func(c *Client) error {
+				_, err := c.DoRequest(context.Background(), http.MethodGet, "/domains", nil)
+				return err
+			},
+		},
+		{
+			name: "management",
+			call: func(c *Client) error {
+				_, err := c.DoManagementRequest(context.Background(), http.MethodGet, "/management/user", nil)
+				return err
+			},
+		},
+		{
+			name: "organization",
+			call: func(c *Client) error {
+				_, err := c.DoOrgRequest(context.Background(), http.MethodGet, "/members", nil)
+				return err
+			},
+		},
+	}
+
+	for _, status := range []struct {
+		code         int
+		body         string
+		wantNotFound bool
+	}{
+		{code: http.StatusNotFound, body: "missing", wantNotFound: true},
+		{code: http.StatusInternalServerError, body: "upstream returned 404", wantNotFound: false},
+	} {
+		status := status
+		for _, test := range tests {
+			test := test
+			t.Run(fmt.Sprintf("%s/%d", test.name, status.code), func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(status.code)
+					_, _ = w.Write([]byte(status.body))
+				}))
+				defer server.Close()
+
+				c := &Client{
+					BaseURL:        server.URL,
+					OrganizationID: "DEFAULT",
+					EnvironmentID:  "DEFAULT",
+					httpClient:     server.Client(),
+				}
+				err := test.call(c)
+				var apiErr *APIError
+				if !errors.As(err, &apiErr) {
+					t.Fatalf("error type = %T, want *APIError", err)
+				}
+				if apiErr.StatusCode != status.code || apiErr.Body != status.body {
+					t.Fatalf("API error = %#v", apiErr)
+				}
+				wantMessage := fmt.Sprintf("API error (status %d): %s", status.code, status.body)
+				if err.Error() != wantMessage {
+					t.Fatalf("error = %q, want %q", err, wantMessage)
+				}
+				if got := IsNotFound(err); got != status.wantNotFound {
+					t.Fatalf("IsNotFound() = %t, want %t", got, status.wantNotFound)
+				}
+			})
+		}
+	}
+}
+
+func TestIsNotFoundRecognizesWrappedSentinelOnly(t *testing.T) {
+	if !IsNotFound(fmt.Errorf("lookup failed: %w", ErrNotFound)) {
+		t.Fatal("wrapped ErrNotFound was not recognized")
+	}
+	if IsNotFound(errors.New("resource not found")) {
+		t.Fatal("plain error text must not be recognized as not found")
+	}
+}
+
+func TestRequiredStringRejectsInvalidResponseFieldsWithoutEchoingValues(t *testing.T) {
+	tests := map[string]map[string]interface{}{
+		"missing": nil,
+		"null":    {"id": nil},
+		"numeric": {"id": float64(123)},
+		"object":  {"id": map[string]interface{}{"sensitive-value": true}},
+		"empty":   {"id": ""},
+		"blank":   {"id": "   "},
+	}
+
+	for name, response := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := RequiredString(response, "id")
+			if err == nil {
+				t.Fatal("expected invalid response field error")
+			}
+			if strings.Contains(err.Error(), "sensitive-value") {
+				t.Fatalf("error exposed response value: %v", err)
+			}
+		})
+	}
+}
+
+func TestRequiredStringReturnsValidResponseField(t *testing.T) {
+	value, err := RequiredString(map[string]interface{}{"id": "resource-123"}, "id")
+	if err != nil {
+		t.Fatalf("RequiredString: %v", err)
+	}
+	if value != "resource-123" {
+		t.Fatalf("value = %q, want resource-123", value)
+	}
+}
+
+func TestOAuthTokenRequestHasTimeout(t *testing.T) {
+	requestStarted := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(requestStarted)
+		<-releaseRequest
+	}))
+	defer server.Close()
+	defer close(releaseRequest)
+
+	c := &Client{
+		BaseURL:        server.URL,
+		OrganizationID: "DEFAULT",
+		EnvironmentID:  "DEFAULT",
+		httpClient:     newOAuthHTTPClient(server.URL, "admin", "adminadmin", 20*time.Millisecond),
+	}
+	started := time.Now()
+	_, err := c.DoManagementRequest(context.Background(), http.MethodGet, "/management/user", nil)
+	if err == nil {
+		t.Fatal("expected token request timeout")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("token request took %s, want less than 1s", elapsed)
+	}
+	select {
+	case <-requestStarted:
+	default:
+		t.Fatal("token endpoint was not called")
+	}
+}
 
 // newTestClient creates a Client pointing at a test server.
 // The server must handle /management/auth/token for OAuth2.
@@ -5160,6 +5306,115 @@ func TestOrgGroupMembersOperations(t *testing.T) {
 	}
 	if err := c.RemoveOrgGroupMember(context.Background(), "group-123", "org-user-3"); err != nil {
 		t.Fatalf("remove organization group member: %v", err)
+	}
+}
+
+func TestGroupMemberOperationsPaginate(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(*Client) ([]string, error)
+	}{
+		{
+			name: "environment",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members",
+			call: func(c *Client) ([]string, error) {
+				return c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+			},
+		},
+		{
+			name: "organization",
+			path: "/management/organizations/DEFAULT/groups/group-123/members",
+			call: func(c *Client) ([]string, error) {
+				return c.GetOrgGroupMembers(context.Background(), "group-123")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(test.path, func(w http.ResponseWriter, r *http.Request) {
+				page := r.URL.Query().Get("page")
+				if r.URL.Query().Get("size") != "100" {
+					t.Fatalf("size = %q, want 100", r.URL.Query().Get("size"))
+				}
+				members := make([]map[string]interface{}, 0, 100)
+				switch page {
+				case "0":
+					for i := 0; i < 100; i++ {
+						members = append(members, map[string]interface{}{"id": fmt.Sprintf("user-%03d", i)})
+					}
+				case "1":
+					members = append(members,
+						map[string]interface{}{"id": "user-100"},
+						map[string]interface{}{"ignored": true},
+						map[string]interface{}{"id": "user-101"},
+					)
+				default:
+					t.Fatalf("unexpected page %q", page)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": members})
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			members, err := test.call(newTestClient(server))
+			if err != nil {
+				t.Fatalf("get members: %v", err)
+			}
+			if len(members) != 102 || members[0] != "user-000" || members[101] != "user-101" {
+				t.Fatalf("members = %#v, want 102 members from both pages", members)
+			}
+		})
+	}
+}
+
+func TestGroupMemberOperationsReturnLaterPageError(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(*Client) ([]string, error)
+	}{
+		{
+			name: "environment",
+			path: "/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-123/groups/group-123/members",
+			call: func(c *Client) ([]string, error) {
+				return c.GetGroupMembers(context.Background(), "domain-123", "group-123")
+			},
+		},
+		{
+			name: "organization",
+			path: "/management/organizations/DEFAULT/groups/group-123/members",
+			call: func(c *Client) ([]string, error) {
+				return c.GetOrgGroupMembers(context.Background(), "group-123")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			mux := testMux()
+			mux.HandleFunc(test.path, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("page") == "1" {
+					http.Error(w, "second page failed", http.StatusInternalServerError)
+					return
+				}
+				members := make([]map[string]interface{}, 100)
+				for i := range members {
+					members[i] = map[string]interface{}{"id": fmt.Sprintf("user-%03d", i)}
+				}
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": members})
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			if _, err := test.call(newTestClient(server)); err == nil {
+				t.Fatal("expected second page error")
+			}
+		})
 	}
 }
 

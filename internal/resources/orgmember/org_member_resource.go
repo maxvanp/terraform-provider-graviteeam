@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -114,7 +115,7 @@ func (r *OrgMemberResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -138,7 +139,7 @@ func (r *OrgMemberResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	err := r.client.DeleteOrgMember(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization member", err.Error())
@@ -160,7 +161,7 @@ func (r *OrgMemberResource) ImportState(ctx context.Context, req resource.Import
 
 func parseImportID(id string) (string, string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 3 {
+	if len(parts) != 3 || !importid.Valid(parts) {
 		return "", "", "", false
 	}
 	return parts[0], strings.ToUpper(parts[1]), parts[2], true
@@ -186,7 +187,7 @@ func (r *OrgMemberResource) readMembership(ctx context.Context, model *OrgMember
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("organization member not found")
+	return fmt.Errorf("organization member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *OrgMemberModel, membership map[string]interface{}) bool {

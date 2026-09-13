@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -164,7 +165,7 @@ func (r *ProtectedResourceResource) Read(ctx context.Context, req resource.ReadR
 
 	result, err := r.client.GetProtectedResource(ctx, state.DomainID.ValueString(), state.ID.ValueString(), state.Type.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -223,14 +224,14 @@ func (r *ProtectedResourceResource) Delete(ctx context.Context, req resource.Del
 	}
 
 	err := r.client.DeleteProtectedResource(ctx, state.DomainID.ValueString(), state.ID.ValueString(), state.Type.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting protected resource", err.Error())
 	}
 }
 
 func (r *ProtectedResourceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/protected_resource_id, got: %s", req.ID))
 		return
 	}

@@ -2,7 +2,6 @@ package orgreporter
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -99,7 +98,12 @@ func (r *OrgReporterResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -112,7 +116,7 @@ func (r *OrgReporterResource) Read(ctx context.Context, req resource.ReadRequest
 
 	result, err := r.client.GetOrgReporter(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -163,7 +167,7 @@ func (r *OrgReporterResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := r.client.DeleteOrgReporter(ctx, state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization reporter", err.Error())
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -118,7 +119,7 @@ func (r *AlertTriggerResource) Read(ctx context.Context, req resource.ReadReques
 
 	triggers, err := r.client.ListAlertTriggers(ctx, state.DomainID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -167,14 +168,14 @@ func (r *AlertTriggerResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	state.AlertNotifierIDs = types.SetNull(types.StringType)
 	_, err := r.patch(ctx, &state, false)
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting alert trigger", err.Error())
 	}
 }
 
 func (r *AlertTriggerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/type, got: %s", req.ID))
 		return
 	}

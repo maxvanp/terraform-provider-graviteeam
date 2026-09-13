@@ -2,7 +2,6 @@ package orggroup
 
 import (
 	"context"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -99,7 +98,12 @@ func (r *OrgGroupResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	if plan.Roles != nil {
 		updateBody := buildBody(plan, OrgGroupModel{})
@@ -131,7 +135,7 @@ func (r *OrgGroupResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	result, err := r.client.GetOrgGroup(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -196,7 +200,7 @@ func (r *OrgGroupResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteOrgGroup(ctx, state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization group", err.Error())
 	}
 }

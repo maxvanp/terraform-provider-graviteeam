@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -109,7 +110,7 @@ func (r *AuthorizationEngineResource) Read(ctx context.Context, req resource.Rea
 
 	result, err := r.client.GetAuthorizationEngine(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -155,7 +156,7 @@ func (r *AuthorizationEngineResource) Delete(ctx context.Context, req resource.D
 	}
 
 	err := r.client.DeleteAuthorizationEngine(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting authorization engine", err.Error())
 	}
 }
@@ -172,7 +173,7 @@ func (r *AuthorizationEngineResource) ImportState(ctx context.Context, req resou
 
 func parseImportID(id string) (string, string, bool) {
 	parts := strings.SplitN(id, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

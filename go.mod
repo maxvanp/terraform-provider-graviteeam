@@ -1,6 +1,6 @@
 module github.com/maxvanp/terraform-provider-graviteeam
 
-go 1.26.5
+go 1.26.8
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
@@ -66,6 +66,6 @@ require (
 	golang.org/x/tools v0.47.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260713224248-f5fc221cf8c4 // indirect
-	google.golang.org/grpc v1.82.0 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

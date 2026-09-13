@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -109,7 +110,7 @@ func (r *ApplicationFlowResource) Read(ctx context.Context, req resource.ReadReq
 
 	result, err := r.client.GetApplicationFlows(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -165,7 +166,7 @@ func (r *ApplicationFlowResource) Delete(ctx context.Context, req resource.Delet
 	// Reset flows to empty list (flows always exist, we just clear them)
 	_, err := r.client.UpdateApplicationFlows(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), []interface{}{})
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application flows", err.Error())
@@ -175,7 +176,7 @@ func (r *ApplicationFlowResource) Delete(ctx context.Context, req resource.Delet
 func (r *ApplicationFlowResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/application_id
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/application_id, got: %s", req.ID))
 		return
 	}

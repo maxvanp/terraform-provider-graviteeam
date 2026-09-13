@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -97,7 +98,12 @@ func (r *ServiceResourceResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -110,7 +116,7 @@ func (r *ServiceResourceResource) Read(ctx context.Context, req resource.ReadReq
 
 	result, err := r.client.GetServiceResource(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -157,7 +163,7 @@ func (r *ServiceResourceResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	err := r.client.DeleteServiceResource(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting service resource", err.Error())
 	}
 }
@@ -174,7 +180,7 @@ func (r *ServiceResourceResource) ImportState(ctx context.Context, req resource.
 
 func parseImportID(id string) (string, string, bool) {
 	parts := strings.SplitN(id, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

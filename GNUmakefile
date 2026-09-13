@@ -4,12 +4,15 @@ NAMESPACE=maxvanp
 NAME=graviteeam
 VERSION=0.1.0
 GO?=$(or $(shell command -v go 2>/dev/null),$(wildcard /usr/local/go/bin/go),go)
+GO_BIN_DIR=$(patsubst %/,%,$(dir $(shell command -v $(GO) 2>/dev/null)))
+TOOLS_PATH=$(if $(GO_BIN_DIR),$(GO_BIN_DIR):)$(HOME)/go/bin:$(PATH)
+TOOL_ENV=env 'PATH=$(TOOLS_PATH)'
 OS_ARCH=$(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 GOLANGCI_LINT?=golangci-lint
 TFPLUGINDOCS?=$(or $(shell command -v tfplugindocs 2>/dev/null),$(wildcard $(HOME)/go/bin/tfplugindocs),tfplugindocs)
 TFPLUGINDOCS_VERSION?=v0.25.0
-LINT_TIMEOUT?=5m
-DOCS_GENERATE=env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' $(TFPLUGINDOCS) generate --provider-name graviteeam
+LINT_TIMEOUT?=10m
+DOCS_GENERATE=$(TOOL_ENV) $(TFPLUGINDOCS) generate --provider-name graviteeam
 
 default: build
 
@@ -24,7 +27,7 @@ clean:
 	rm -f $(BINARY)
 
 fmt:
-	$(GOLANGCI_LINT) fmt
+	$(TOOL_ENV) $(GOLANGCI_LINT) fmt
 
 vet:
 	$(GO) vet ./...
@@ -39,9 +42,15 @@ coverage-audit:
 local-gap-probe:
 	./scripts/probe-openapi-gaps.py --check
 
+release-check:
+	goreleaser check
+	goreleaser release --snapshot --clean --skip=sign
+	./scripts/verify-release-artifacts.sh
+	python3 scripts/test-release-artifacts.py
+
 lint:
-	$(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
-	$(GOLANGCI_LINT) fmt --diff
+	$(TOOL_ENV) $(GOLANGCI_LINT) run --timeout $(LINT_TIMEOUT)
+	$(TOOL_ENV) $(GOLANGCI_LINT) fmt --diff
 
 test: coverage-audit
 	$(GO) test ./... -v $(TESTARGS) -timeout 120m
@@ -58,9 +67,9 @@ verify-local: coverage-baseline docs-check coverage-audit
 	git diff --check
 
 docs-tool:
-	@if ! env 'PATH=/usr/local/go/bin:$(HOME)/go/bin:$(PATH)' command -v $(TFPLUGINDOCS) >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
+	@if ! PATH='$(TOOLS_PATH)' command -v "$(TFPLUGINDOCS)" >/dev/null 2>&1 && [ ! -x "$(TFPLUGINDOCS)" ]; then \
 		echo "installing tfplugindocs $(TFPLUGINDOCS_VERSION)"; \
-		env 'PATH=/usr/local/go/bin:$(PATH)' GOBIN="$(HOME)/go/bin" $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION); \
+		$(TOOL_ENV) GOBIN="$(HOME)/go/bin" $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION); \
 	fi
 
 docs: docs-tool
@@ -82,4 +91,4 @@ docs-check: docs-tool
 	rm -f "$$log"
 	@git diff --exit-code -- docs/index.md docs/resources docs/data-sources || (echo "generated docs are out of date; run 'make docs' and commit the generated changes" && exit 1)
 
-.PHONY: build install clean fmt vet coverage-audit local-gap-probe lint test testacc coverage-baseline verify-local docs-tool docs docs-check
+.PHONY: build install clean fmt vet coverage-audit local-gap-probe release-check lint test testacc coverage-baseline verify-local docs-tool docs docs-check

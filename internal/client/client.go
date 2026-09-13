@@ -4,14 +4,52 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
+
+const (
+	defaultHTTPTimeout   = 30 * time.Second
+	groupMembersPageSize = 100
+)
+
+var ErrNotFound = errors.New("resource not found")
+
+type APIError struct {
+	StatusCode int
+	Body       string
+}
+
+// RequiredString returns a required non-empty string from an API response.
+func RequiredString(response map[string]interface{}, field string) (string, error) {
+	value, ok := response[field].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("response field %q must be a non-empty string", field)
+	}
+
+	return value, nil
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("API error (status %d): %s", e.StatusCode, e.Body)
+}
+
+func IsNotFound(err error) bool {
+	return errors.Is(err, ErrNotFound) || IsStatus(err, http.StatusNotFound)
+}
+
+func IsStatus(err error, statusCode int) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == statusCode
+}
 
 type Client struct {
 	BaseURL        string
@@ -21,19 +59,23 @@ type Client struct {
 }
 
 func New(apiURL, clientID, clientSecret, orgID, envID string) *Client {
+	return &Client{
+		BaseURL:        apiURL,
+		OrganizationID: orgID,
+		EnvironmentID:  envID,
+		httpClient:     newOAuthHTTPClient(apiURL, clientID, clientSecret, defaultHTTPTimeout),
+	}
+}
+
+func newOAuthHTTPClient(apiURL, clientID, clientSecret string, timeout time.Duration) *http.Client {
 	cfg := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		TokenURL:     apiURL + "/management/auth/token",
 		AuthStyle:    oauth2.AuthStyleInHeader,
 	}
-
-	return &Client{
-		BaseURL:        apiURL,
-		OrganizationID: orgID,
-		EnvironmentID:  envID,
-		httpClient:     cfg.Client(context.Background()),
-	}
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Timeout: timeout})
+	return cfg.Client(ctx)
 }
 
 func (c *Client) managementPath() string {
@@ -72,7 +114,7 @@ func (c *Client) DoRequest(ctx context.Context, method, path string, body interf
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	return respBody, nil
@@ -1754,7 +1796,7 @@ func (c *Client) DoManagementRequest(ctx context.Context, method, path string, b
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	return respBody, nil
@@ -1799,7 +1841,7 @@ func (c *Client) DoOrgRequest(ctx context.Context, method, path string, body int
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 
 	return respBody, nil
@@ -2218,27 +2260,10 @@ func (c *Client) DeleteOrgMember(ctx context.Context, id string) error {
 // Organization Group Members operations
 
 func (c *Client) GetOrgGroupMembers(ctx context.Context, groupID string) ([]string, error) {
-	data, err := c.DoOrgRequest(ctx, http.MethodGet, "/groups/"+groupID+"/members?page=0&size=100", nil)
-	if err != nil {
-		return nil, err
-	}
-	var page map[string]interface{}
-	if err := json.Unmarshal(data, &page); err != nil {
-		return nil, err
-	}
-	dataArr, ok := page["data"].([]interface{})
-	if !ok {
-		return []string{}, nil
-	}
-	var memberIDs []string
-	for _, item := range dataArr {
-		if userObj, ok := item.(map[string]interface{}); ok {
-			if id, ok := userObj["id"].(string); ok {
-				memberIDs = append(memberIDs, id)
-			}
-		}
-	}
-	return memberIDs, nil
+	return getGroupMemberIDs(func(page int) ([]byte, error) {
+		path := fmt.Sprintf("/groups/%s/members?page=%d&size=%d", groupID, page, groupMembersPageSize)
+		return c.DoOrgRequest(ctx, http.MethodGet, path, nil)
+	})
 }
 
 func (c *Client) AddOrgGroupMember(ctx context.Context, groupID, memberID string) error {
@@ -2351,28 +2376,38 @@ func (c *Client) UpdateApplicationFlows(ctx context.Context, domainID, appID str
 // Group Members operations
 
 func (c *Client) GetGroupMembers(ctx context.Context, domainID, groupID string) ([]string, error) {
-	path := fmt.Sprintf("/domains/%s/groups/%s/members?page=0&size=100", domainID, groupID)
-	data, err := c.DoRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-	var page map[string]interface{}
-	if err := json.Unmarshal(data, &page); err != nil {
-		return nil, err
-	}
-	dataArr, ok := page["data"].([]interface{})
-	if !ok {
-		return []string{}, nil
-	}
+	return getGroupMemberIDs(func(page int) ([]byte, error) {
+		path := fmt.Sprintf("/domains/%s/groups/%s/members?page=%d&size=%d", domainID, groupID, page, groupMembersPageSize)
+		return c.DoRequest(ctx, http.MethodGet, path, nil)
+	})
+}
+
+func getGroupMemberIDs(fetch func(page int) ([]byte, error)) ([]string, error) {
 	var memberIDs []string
-	for _, item := range dataArr {
-		if userObj, ok := item.(map[string]interface{}); ok {
-			if id, ok := userObj["id"].(string); ok {
-				memberIDs = append(memberIDs, id)
+	for pageNumber := 0; ; pageNumber++ {
+		data, err := fetch(pageNumber)
+		if err != nil {
+			return nil, err
+		}
+		var page map[string]interface{}
+		if err := json.Unmarshal(data, &page); err != nil {
+			return nil, err
+		}
+		dataArr, ok := page["data"].([]interface{})
+		if !ok {
+			return memberIDs, nil
+		}
+		for _, item := range dataArr {
+			if userObj, ok := item.(map[string]interface{}); ok {
+				if id, ok := userObj["id"].(string); ok {
+					memberIDs = append(memberIDs, id)
+				}
 			}
 		}
+		if len(dataArr) < groupMembersPageSize {
+			return memberIDs, nil
+		}
 	}
-	return memberIDs, nil
 }
 
 func (c *Client) AddGroupMember(ctx context.Context, domainID, groupID, memberID string) error {

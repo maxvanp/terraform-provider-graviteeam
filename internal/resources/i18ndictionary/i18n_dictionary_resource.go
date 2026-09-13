@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -95,7 +96,12 @@ func (r *I18nDictionaryResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	// If entries are specified, update with entries
 	if !plan.Entries.IsNull() && !plan.Entries.IsUnknown() {
@@ -124,7 +130,7 @@ func (r *I18nDictionaryResource) Read(ctx context.Context, req resource.ReadRequ
 
 	result, err := r.client.GetI18nDictionary(ctx, state.DomainID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -185,7 +191,7 @@ func (r *I18nDictionaryResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err := r.client.DeleteI18nDictionary(ctx, state.DomainID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting i18n dictionary", err.Error())
 	}
 }
@@ -202,7 +208,7 @@ func (r *I18nDictionaryResource) ImportState(ctx context.Context, req resource.I
 
 func parseImportID(id string) (string, string, bool) {
 	parts := strings.SplitN(id, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

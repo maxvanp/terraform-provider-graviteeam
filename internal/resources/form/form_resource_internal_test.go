@@ -787,13 +787,17 @@ func TestFormCRUDReportsInvalidPlanAndStateData(t *testing.T) {
 }
 
 func TestFormImportRejectsInvalidID(t *testing.T) {
-	var resp resource.ImportStateResponse
-	(&FormResource{}).ImportState(context.Background(), resource.ImportStateRequest{
-		ID: "invalid",
-	}, &resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected invalid import id diagnostics")
+	var schemaResp resource.SchemaResponse
+	(&FormResource{}).Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	for _, id := range []string{"invalid", "/LOGIN", "domain-123/ ", "domain-123//LOGIN"} {
+		resp := resource.ImportStateResponse{State: formState(t, schemaResp.Schema, FormModel{
+			DomainID: types.StringValue("placeholder-domain"),
+			Template: types.StringValue("ERROR"),
+		})}
+		(&FormResource{}).ImportState(context.Background(), resource.ImportStateRequest{ID: id}, &resp)
+		if !resp.Diagnostics.HasError() {
+			t.Errorf("%q: expected invalid import id diagnostics", id)
+		}
 	}
 }
 

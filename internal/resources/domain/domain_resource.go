@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -172,7 +171,11 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	id := result["id"].(string)
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
 	plan.ID = types.StringValue(id)
 	plan.DefaultIdpID = types.StringValue("default-idp-" + id)
 
@@ -201,7 +204,7 @@ func (r *DomainResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	result, err := r.client.GetDomain(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

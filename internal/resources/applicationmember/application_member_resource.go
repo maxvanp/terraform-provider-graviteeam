@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -132,7 +133,7 @@ func (r *ApplicationMemberResource) Read(ctx context.Context, req resource.ReadR
 
 	err := r.readMembership(ctx, &state)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -156,7 +157,7 @@ func (r *ApplicationMemberResource) Delete(ctx context.Context, req resource.Del
 
 	err := r.client.DeleteApplicationMember(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application member", err.Error())
@@ -166,7 +167,7 @@ func (r *ApplicationMemberResource) Delete(ctx context.Context, req resource.Del
 func (r *ApplicationMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/application_id/member_id/member_type/role_id
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 5 {
+	if len(parts) != 5 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/application_id/member_id/member_type/role_id, got: %s", req.ID))
 		return
 	}
@@ -190,7 +191,7 @@ func (r *ApplicationMemberResource) readMembership(ctx context.Context, model *A
 		readIntoModel(model, membership)
 		return nil
 	}
-	return fmt.Errorf("application member not found")
+	return fmt.Errorf("application member not found: %w", client.ErrNotFound)
 }
 
 func matchesMembership(model *ApplicationMemberModel, membership map[string]interface{}) bool {

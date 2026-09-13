@@ -132,7 +132,7 @@ func (r *OrgFormResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgForm(ctx, state.Template.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -186,7 +186,7 @@ func (r *OrgFormResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	err := r.client.DeleteOrgForm(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization form", err.Error())

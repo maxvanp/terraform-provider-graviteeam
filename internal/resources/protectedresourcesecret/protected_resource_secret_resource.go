@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -123,7 +124,7 @@ func (r *ProtectedResourceSecretResource) Read(ctx context.Context, req resource
 
 	secret, err := r.findSecret(ctx, state.DomainID.ValueString(), state.ProtectedResourceID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -174,7 +175,7 @@ func (r *ProtectedResourceSecretResource) Delete(ctx context.Context, req resour
 
 	err := r.client.DeleteProtectedResourceSecret(ctx, state.DomainID.ValueString(), state.ProtectedResourceID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting protected resource secret", err.Error())
@@ -196,7 +197,7 @@ func (r *ProtectedResourceSecretResource) ImportState(ctx context.Context, req r
 
 func parseImportID(id string) (string, string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 3 {
+	if len(parts) != 3 || !importid.Valid(parts) {
 		return "", "", "", false
 	}
 	return parts[0], parts[1], parts[2], true
@@ -218,7 +219,7 @@ func (r *ProtectedResourceSecretResource) findSecret(ctx context.Context, domain
 			return secret, nil
 		}
 	}
-	return nil, fmt.Errorf("protected resource secret not found")
+	return nil, fmt.Errorf("protected resource secret not found: %w", client.ErrNotFound)
 }
 
 func readIntoModel(model *ProtectedResourceSecretModel, data map[string]interface{}, preservedSecret types.String) {

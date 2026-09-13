@@ -3,7 +3,6 @@ package orgidentityprovider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -116,7 +115,12 @@ func (r *OrgIdentityProviderResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	needsUpdate := len(plan.Mappers) > 0 ||
 		(!plan.GroupMapper.IsNull() && !plan.GroupMapper.IsUnknown()) ||
@@ -147,7 +151,7 @@ func (r *OrgIdentityProviderResource) Read(ctx context.Context, req resource.Rea
 
 	result, err := r.client.GetOrgIdentityProvider(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -201,7 +205,7 @@ func (r *OrgIdentityProviderResource) Delete(ctx context.Context, req resource.D
 
 	err := r.client.DeleteOrgIdentityProvider(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting organization identity provider", err.Error())

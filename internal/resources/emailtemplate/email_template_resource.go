@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -139,7 +140,12 @@ func (r *EmailTemplateResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	r.readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -159,7 +165,7 @@ func (r *EmailTemplateResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetEmail(ctx, state.DomainID.ValueString(), appID, state.Template.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -217,7 +223,7 @@ func (r *EmailTemplateResource) Delete(ctx context.Context, req resource.DeleteR
 
 	err := r.client.DeleteEmail(ctx, state.DomainID.ValueString(), appID, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting email template", err.Error())
@@ -229,6 +235,10 @@ func (r *EmailTemplateResource) ImportState(ctx context.Context, req resource.Im
 	// The API retrieves email templates by template type (not by ID),
 	// so the import ID must include the template type.
 	parts := strings.Split(req.ID, "/")
+	if !importid.Valid(parts) {
+		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/template or domain_id/app_id/template, got: %s", req.ID))
+		return
+	}
 	switch len(parts) {
 	case 2:
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain_id"), parts[0])...)

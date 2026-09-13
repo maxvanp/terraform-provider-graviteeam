@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -103,7 +104,7 @@ func (r *IdentityProviderPasswordPolicyResource) Read(ctx context.Context, req r
 
 	result, err := r.client.GetIdentityProvider(ctx, state.DomainID.ValueString(), state.IdentityProviderID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -146,7 +147,7 @@ func (r *IdentityProviderPasswordPolicyResource) Delete(ctx context.Context, req
 	}
 
 	err := r.client.ClearIdentityProviderPasswordPolicy(ctx, state.DomainID.ValueString(), state.IdentityProviderID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error clearing identity provider password policy", err.Error())
 	}
 }
@@ -169,7 +170,7 @@ func assignmentID(domainID, identityProviderID string) types.String {
 
 func parseAssignmentImportID(id string) (string, string, bool) {
 	parts := strings.Split(id, "/")
-	if len(parts) != 2 {
+	if len(parts) != 2 || !importid.Valid(parts) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

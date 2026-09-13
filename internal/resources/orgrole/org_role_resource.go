@@ -2,6 +2,7 @@ package orgrole
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -99,7 +100,12 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	// Create-then-update: if permissions are set, do an update
 	hasPermissions := len(plan.Permissions) > 0
@@ -123,7 +129,10 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	readIntoModel(&plan, result)
+	if err := readIntoModel(&plan, result); err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
 	// Re-read to get the full state after potential update
 	if hasPermissions {
 		readResult, err := r.client.GetOrgRole(ctx, plan.ID.ValueString())
@@ -131,7 +140,10 @@ func (r *OrgRoleResource) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.AddError("Error reading organization role after creation", err.Error())
 			return
 		}
-		readIntoModel(&plan, readResult)
+		if err := readIntoModel(&plan, readResult); err != nil {
+			resp.Diagnostics.AddError("Invalid read response", err.Error())
+			return
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -146,7 +158,7 @@ func (r *OrgRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetOrgRole(ctx, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -154,7 +166,10 @@ func (r *OrgRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	readIntoModel(&state, result)
+	if err := readIntoModel(&state, result); err != nil {
+		resp.Diagnostics.AddError("Invalid read response", err.Error())
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -192,7 +207,7 @@ func (r *OrgRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	err := r.client.DeleteOrgRole(ctx, state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting organization role", err.Error())
 	}
 }
@@ -222,7 +237,7 @@ func buildUpdateBody(plan, state OrgRoleModel) map[string]interface{} {
 	return body
 }
 
-func readIntoModel(model *OrgRoleModel, result map[string]interface{}) {
+func readIntoModel(model *OrgRoleModel, result map[string]interface{}) error {
 	if name, ok := result["name"].(string); ok {
 		model.Name = types.StringValue(name)
 	}
@@ -237,10 +252,16 @@ func readIntoModel(model *OrgRoleModel, result map[string]interface{}) {
 	if perms, ok := result["permissions"].([]interface{}); ok && len(perms) > 0 {
 		permissions := make([]types.String, len(perms))
 		for i, p := range perms {
-			permissions[i] = types.StringValue(p.(string))
+			permission, ok := p.(string)
+			if !ok {
+				return fmt.Errorf("response field %q must contain only strings", "permissions")
+			}
+			permissions[i] = types.StringValue(permission)
 		}
 		model.Permissions = permissions
 	} else {
 		model.Permissions = nil
 	}
+
+	return nil
 }

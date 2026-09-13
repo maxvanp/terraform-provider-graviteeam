@@ -2,8 +2,12 @@ package provider
 
 import (
 	"context"
+	"net/url"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -81,6 +85,7 @@ import (
 )
 
 var _ provider.Provider = &GraviteeAMProvider{}
+var _ provider.ProviderWithValidateConfig = &GraviteeAMProvider{}
 
 type GraviteeAMProvider struct {
 	version string
@@ -136,10 +141,58 @@ func (p *GraviteeAMProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 	}
 }
 
+func (p *GraviteeAMProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
+	var config GraviteeAMProviderModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(validateProviderConfig(config, false)...)
+}
+
+func validateProviderConfig(config GraviteeAMProviderModel, requireKnown bool) diag.Diagnostics {
+	var diagnostics diag.Diagnostics
+	for _, attr := range []struct {
+		name     string
+		value    types.String
+		optional bool
+	}{
+		{"api_url", config.APIURL, false},
+		{"client_id", config.ClientID, false},
+		{"client_secret", config.ClientSecret, false},
+		{"organization_id", config.OrganizationID, true},
+		{"environment_id", config.EnvironmentID, true},
+	} {
+		if attr.value.IsUnknown() {
+			if requireKnown {
+				diagnostics.AddAttributeError(path.Root(attr.name), "Unknown provider configuration", "The provider requires a known value for "+attr.name+" before it can configure the Gravitee AM client.")
+			}
+			continue
+		}
+		if attr.optional && attr.value.IsNull() {
+			continue
+		}
+		if strings.TrimSpace(attr.value.ValueString()) == "" {
+			diagnostics.AddAttributeError(path.Root(attr.name), "Empty provider configuration", "The value of "+attr.name+" must not be empty or contain only whitespace.")
+		}
+	}
+	if !config.APIURL.IsUnknown() && strings.TrimSpace(config.APIURL.ValueString()) != "" {
+		parsed, err := url.Parse(config.APIURL.ValueString())
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+			diagnostics.AddAttributeError(path.Root("api_url"), "Invalid Management API URL", "The api_url must be an absolute HTTP or HTTPS URL with a host and no embedded credentials, query string, or fragment.")
+		}
+	}
+	return diagnostics
+}
+
 func (p *GraviteeAMProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config GraviteeAMProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(validateProviderConfig(config, true)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -149,12 +202,12 @@ func (p *GraviteeAMProvider) Configure(ctx context.Context, req provider.Configu
 	clientSecret := config.ClientSecret.ValueString()
 
 	orgID := "DEFAULT"
-	if !config.OrganizationID.IsNull() && !config.OrganizationID.IsUnknown() {
+	if !config.OrganizationID.IsNull() {
 		orgID = config.OrganizationID.ValueString()
 	}
 
 	envID := "DEFAULT"
-	if !config.EnvironmentID.IsNull() && !config.EnvironmentID.IsUnknown() {
+	if !config.EnvironmentID.IsNull() {
 		envID = config.EnvironmentID.ValueString()
 	}
 

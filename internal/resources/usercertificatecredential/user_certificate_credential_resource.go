@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -130,7 +131,7 @@ func (r *UserCertificateCredentialResource) Read(ctx context.Context, req resour
 
 	result, err := r.client.GetUserCertificateCredential(ctx, state.DomainID.ValueString(), state.UserID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -154,14 +155,14 @@ func (r *UserCertificateCredentialResource) Delete(ctx context.Context, req reso
 	}
 
 	err := r.client.DeleteUserCertificateCredential(ctx, state.DomainID.ValueString(), state.UserID.ValueString(), state.ID.ValueString())
-	if err != nil && !strings.Contains(err.Error(), "404") {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Error deleting user certificate credential", err.Error())
 	}
 }
 
 func (r *UserCertificateCredentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	if len(parts) != 3 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/user_id/credential_id, got: %s", req.ID))
 		return
 	}

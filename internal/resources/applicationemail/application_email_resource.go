@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/maxvanp/terraform-provider-graviteeam/internal/client"
+	"github.com/maxvanp/terraform-provider-graviteeam/internal/resources/importid"
 )
 
 var (
@@ -134,7 +135,12 @@ func (r *ApplicationEmailResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	plan.ID = types.StringValue(result["id"].(string))
+	id, err := client.RequiredString(result, "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid create response", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(id)
 
 	r.readIntoModel(&plan, result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -149,7 +155,7 @@ func (r *ApplicationEmailResource) Read(ctx context.Context, req resource.ReadRe
 
 	result, err := r.client.GetEmail(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.Template.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -197,7 +203,7 @@ func (r *ApplicationEmailResource) Delete(ctx context.Context, req resource.Dele
 
 	err := r.client.DeleteEmail(ctx, state.DomainID.ValueString(), state.ApplicationID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if client.IsNotFound(err) {
 			return
 		}
 		resp.Diagnostics.AddError("Error deleting application email template", err.Error())
@@ -207,7 +213,7 @@ func (r *ApplicationEmailResource) Delete(ctx context.Context, req resource.Dele
 func (r *ApplicationEmailResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: domain_id/application_id/template
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	if len(parts) != 3 || !importid.Valid(parts) {
 		resp.Diagnostics.AddError("Invalid import ID", fmt.Sprintf("Expected format: domain_id/application_id/template, got: %s", req.ID))
 		return
 	}
