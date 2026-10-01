@@ -4,7 +4,7 @@ services:
     volumes:
       - ./internal/acctest/testdata/jwks.json:/usr/share/nginx/html/jwks.json:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/jwks.json"]
+      test: ["CMD", "wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1/jwks.json"]
       interval: 5s
       timeout: 5s
       retries: 10
