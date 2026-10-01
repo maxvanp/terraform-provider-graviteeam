@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Upgrade `google.golang.org/grpc` to 1.83.2 to remediate reachable vulnerabilities GO-2026-6443 and GO-2026-6348
 - Make trust-domain acceptance tests independent of external DNS and Google availability by serving a public test JWKS in the local Compose stack
 
 ## [0.1.0] - 2026-09-13
