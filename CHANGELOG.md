@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-01
+
+### Changed
+
+- Update the Gravitee AM compatibility target, local acceptance stack, and OpenAPI refresh default to 4.12.7
+- Refresh the upstream 4.12.7 API reference; all 205 paths and 249 schemas remain unchanged from 4.12.6
+- Update the local installation version and usage example to 0.1.1
+
+### Fixed
+
+- Make trust-domain acceptance tests independent of external DNS and Google availability by serving a public test JWKS in the local Compose stack
+
 ## [0.1.0] - 2026-09-13
 
 ### Added

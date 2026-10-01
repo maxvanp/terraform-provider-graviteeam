@@ -60,6 +60,8 @@ docker compose -f docker-compose.test.yml up -d
 TF_ACC=1 make testacc
 ```
 
+The Compose stack includes a local JWKS fixture for trust-domain tests. Its public RSA key is test data only. The trust-domain test explicitly permits this private HTTP endpoint in its disposable security domain; production domains retain their normal key-retrieval protections.
+
 ### Refresh the bundled OpenAPI reference
 
 ```bash

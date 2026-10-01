@@ -21,6 +21,7 @@ func TestAccTrustDomain_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("graviteeam_trust_domain.test", "created_at"),
 					resource.TestCheckResourceAttr("graviteeam_trust_domain.test", "name", "terraform.example.com"),
 					resource.TestCheckResourceAttr("graviteeam_trust_domain.test", "bundle_source", "JWKS_URL"),
+					resource.TestCheckResourceAttr("graviteeam_trust_domain.test", "jwks_url", "http://jwks/jwks.json"),
 					resource.TestCheckResourceAttr("graviteeam_trust_domain.test", "refresh_interval_seconds", "300"),
 					resource.TestCheckResourceAttr("graviteeam_trust_domain.test", "allowed_algorithms.0", "RS256"),
 				),
@@ -59,6 +60,8 @@ resource "graviteeam_domain" "test" {
     oidc = {
       workloadIdentitySettings = {
         enabled = true
+        allowPrivateIpAddress = true
+        allowUnsecuredHttpUri = true
       }
     }
   })
@@ -72,7 +75,7 @@ resource "graviteeam_trust_domain" "test" {
   name                    = "terraform.example.com"
   description             = %q
   bundle_source           = "JWKS_URL"
-  jwks_url                = "https://www.googleapis.com/oauth2/v3/certs"
+  jwks_url                = "http://jwks/jwks.json"
   refresh_interval_seconds = %d
   allowed_algorithms      = %s
 }

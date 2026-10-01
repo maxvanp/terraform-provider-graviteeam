@@ -6,11 +6,11 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.26.8 (for building from source)
-- [Gravitee Access Management](https://www.gravitee.io/platform/access-management) 4.12.6 (the tested compatibility target)
+- [Gravitee Access Management](https://www.gravitee.io/platform/access-management) 4.12.7 (the tested compatibility target)
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.12.6** Management API. Acceptance tests are run against Gravitee AM 4.12.6.
+This provider targets the **Gravitee AM 4.12.7** Management API. Acceptance tests are run against Gravitee AM 4.12.7.
 
 The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM version.
 
@@ -24,7 +24,7 @@ Until `v1.0.0`, compatibility may still evolve as the Gravitee AM API changes. A
 
 ## Installation
 
-The signed [v0.1.0 GitHub release](https://github.com/maxvanp/terraform-provider-graviteeam/releases/tag/v0.1.0) is published and available from the [Terraform Registry](https://registry.terraform.io/providers/maxvanp/graviteeam/0.1.0). Use the pinned `required_providers` example below, then run `terraform init`.
+Provider releases are distributed through [GitHub Releases](https://github.com/maxvanp/terraform-provider-graviteeam/releases) and the [Terraform Registry](https://registry.terraform.io/providers/maxvanp/graviteeam). Use the pinned `required_providers` example below, then run `terraform init`.
 
 ### Install a GitHub release
 
@@ -74,7 +74,7 @@ terraform {
   required_providers {
     graviteeam = {
       source  = "maxvanp/graviteeam"
-      version = "0.1.0"
+      version = "0.1.1"
     }
   }
 }

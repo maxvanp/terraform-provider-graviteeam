@@ -6,15 +6,15 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM version | `4.12.6` |
+| Target Gravitee AM version | `4.12.7` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.12.6` |
+| Bundled OpenAPI version | `4.12.7` |
 | OpenAPI path entries | `205` |
 | Path entries with at least one write verb | `126` |
 | Terraform resources registered | `53` |
 | Terraform data sources registered | `20` |
 
-The [AM 4.12 changelog](https://documentation.gravitee.io/am/releases-and-changelog/changelog/am-4.12.x) lists 4.12.2–4.12.6 as bug-fix releases, including user deletion, permission caching, and console login corrections. The upstream 4.12.6 snapshot has no path or schema changes from 4.12.1, so this update changes the tested server version without changing Terraform resource schemas.
+The [AM 4.12 changelog](https://documentation.gravitee.io/am/releases-and-changelog/changelog/am-4.12.x) lists 4.12.7 as a bug-fix release, including trusted-issuer token exchange roles, SCIM email handling, CIMD social login, and Enterprise identity-provider secret references. The upstream 4.12.7 snapshot has no path or schema changes from 4.12.6 or 4.12.1, so this update changes the test server version without changing Terraform resource schemas.
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -215,7 +215,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-None currently identified in the 4.12.6 OpenAPI audit. Compared with 4.12.1, all 205 paths and 249 schemas are unchanged; only `info.version` differs in the upstream snapshot.
+None currently identified in the 4.12.7 OpenAPI audit. Compared with 4.12.1, all 205 paths and 249 schemas are unchanged; only `info.version` differs in the upstream snapshot.
 
 ### Read-Like POST Endpoints Not Covered
 

@@ -1,4 +1,14 @@
 services:
+  jwks:
+    image: nginx:1.28.0-alpine
+    volumes:
+      - ./internal/acctest/testdata/jwks.json:/usr/share/nginx/html/jwks.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/jwks.json"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   mongodb:
     image: mongo:6.0
     ports:
@@ -10,10 +20,12 @@ services:
       retries: 10
 
   am-management-api:
-    image: graviteeio/am-management-api:4.12.6
+    image: graviteeio/am-management-api:4.12.7
     ports:
       - "8093:8093"
     depends_on:
+      jwks:
+        condition: service_healthy
       mongodb:
         condition: service_healthy
     environment:
@@ -28,7 +40,7 @@ services:
       start_period: 30s
 
   am-gateway:
-    image: graviteeio/am-gateway:4.12.6
+    image: graviteeio/am-gateway:4.12.7
     ports:
       - "8092:8092"
     depends_on:
