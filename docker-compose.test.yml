@@ -1,6 +1,6 @@
 services:
   jwks:
-    image: nginx:1.28.0-alpine
+    image: nginx:1.31.7-alpine
     volumes:
       - ./internal/acctest/testdata/jwks.json:/usr/share/nginx/html/jwks.json:ro
     healthcheck:
@@ -40,7 +40,7 @@ services:
       start_period: 30s
 
   am-gateway:
-    image: graviteeio/am-gateway:4.12.7
+    image: graviteeio/am-gateway:4.13.2
     ports:
       - "8092:8092"
     depends_on:
