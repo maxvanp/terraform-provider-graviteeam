@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Upgrade Go to 1.26.10 and `golang.org/x/net` to v0.62.0 so `govulncheck ./...` is clean (GO-2026-6809, GO-2026-6617, GO-2026-6613, GO-2026-6612, GO-2026-6611, GO-2026-6610, GO-2026-6608, GO-2026-6607, GO-2026-6605, GO-2026-6603, GO-2026-6866, GO-2026-6860)
+
 ## [0.1.1] - 2026-10-01
 
 ### Changed
