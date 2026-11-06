@@ -189,7 +189,19 @@ func buildBody(model OrgReporterModel, current map[string]interface{}) map[strin
 			body["inherited"] = inherited
 		}
 	}
+	preserveReporterAttributeMappings(body, current)
 	return body
+}
+
+func preserveReporterAttributeMappings(body, current map[string]interface{}) {
+	if current == nil {
+		return
+	}
+	for _, key := range []string{"attributeMappings", "attributeMappingEventTypes"} {
+		if value, ok := current[key]; ok {
+			body[key] = value
+		}
+	}
 }
 
 func readIntoModel(model *OrgReporterModel, data map[string]interface{}) {

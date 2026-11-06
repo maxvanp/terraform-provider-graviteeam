@@ -17,32 +17,25 @@
 openapi: 3.0.1
 info:
   title: Gravitee.io - Access Management API
-  version: 4.12.7
+  version: 4.13.2
 servers:
 - url: /management
 security:
 - gravitee-auth: []
 tags:
 - name: Authentication Device Notifier
-- name: Authorization Engine
-- name: Bot Detection
-- name: Certificate
 - name: Device Identifier
-- name: Extension Grant
-- name: Factor
-- name: Identity Provider
 - name: Notifier
 - name: Password Policy
 - name: Plugin
 - name: Policy
-- name: Reporter
-- name: Resource
 - name: alerts
 - name: application
 - name: audit
 - name: authorization engine
 - name: bot detection
 - name: certificate
+- name: cross-app-access
 - name: data-sources
 - name: dataPlane
 - name: device identifiers
@@ -57,6 +50,7 @@ tags:
 - name: form
 - name: group
 - name: identity provider
+- name: license
 - name: platform
 - name: preview
 - name: protected-resource
@@ -67,6 +61,7 @@ tags:
 - name: sharding-tags
 - name: theme
 - name: trust-domain
+- name: trusted-domain
 - name: user
 - name: user notifications
 paths:
@@ -122,9 +117,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Audit"
+                $ref: "#/components/schemas/AuditPage"
           description: List audit logs for the platform
         "500":
           description: Internal server error
@@ -321,8 +314,9 @@ paths:
       summary: List all the environments
   /organizations/{organizationId}/environments/{environmentId}/data-planes:
     get:
-      description: "List all the data planes accessible to the current user. User\
-        \ must have DATA_PLANE[READ] permission on the specified environment or organization"
+      description: "List the data planes a new domain of the environment can be created\
+        \ on. User must have DATA_PLANE[READ] permission on the specified environment\
+        \ or organization"
       operationId: listDataPlanes
       parameters:
       - in: path
@@ -414,6 +408,14 @@ paths:
         name: q
         schema:
           type: string
+      - in: query
+        name: ids
+        schema:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+          minItems: 0
       responses:
         "200":
           content:
@@ -1828,8 +1830,9 @@ paths:
   /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/applications/{application}/flows/{flow}:
     get:
       description: "User must have the APPLICATION_FLOW[READ] permission on the specified\
-        \ domain or APPLICATION_FLOW[READ] permission on the specified environment\
-        \ or APPLICATION_FLOW[READ] permission on the specified organization"
+        \ application or APPLICATION_FLOW[READ] permission on the specified domain\
+        \ or APPLICATION_FLOW[READ] permission on the specified environment or APPLICATION_FLOW[READ]\
+        \ permission on the specified organization"
       operationId: getAppFlow
       parameters:
       - in: path
@@ -1872,8 +1875,9 @@ paths:
       - domain
     put:
       description: "User must have the APPLICATION_FLOW[UPDATE] permission on the\
-        \ specified domain or APPLICATION_FLOW[UPDATE] permission on the specified\
-        \ environment or APPLICATION_FLOW[UPDATE] permission on the specified organization"
+        \ specified application or APPLICATION_FLOW[UPDATE] permission on the specified\
+        \ domain or APPLICATION_FLOW[UPDATE] permission on the specified environment\
+        \ or APPLICATION_FLOW[UPDATE] permission on the specified organization"
       operationId: updateAppFlow
       parameters:
       - in: path
@@ -2779,9 +2783,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Audit"
+                $ref: "#/components/schemas/AuditPage"
           description: List audit logs for a security domain
         "500":
           description: Internal server error
@@ -6546,10 +6548,14 @@ paths:
         name: q
         schema:
           type: string
-      - in: query
+      - description: Restricts the listing to a single type. All types are listed
+          when it is absent.
+        in: query
         name: type
         schema:
           type: string
+          enum:
+          - MCP_SERVER
       - in: query
         name: page
         schema:
@@ -6574,6 +6580,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProtectedResourcePage"
           description: List registered protected resources for a security domain
+        "400":
+          description: Unrecognised type
         "500":
           description: Internal server error
       summary: List registered protected resources for a security domain
@@ -6648,13 +6656,19 @@ paths:
         required: true
         schema:
           type: string
-      - in: query
+      - description: Asserts the resource has this type. The resource is deleted on
+          its id alone when it is absent.
+        in: query
         name: type
         schema:
           type: string
+          enum:
+          - MCP_SERVER
       responses:
         "204":
           description: Protected Resource successfully deleted
+        "400":
+          description: Unrecognised type
         "403":
           description: Forbidden
         "404":
@@ -6692,10 +6706,14 @@ paths:
         required: true
         schema:
           type: string
-      - in: query
+      - description: Asserts the resource has this type. The resource is read on its
+          id alone when it is absent.
+        in: query
         name: type
         schema:
           type: string
+          enum:
+          - MCP_SERVER
       responses:
         "200":
           content:
@@ -6703,6 +6721,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProtectedResourcePrimaryData"
           description: Protected Resource
+        "400":
+          description: Unrecognised type
         "500":
           description: Internal server error
       summary: Get a Protected Resource
@@ -6798,6 +6818,105 @@ paths:
         "500":
           description: Internal server error
       summary: Update a Protected Resource
+      tags:
+      - protected-resource
+      - domain
+  /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/protected-resources/{protected-resource}/flows:
+    get:
+      description: "User must have the PROTECTED_RESOURCE_FLOW[LIST] permission on\
+        \ the specified resource or PROTECTED_RESOURCE_FLOW[LIST] permission on the\
+        \ specified domain or PROTECTED_RESOURCE_FLOW[LIST] permission on the specified\
+        \ environment or PROTECTED_RESOURCE_FLOW[LIST] permission on the specified\
+        \ organization. Except if user has PROTECTED_RESOURCE_FLOW[READ] permission\
+        \ on the resource, domain, environment or organization, each returned flow\
+        \ is filtered and contains only basic information such as id and name and\
+        \ isEnabled."
+      operationId: listProtectedResourceFlows
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: protected-resource
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowEntity"
+          description: List registered flows for a protected resource
+        "500":
+          description: Internal server error
+      summary: List registered flows for a protected resource
+      tags:
+      - protected-resource
+      - domain
+    put:
+      description: "User must have the PROTECTED_RESOURCE_FLOW[UPDATE] permission\
+        \ on the specified resource or PROTECTED_RESOURCE_FLOW[UPDATE] permission\
+        \ on the specified domain or PROTECTED_RESOURCE_FLOW[UPDATE] permission on\
+        \ the specified environment or PROTECTED_RESOURCE_FLOW[UPDATE] permission\
+        \ on the specified organization. Only the TOKEN flow can be configured for\
+        \ a protected resource."
+      operationId: defineProtectedResourceFlows
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: protected-resource
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/Flow"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowEntity"
+          description: Flows successfully updated
+        "500":
+          description: Internal server error
+      summary: Create or update list of flows
       tags:
       - protected-resource
       - domain
@@ -8238,6 +8357,7 @@ paths:
       - domain
   /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/trust-domains:
     get:
+      deprecated: true
       description: "User must have the DOMAIN_TRUST_DOMAIN[LIST] permission on the\
         \ specified domain or DOMAIN_TRUST_DOMAIN[LIST] permission on the specified\
         \ environment or DOMAIN_TRUST_DOMAIN[LIST] permission on the specified organization"
@@ -8274,9 +8394,11 @@ paths:
       - trust-domain
       - domain
     post:
+      deprecated: true
       description: "User must have the DOMAIN_TRUST_DOMAIN[CREATE] permission on the\
         \ specified domain or DOMAIN_TRUST_DOMAIN[CREATE] permission on the specified\
-        \ environment or DOMAIN_TRUST_DOMAIN[CREATE] permission on the specified organization"
+        \ environment or DOMAIN_TRUST_DOMAIN[CREATE] permission on the specified organization.\
+        \ Deprecated: use POST /trusted-domains instead."
       operationId: createTrustDomain
       parameters:
       - in: path
@@ -8311,12 +8433,13 @@ paths:
           description: Invalid trust domain configuration
         "500":
           description: Internal server error
-      summary: Register a SPIFFE trust domain on the security domain
+      summary: Register a trust domain on the security domain
       tags:
       - trust-domain
       - domain
   /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/trust-domains/{trustDomainId}:
     delete:
+      deprecated: true
       description: "User must have the DOMAIN_TRUST_DOMAIN[DELETE] permission on the\
         \ specified domain or DOMAIN_TRUST_DOMAIN[DELETE] permission on the specified\
         \ environment or DOMAIN_TRUST_DOMAIN[DELETE] permission on the specified organization"
@@ -8352,6 +8475,7 @@ paths:
       - trust-domain
       - domain
     get:
+      deprecated: true
       description: "User must have the DOMAIN_TRUST_DOMAIN[READ] permission on the\
         \ specified domain or DOMAIN_TRUST_DOMAIN[READ] permission on the specified\
         \ environment or DOMAIN_TRUST_DOMAIN[READ] permission on the specified organization"
@@ -8391,9 +8515,11 @@ paths:
       - trust-domain
       - domain
     put:
+      deprecated: true
       description: "User must have the DOMAIN_TRUST_DOMAIN[UPDATE] permission on the\
         \ specified domain or DOMAIN_TRUST_DOMAIN[UPDATE] permission on the specified\
-        \ environment or DOMAIN_TRUST_DOMAIN[UPDATE] permission on the specified organization"
+        \ environment or DOMAIN_TRUST_DOMAIN[UPDATE] permission on the specified organization.\
+        \ Deprecated: use PUT /trusted-domains/{trustedDomainId} instead."
       operationId: updateTrustDomain
       parameters:
       - in: path
@@ -8436,6 +8562,331 @@ paths:
       summary: Update a trust domain
       tags:
       - trust-domain
+      - domain
+  /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/trusted-domains:
+    get:
+      description: "List trusted domains using cursor-based pagination. User must\
+        \ have the DOMAIN_TRUST_DOMAIN[LIST] permission on the specified domain or\
+        \ DOMAIN_TRUST_DOMAIN[LIST] permission on the specified environment or DOMAIN_TRUST_DOMAIN[LIST]\
+        \ permission on the specified organization"
+      operationId: listTrustedDomains
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - description: "Maximum number of trusted domains per page. When omitted, every\
+          \ trusted domain is returned in a single page."
+        in: query
+        name: limit
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 1
+      - description: Sort field. Trusted domains can only be sorted by name.
+        in: query
+        name: sort
+        schema:
+          type: string
+          default: name
+      - description: "Sort direction, ASC or DESC."
+        in: query
+        name: dir
+        schema:
+          type: string
+          default: ASC
+      - description: Zero-based index of the page to return. Requires limit.
+        in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - description: Keeps only the trusted domains trusted for this usage. Empty
+          keeps every trusted domain.
+        in: query
+        name: usage
+        schema:
+          type: string
+          enum:
+          - SPIFFE
+          - TOKEN_EXCHANGE
+          - CROSS_APP_ACCESS
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDomainPage"
+          description: List of trusted domains
+        "400":
+          description: "Invalid limit, sort, dir, page or usage"
+        "500":
+          description: Internal server error
+      summary: List trusted domains registered against the security domain
+      tags:
+      - trusted-domain
+      - domain
+    post:
+      description: "User must have the DOMAIN_TRUST_DOMAIN[CREATE] permission on the\
+        \ specified domain or DOMAIN_TRUST_DOMAIN[CREATE] permission on the specified\
+        \ environment or DOMAIN_TRUST_DOMAIN[CREATE] permission on the specified organization"
+      operationId: createTrustedDomain
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTrustedDomain"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDomain"
+          description: Trusted domain successfully created
+        "400":
+          description: Invalid trusted domain configuration
+        "500":
+          description: Internal server error
+      summary: Register a trusted domain on the security domain
+      tags:
+      - trusted-domain
+      - domain
+  /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/trusted-domains/_cursor:
+    get:
+      description: "Follows the nextCursor returned by the trusted domains list. User\
+        \ must have the DOMAIN_TRUST_DOMAIN[LIST] permission on the specified domain\
+        \ or DOMAIN_TRUST_DOMAIN[LIST] permission on the specified environment or\
+        \ DOMAIN_TRUST_DOMAIN[LIST] permission on the specified organization"
+      operationId: listTrustedDomainsCursor
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - description: Maximum number of trusted domains per page.
+        in: query
+        name: limit
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          maximum: 100
+          minimum: 1
+      - description: Sort field. Trusted domains can only be sorted by name.
+        in: query
+        name: sort
+        schema:
+          type: string
+          default: name
+      - description: "Sort direction, ASC or DESC."
+        in: query
+        name: dir
+        schema:
+          type: string
+          default: ASC
+      - description: Zero-based index of the page to return.
+        in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - description: Keeps only the trusted domains trusted for this usage. Empty
+          keeps every trusted domain.
+        in: query
+        name: usage
+        schema:
+          type: string
+          enum:
+          - SPIFFE
+          - TOKEN_EXCHANGE
+          - CROSS_APP_ACCESS
+      - description: "Cursor of the page to return, as found in the nextCursor of\
+          \ the previous page."
+        in: query
+        name: cursor
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDomainPage"
+          description: List of trusted domains
+        "400":
+          description: "Invalid cursor, limit, sort, dir, page or usage"
+        "500":
+          description: Internal server error
+      summary: List the next page of trusted domains registered against the security
+        domain
+      tags:
+      - trusted-domain
+      - domain
+  /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/trusted-domains/{trustedDomainId}:
+    delete:
+      description: "User must have the DOMAIN_TRUST_DOMAIN[DELETE] permission on the\
+        \ specified domain or DOMAIN_TRUST_DOMAIN[DELETE] permission on the specified\
+        \ environment or DOMAIN_TRUST_DOMAIN[DELETE] permission on the specified organization"
+      operationId: deleteTrustedDomain
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: trustedDomainId
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Trusted domain successfully deleted
+        "500":
+          description: Internal server error
+      summary: Delete a trusted domain
+      tags:
+      - trusted-domain
+      - domain
+    get:
+      description: "User must have the DOMAIN_TRUST_DOMAIN[READ] permission on the\
+        \ specified domain or DOMAIN_TRUST_DOMAIN[READ] permission on the specified\
+        \ environment or DOMAIN_TRUST_DOMAIN[READ] permission on the specified organization"
+      operationId: getTrustedDomain
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: trustedDomainId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDomain"
+          description: Trusted domain
+        "404":
+          description: Trusted domain not found
+      summary: Get a trusted domain
+      tags:
+      - trusted-domain
+      - domain
+    put:
+      description: "User must have the DOMAIN_TRUST_DOMAIN[UPDATE] permission on the\
+        \ specified domain or DOMAIN_TRUST_DOMAIN[UPDATE] permission on the specified\
+        \ environment or DOMAIN_TRUST_DOMAIN[UPDATE] permission on the specified organization"
+      operationId: updateTrustedDomain
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: trustedDomainId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTrustedDomain"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDomain"
+          description: Trusted domain successfully updated
+        "404":
+          description: Trusted domain not found
+        "500":
+          description: Internal server error
+      summary: Update a trusted domain
+      tags:
+      - trusted-domain
       - domain
   /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/users:
     get:
@@ -8765,9 +9216,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Audit"
+                $ref: "#/components/schemas/AuditPage"
           description: User audit logs successfully fetched
         "500":
           description: Internal server error
@@ -9931,6 +10380,63 @@ paths:
       tags:
       - user
       - domain
+  /organizations/{organizationId}/environments/{environmentId}/domains/{domain}/xaa-resource-servers:
+    get:
+      description: "Flattens the resource servers of every trusted domain that has\
+        \ Cross App Access enabled, keeping those the search term matches, up to the\
+        \ requested limit. User must have the DOMAIN_SETTINGS[READ] permission on\
+        \ the specified domain or DOMAIN_SETTINGS[READ] permission on the specified\
+        \ environment or DOMAIN_SETTINGS[READ] permission on the specified organization"
+      operationId: listCrossAppAccessResourceServers
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: environmentId
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: domain
+        required: true
+        schema:
+          type: string
+      - description: "Case-insensitive term matched against the resource server name,\
+          \ its resource identifier and the name of the trusted domain exposing it.\
+          \ Empty keeps every resource server."
+        in: query
+        name: q
+        schema:
+          type: string
+          default: ""
+      - description: Maximum number of resource servers to return.
+        in: query
+        name: limit
+        schema:
+          type: integer
+          format: int32
+          default: 10
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CrossAppAccessResourceServerEntity"
+          description: List of resource servers
+        "500":
+          description: Internal server error
+      summary: List the resource servers an application of this security domain may
+        be mapped to
+      tags:
+      - cross-app-access
+      - domain
   /organizations/{organizationId}/environments/{environmentId}/members/permissions:
     get:
       description: "User must have ENVIRONMENT[READ] permission on the specified environment\
@@ -10266,7 +10772,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/UserEntity"
           description: Group members successfully fetched
         "500":
           description: Internal server error
@@ -10474,6 +10980,32 @@ paths:
       summary: Update an identity provider
       tags:
       - identity provider
+  /organizations/{organizationId}/license:
+    get:
+      operationId: getOrganizationLicense
+      parameters:
+      - in: path
+        name: organizationId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraviteeLicense"
+          description: Organization license successfully fetched
+        "403":
+          description: Not a member of the organization
+        "404":
+          description: Organization not found
+        "500":
+          description: Internal server error
+      summary: "Get the organization License, falling back to the platform License\
+        \ when the organization has none"
+      tags:
+      - license
   /organizations/{organizationId}/members:
     get:
       description: "User must have ORGANIZATION_MEMBER[LIST] permission on the specified\
@@ -11174,7 +11706,8 @@ paths:
       - user
     put:
       description: "User must have the ORGANIZATION_USER[UPDATE] permission on the\
-        \ specified organization"
+        \ specified organization. If the enabled field is set, the user status changes\
+        \ in the same way as with the status endpoint."
       operationId: updateOrganizationUser
       parameters:
       - in: path
@@ -11208,7 +11741,8 @@ paths:
   /organizations/{organizationId}/users/{user}/resetPassword:
     post:
       description: "User must have the ORGANIZATION_USER[UPDATE] permission on the\
-        \ specified organization"
+        \ specified organization. Resetting the password ends the existing sessions\
+        \ and revokes the account access tokens."
       operationId: resetOrganizationUserPassword
       parameters:
       - in: path
@@ -11238,7 +11772,8 @@ paths:
   /organizations/{organizationId}/users/{user}/status:
     put:
       description: "User must have the ORGANIZATION_USER[UPDATE] permission on the\
-        \ specified organization"
+        \ specified organization. Disabling a user ends the existing sessions and\
+        \ revokes the account access tokens."
       operationId: updateOrganizationUserStatus
       parameters:
       - in: path
@@ -11430,6 +11965,23 @@ paths:
       summary: Get the Policy Studio flow schema
       tags:
       - platform
+  /platform/configuration/installation:
+    get:
+      description: There is no particular permission needed. User must be authenticated.
+      operationId: getInstallationConfiguration
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallationConfiguration"
+          description: Installation configuration successfully fetched
+        "500":
+          description: Internal server error
+      summary: Get the installation type of this instance and whether it owns the
+        storage of identity providers on the system cluster
+      tags:
+      - platform
   /platform/configuration/spel/grammar:
     get:
       description: There is no particular permission needed. User must be authenticated.
@@ -11478,12 +12030,17 @@ paths:
     get:
       operationId: getLicense
       responses:
-        default:
+        "200":
           content:
-            application/json: {}
-          description: default response
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraviteeLicense"
+          description: Platform license successfully fetched
+        "500":
+          description: Internal server error
       summary: Get current node License
       tags:
+      - license
       - platform
   /platform/plugins/auth-device-notifiers:
     get:
@@ -11565,7 +12122,7 @@ paths:
       summary: List authorization engine plugins
       tags:
       - Plugin
-      - Authorization Engine
+      - authorization engine
       - platform
   /platform/plugins/authorization-engines/{authorizationEngine}:
     get:
@@ -11585,7 +12142,7 @@ paths:
       summary: Get an authorization engine plugin
       tags:
       - Plugin
-      - Authorization Engine
+      - authorization engine
       - platform
   /platform/plugins/authorization-engines/{authorizationEngine}/schema:
     get:
@@ -11605,7 +12162,7 @@ paths:
       summary: Get an authorization engine plugin's schema
       tags:
       - Plugin
-      - Authorization Engine
+      - authorization engine
       - platform
   /platform/plugins/bot-detections:
     get:
@@ -11619,7 +12176,7 @@ paths:
       summary: List bot detection plugins
       tags:
       - Plugin
-      - Bot Detection
+      - bot detection
       - platform
   /platform/plugins/bot-detections/{botDetection}:
     get:
@@ -11639,7 +12196,7 @@ paths:
       summary: Get a Bot Detection plugin
       tags:
       - Plugin
-      - Bot Detection
+      - bot detection
       - platform
   /platform/plugins/bot-detections/{botDetection}/schema:
     get:
@@ -11659,7 +12216,7 @@ paths:
       summary: Get a Bot Detection plugin's schema
       tags:
       - Plugin
-      - Bot Detection
+      - bot detection
       - platform
   /platform/plugins/certificates:
     get:
@@ -11673,7 +12230,7 @@ paths:
       summary: List certificate plugins
       tags:
       - Plugin
-      - Certificate
+      - certificate
       - platform
   /platform/plugins/certificates/{certificate}:
     get:
@@ -11693,7 +12250,7 @@ paths:
       summary: Get an certificate plugin
       tags:
       - Plugin
-      - Certificate
+      - certificate
       - platform
   /platform/plugins/certificates/{certificate}/schema:
     get:
@@ -11713,7 +12270,7 @@ paths:
       summary: Get an certificate's schema
       tags:
       - Plugin
-      - Certificate
+      - certificate
       - platform
   /platform/plugins/device-identifiers:
     get:
@@ -11781,7 +12338,7 @@ paths:
       summary: List extension grant plugins
       tags:
       - Plugin
-      - Extension Grant
+      - extension grant
       - platform
   /platform/plugins/extensionGrants/{extensionGrant}:
     get:
@@ -11801,7 +12358,7 @@ paths:
       summary: Get an extension grant plugin
       tags:
       - Plugin
-      - Extension Grant
+      - extension grant
       - platform
   /platform/plugins/extensionGrants/{extensionGrant}/schema:
     get:
@@ -11821,7 +12378,7 @@ paths:
       summary: Get an extension grant plugin's schema
       tags:
       - Plugin
-      - Extension Grant
+      - extension grant
       - platform
   /platform/plugins/factors:
     get:
@@ -11835,7 +12392,7 @@ paths:
       summary: List factor plugins
       tags:
       - Plugin
-      - Factor
+      - factor
       - platform
   /platform/plugins/factors/{factor}:
     get:
@@ -11855,7 +12412,7 @@ paths:
       summary: Get a factor plugin
       tags:
       - Plugin
-      - Factor
+      - factor
       - platform
   /platform/plugins/factors/{factor}/schema:
     get:
@@ -11875,7 +12432,7 @@ paths:
       summary: Get a factor plugin's schema
       tags:
       - Plugin
-      - Factor
+      - factor
       - platform
   /platform/plugins/identities:
     get:
@@ -11904,7 +12461,7 @@ paths:
       summary: List identity provider plugins
       tags:
       - Plugin
-      - Identity Provider
+      - identity provider
       - platform
   /platform/plugins/identities/{identity}:
     get:
@@ -11924,7 +12481,7 @@ paths:
       summary: Get an identity provider
       tags:
       - Plugin
-      - Identity Provider
+      - identity provider
       - platform
   /platform/plugins/identities/{identity}/schema:
     get:
@@ -11944,7 +12501,7 @@ paths:
       summary: Get an identity provider plugin's schema
       tags:
       - Plugin
-      - Identity Provider
+      - identity provider
       - platform
   /platform/plugins/notifiers:
     get:
@@ -12124,7 +12681,7 @@ paths:
       summary: List reporter plugins
       tags:
       - Plugin
-      - Reporter
+      - reporter
       - platform
   /platform/plugins/reporters/{reporter}:
     get:
@@ -12144,7 +12701,7 @@ paths:
       summary: Get a reporter plugin
       tags:
       - Plugin
-      - Reporter
+      - reporter
       - platform
   /platform/plugins/reporters/{reporter}/schema:
     get:
@@ -12163,7 +12720,7 @@ paths:
       summary: Get a reporter plugin's schema
       tags:
       - Plugin
-      - Reporter
+      - reporter
       - platform
   /platform/plugins/resources:
     get:
@@ -12184,7 +12741,7 @@ paths:
       summary: List resource plugins
       tags:
       - Plugin
-      - Resource
+      - resource
       - platform
   /platform/plugins/resources/{resource}:
     get:
@@ -12204,7 +12761,7 @@ paths:
       summary: Get a resource plugin
       tags:
       - Plugin
-      - Resource
+      - resource
       - platform
   /platform/plugins/resources/{resource}/schema:
     get:
@@ -12224,7 +12781,7 @@ paths:
       summary: Get a resource plugin's schema
       tags:
       - Plugin
-      - Resource
+      - resource
       - platform
   /platform/roles/{role}:
     get:
@@ -12300,6 +12857,41 @@ paths:
       summary: Mark User notification as read
       tags:
       - user notifications
+      - user
+  /user/preferences:
+    get:
+      operationId: getConsolePreferences
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleUserPreferences"
+          description: Current user console preferences successfully fetched
+        "500":
+          description: Internal server error
+      summary: Get the console preferences of the current user
+      tags:
+      - user
+    put:
+      operationId: updateConsolePreferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsoleUserPreferences"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleUserPreferences"
+          description: Current user console preferences successfully updated
+        "500":
+          description: Internal server error
+      summary: Update the console preferences of the current user
+      tags:
       - user
 components:
   schemas:
@@ -12594,8 +13186,6 @@ components:
             type: object
         name:
           type: string
-        passwordSettings:
-          $ref: "#/components/schemas/PasswordSettings"
         secretSettings:
           type: array
           items:
@@ -12628,6 +13218,41 @@ components:
           type: boolean
         skipConsent:
           type: boolean
+    ApplicationCrossAppAccessResourceServer:
+      type: object
+      description: A resource server this application may request an ID-JAG for.
+      properties:
+        clientId:
+          type: string
+          description: Identifier this application is registered with at the resource
+            authorization server.
+          example: acme-calendar-client
+          maxLength: 512
+        resourceServerId:
+          type: string
+          description: "Identifier of the resource server, as generated by AM on the\
+            \ trusted domain."
+        trustDomainId:
+          type: string
+          description: Identifier of the trusted domain the resource server belongs
+            to. A hint used to resolve the resource server; the resource server identifier
+            remains authoritative.
+      title: Cross App Access resource server mapping
+    ApplicationCrossAppAccessSettings:
+      type: object
+      description: Resource servers this application may request an ID-JAG for.
+      properties:
+        enabled:
+          type: boolean
+          default: false
+          description: Whether this application participates in Cross App Access.
+        resourceServers:
+          type: array
+          description: "Resource servers this application may reach, one entry per\
+            \ resource server."
+          items:
+            $ref: "#/components/schemas/ApplicationCrossAppAccessResourceServer"
+      title: Application Cross App Access settings
     ApplicationCursorPage:
       type: object
     ApplicationEntity:
@@ -12700,6 +13325,8 @@ components:
           type: array
           items:
             type: string
+        crossAppAccessSettings:
+          $ref: "#/components/schemas/ApplicationCrossAppAccessSettings"
         defaultACRvalues:
           type: array
           items:
@@ -12713,6 +13340,8 @@ components:
             type: string
         disableRefreshTokenRotation:
           type: boolean
+        dpopBoundAccessTokens:
+          type: boolean
         enhanceScopesWithUserPermissions:
           type: boolean
         forcePKCE:
@@ -12723,6 +13352,12 @@ components:
           type: array
           items:
             type: string
+        idJagValiditySeconds:
+          type: integer
+          format: int32
+          default: 300
+          description: Lifetime in seconds of an ID-JAG minted for this application.
+          minimum: 1
         idTokenEncryptedResponseAlg:
           type: string
         idTokenEncryptedResponseEnc:
@@ -12740,6 +13375,8 @@ components:
           type: string
         logoUri:
           type: string
+        optInScopeSelection:
+          type: boolean
         policyUri:
           type: string
         postLogoutRedirectUris:
@@ -12898,6 +13535,8 @@ components:
       properties:
         defaultScope:
           type: boolean
+        requiredScope:
+          type: boolean
         scope:
           type: string
         scopeApproval:
@@ -12925,8 +13564,6 @@ components:
           $ref: "#/components/schemas/MFASettings"
         oauth:
           $ref: "#/components/schemas/ApplicationOAuthSettings"
-        passwordSettings:
-          $ref: "#/components/schemas/PasswordSettings"
         riskAssessment:
           $ref: "#/components/schemas/RiskAssessmentSettings"
         saml:
@@ -13043,6 +13680,19 @@ components:
           enum:
           - SUCCESS
           - FAILURE
+    AuditPage:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          format: int32
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Audit"
+        totalCount:
+          type: integer
+          format: int64
     AuthenticationDeviceNotifier:
       type: object
       properties:
@@ -13587,6 +14237,19 @@ components:
           type: string
         settingsId:
           type: string
+    ConsoleUserPreferences:
+      type: object
+      properties:
+        defaultDomainId:
+          type: string
+        defaultEnvironmentId:
+          type: string
+        pinnedDomainIds:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+          minItems: 0
     CookieSettings:
       type: object
       properties:
@@ -13643,7 +14306,13 @@ components:
         enabled:
           type: boolean
           default: false
-          description: Whether CORS handling is enabled for the domain.
+          description: Whether CORS handling is enabled for the domain when not inherited.
+        inherited:
+          type: boolean
+          default: true
+          description: "Whether CORS settings are inherited from the gateway defaults\
+            \ (gravitee.yml). When null, legacy behaviour applies: enabled=true overrides\
+            \ and enabled=false inherits."
         maxAge:
           type: integer
           format: int32
@@ -13706,6 +14375,153 @@ components:
           type: string
         username:
           type: string
+    CrossAppAccessResourceServer:
+      type: object
+      description: "A resource server AM may mint an ID-JAG towards, behind this authority's\
+        \ authorization server."
+      properties:
+        id:
+          type: string
+          description: Identifier generated by AM. Echo it back on update to keep
+            this resource server's identity across a rename or a new resource; anything
+            else is given a new one.
+        name:
+          type: string
+          description: Label the resource server is known by.
+          example: Acme Calendar
+          maxLength: 255
+        resource:
+          type: string
+          description: "Resource identifier of the resource server, as defined by\
+            \ RFC 8707. Carried by the \"resource\" claim of the ID-JAG. An absolute\
+            \ URI, unique within this authority."
+          example: https://calendar.acme.com
+          maxLength: 512
+      title: Cross App Access resource server
+    CrossAppAccessResourceServerEntity:
+      type: object
+      description: A resource server an application may request an ID-JAG for.
+      properties:
+        name:
+          type: string
+          description: Label the resource server is known by.
+        resource:
+          type: string
+          description: "Resource identifier of the resource server, carried by the\
+            \ \"resource\" claim."
+        resourceServerId:
+          type: string
+          description: "Identifier of the resource server, stable across a rename."
+        trustDomainId:
+          type: string
+          description: Identifier of the trusted domain exposing this resource server.
+        trustDomainName:
+          type: string
+          description: Name of the trusted domain exposing this resource server.
+      title: Cross App Access resource server
+    CrossAppAccessSettings:
+      type: object
+      description: "Outbound configuration for minting ID-JAGs towards this authority.\
+        \ The ID-JAG is presented to the authorization server named by the trusted\
+        \ domain's domainIdentifier, which the \"aud\" claim carries."
+      properties:
+        audSubMapping:
+          type: string
+          description: "Expression producing the optional \"aud_sub\" claim, with\
+            \ the user profile available as context.attributes['user']. The claim\
+            \ is omitted when the expression yields nothing, and issuance is refused\
+            \ when the expression fails."
+          example: "{#context.attributes['user'].email}"
+          maxLength: 512
+        enabled:
+          type: boolean
+          default: false
+          description: Whether AM may mint an ID-JAG towards this authority.
+        resourceServers:
+          type: array
+          description: Resource servers this authority exposes behind that authorization
+            server.
+          items:
+            $ref: "#/components/schemas/CrossAppAccessResourceServer"
+        scopeMappings:
+          type: object
+          additionalProperties:
+            type: string
+            description: One-to-one mapping from domain scope to the name this authority
+              knows it by. A requested domain scope with no mapping is refused.
+          description: One-to-one mapping from domain scope to the name this authority
+            knows it by. A requested domain scope with no mapping is refused.
+      title: Cross App Access settings
+    CspSettings:
+      type: object
+      description: Content Security Policy configuration for the domain's login and
+        consent pages.
+      properties:
+        directives:
+          type: array
+          description: "CSP directives, one per entry, in the form \"directive-name\
+            \ value\". A trailing semicolon is optional. Directive names must be valid\
+            \ CSP tokens and must not repeat; values are not interpreted. Directives\
+            \ that take no value, such as \"upgrade-insecure-requests\", may be supplied\
+            \ on their own. When reportOnly is enabled, a \"report-uri\" or \"report-to\"\
+            \ directive is required."
+          example:
+          - default-src 'self'
+          - script-src 'self'
+          - upgrade-insecure-requests
+          items:
+            type: string
+            description: "CSP directives, one per entry, in the form \"directive-name\
+              \ value\". A trailing semicolon is optional. Directive names must be\
+              \ valid CSP tokens and must not repeat; values are not interpreted.\
+              \ Directives that take no value, such as \"upgrade-insecure-requests\"\
+              , may be supplied on their own. When reportOnly is enabled, a \"report-uri\"\
+              \ or \"report-to\" directive is required."
+            example: "[\"default-src 'self'\",\"script-src 'self'\",\"upgrade-insecure-requests\"\
+              ]"
+        enabled:
+          type: boolean
+          default: false
+          description: Whether CSP is enabled for the domain when not inherited.
+        inherited:
+          type: boolean
+          default: true
+          description: "Whether CSP settings are inherited from the gateway defaults\
+            \ (gravitee.yml). When null, legacy behaviour applies: enabled=true overrides\
+            \ and enabled=false inherits."
+        reportOnly:
+          type: boolean
+          default: false
+          description: "When true, the policy is delivered as Content-Security-Policy-Report-Only."
+        scriptInlineNonce:
+          type: boolean
+          default: true
+          description: Whether inline scripts are allowed via a per-request nonce.
+      title: CSP settings
+    DPoPSettings:
+      type: object
+      description: Demonstrating Proof-of-Possession (RFC 9449) configuration for
+        the domain.
+      properties:
+        dpopSigningAlgorithms:
+          type: array
+          description: "Allowlist of DPoP (RFC 9449) proof signing algorithms accepted\
+            \ at the token endpoint, drawn from the base supported set (ES256/384/512,\
+            \ RS256/384/512). When null the full base set is accepted. Persisting\
+            \ an empty set is rejected."
+          items:
+            type: string
+            description: "Allowlist of DPoP (RFC 9449) proof signing algorithms accepted\
+              \ at the token endpoint, drawn from the base supported set (ES256/384/512,\
+              \ RS256/384/512). When null the full base set is accepted. Persisting\
+              \ an empty set is rejected."
+        requireDpopForAll:
+          type: boolean
+          default: false
+          description: Domain-wide floor (RFC 9449) requiring every application to
+            present a DPoP proof at the token endpoint. When true it cannot be overridden
+            by an application whose own dpop_bound_access_tokens flag is off.
+      title: DPoP settings
     DataPlane:
       type: object
       properties:
@@ -13787,6 +14603,8 @@ components:
         key:
           type: string
           readOnly: true
+        keyRetrievalSettings:
+          $ref: "#/components/schemas/KeyRetrievalSettings"
         loginSettings:
           $ref: "#/components/schemas/LoginSettings"
         managedBy:
@@ -13824,6 +14642,8 @@ components:
           - ORGANIZATION
           - ENVIRONMENT
           - PROTECTED_RESOURCE
+        requireDpopForAll:
+          type: boolean
         saml:
           $ref: "#/components/schemas/SAMLSettings"
         scim:
@@ -13858,6 +14678,8 @@ components:
             $ref: "#/components/schemas/VirtualHost"
         webAuthnSettings:
           $ref: "#/components/schemas/WebAuthnSettings"
+        webProtectionSettings:
+          $ref: "#/components/schemas/WebProtectionSettings"
     DomainPage:
       type: object
       properties:
@@ -14021,6 +14843,8 @@ components:
           type: string
         name:
           type: string
+        target:
+          type: string
         type:
           type: string
         updatedAt:
@@ -14056,6 +14880,8 @@ components:
         defaultEntrypoint:
           type: boolean
         description:
+          type: string
+        environmentId:
           type: string
         id:
           type: string
@@ -14359,6 +15185,29 @@ components:
           description: Input type of the field.
           example: email
       title: Form field
+    GraviteeLicense:
+      type: object
+      properties:
+        expiresAt:
+          type: integer
+          format: int64
+          description: Epoch timestamp in milliseconds.
+        features:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        isExpired:
+          type: boolean
+        packs:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        scope:
+          type: string
+        tier:
+          type: string
     Group:
       type: object
       properties:
@@ -14442,6 +15291,18 @@ components:
           type: integer
           format: int64
           description: Epoch timestamp in milliseconds.
+    IdJagSettings:
+      type: object
+      description: ID-JAG issuance behavior of token exchange.
+      properties:
+        laxValidation:
+          type: boolean
+          default: false
+          description: "Lax validation: also accept an access token as the subject\
+            \ token. By default only an ID token is accepted. The access token must\
+            \ be issued to the requesting client or, when an MCP server requests,\
+            \ have that MCP server as audience."
+      title: ID-JAG settings
     IdentityProvider:
       type: object
       properties:
@@ -14499,12 +15360,21 @@ components:
               type: string
         system:
           type: boolean
+        systemClusterRestricted:
+          type: boolean
         type:
           type: string
         updatedAt:
           type: integer
           format: int64
           description: Epoch timestamp in milliseconds.
+    InstallationConfiguration:
+      type: object
+      properties:
+        systemClusterRestricted:
+          type: boolean
+        type:
+          type: string
     InstallationEntity:
       type: object
       properties:
@@ -14551,11 +15421,46 @@ components:
           type: string
     JWKSet:
       type: object
+      description: Inline JWK set. Required when source is JWK_SET.
       properties:
         keys:
           type: array
           items:
             $ref: "#/components/schemas/JWK"
+    KeyRetrievalSettings:
+      type: object
+      description: "Fetch, SSRF and cache limits applied to every trusted domain in\
+        \ the security domain."
+      properties:
+        allowPrivateIpAddress:
+          type: boolean
+          default: false
+          description: Whether key material can be fetched from private IP addresses.
+        allowUnsecuredHttpUri:
+          type: boolean
+          default: false
+          description: Whether key material can be fetched over unsecured HTTP URIs.
+        cacheMaxEntries:
+          type: integer
+          format: int32
+          default: 50
+          description: Maximum number of key material entries retained in the cache.
+        cacheTtlSeconds:
+          type: integer
+          format: int32
+          default: 300
+          description: "Time-to-live, in seconds, for cached key material."
+        fetchTimeoutMs:
+          type: integer
+          format: int32
+          default: 5000
+          description: "Timeout, in milliseconds, for fetching key material."
+        maxResponseSizeKb:
+          type: integer
+          format: int32
+          default: 32
+          description: "Maximum key material response size, in kilobytes."
+      title: Trusted domain key retrieval settings
     LoginSettings:
       type: object
       description: Configuration of the domain's login flow and the features offered
@@ -14964,7 +15869,6 @@ components:
         name:
           type: string
       required:
-      - dataPlaneId
       - name
     NewEmail:
       type: object
@@ -15020,6 +15924,8 @@ components:
       type: object
       properties:
         description:
+          type: string
+        environmentId:
           type: string
         name:
           type: string
@@ -15345,6 +16251,15 @@ components:
     NewReporter:
       type: object
       properties:
+        attributeMappingEventTypes:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        attributeMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReporterAttributeMapping"
         configuration:
           type: string
         enabled:
@@ -15450,10 +16365,16 @@ components:
       properties:
         allowedAlgorithms:
           type: array
+          deprecated: true
+          description: Use spiffe.allowedAlgorithms instead.
           items:
             type: string
+            deprecated: true
+            description: Use spiffe.allowedAlgorithms instead.
         bundleSource:
           type: string
+          deprecated: true
+          description: Use keyMaterial.source instead.
           enum:
           - JWKS_URL
           - STATIC_JWKS
@@ -15461,11 +16382,46 @@ components:
           type: string
         jwksUrl:
           type: string
+          deprecated: true
+          description: Use keyMaterial.jwksUrl instead.
         name:
           type: string
+          maxLength: 255
+          minLength: 0
         refreshIntervalSeconds:
           type: integer
           format: int32
+          deprecated: true
+          description: Use keyMaterial.refreshIntervalSeconds instead.
+    NewTrustedDomain:
+      type: object
+      properties:
+        crossAppAccess:
+          $ref: "#/components/schemas/CrossAppAccessSettings"
+        description:
+          type: string
+        domainIdentifier:
+          type: string
+          description: "Issuer identifier of this authority's authorization server.\
+            \ Matched against the \"iss\" of an external JWT inbound, and carried\
+            \ as the \"aud\" of an ID-JAG outbound. Required when token exchange or\
+            \ Cross App Access is enabled."
+          example: https://sso.acme.com
+          maxLength: 512
+          minLength: 0
+        keyMaterial:
+          $ref: "#/components/schemas/TrustDomainKeyMaterial"
+        name:
+          type: string
+          description: Label the trusted domain is known by. Unique within the security
+            domain.
+          example: acme-corp
+          maxLength: 255
+          minLength: 0
+        spiffe:
+          $ref: "#/components/schemas/SpiffeTrustSettings"
+        tokenExchange:
+          $ref: "#/components/schemas/TokenExchangeTrustSettings"
     NewUser:
       type: object
       properties:
@@ -15561,6 +16517,8 @@ components:
           $ref: "#/components/schemas/CIMDSettings"
         clientRegistrationSettings:
           $ref: "#/components/schemas/ClientRegistrationSettings"
+        dpopSettings:
+          $ref: "#/components/schemas/DPoPSettings"
         postLogoutRedirectUris:
           type: array
           description: "URLs to which a relying party may request the user be redirected\
@@ -15901,6 +16859,7 @@ components:
             - PROTECTED_RESOURCE_SETTINGS
             - PROTECTED_RESOURCE_OAUTH
             - PROTECTED_RESOURCE_CERTIFICATE
+            - PROTECTED_RESOURCE_FLOW
             - INSTALLATION
           uniqueItems: true
         settings:
@@ -15961,6 +16920,8 @@ components:
           type: array
           items:
             type: string
+        crossAppAccessSettings:
+          $ref: "#/components/schemas/ApplicationCrossAppAccessSettings"
         defaultACRvalues:
           type: array
           items:
@@ -15969,6 +16930,8 @@ components:
           type: integer
           format: int32
         disableRefreshTokenRotation:
+          type: boolean
+        dpopBoundAccessTokens:
           type: boolean
         enhanceScopesWithUserPermissions:
           type: boolean
@@ -15980,6 +16943,9 @@ components:
           type: array
           items:
             type: string
+        idJagValiditySeconds:
+          type: integer
+          format: int32
         idTokenEncryptedResponseAlg:
           type: string
         idTokenEncryptedResponseEnc:
@@ -15997,6 +16963,8 @@ components:
           type: string
         logoUri:
           type: string
+        optInScopeSelection:
+          type: boolean
         policyUri:
           type: string
         postLogoutRedirectUris:
@@ -16141,8 +17109,6 @@ components:
           $ref: "#/components/schemas/PatchMFASettings"
         oauth:
           $ref: "#/components/schemas/PatchApplicationOAuthSettings"
-        passwordSettings:
-          $ref: "#/components/schemas/PatchPasswordSettings"
         requiredPermissions:
           type: array
           items:
@@ -16216,6 +17182,7 @@ components:
             - PROTECTED_RESOURCE_SETTINGS
             - PROTECTED_RESOURCE_OAUTH
             - PROTECTED_RESOURCE_CERTIFICATE
+            - PROTECTED_RESOURCE_FLOW
             - INSTALLATION
           uniqueItems: true
         riskAssessment:
@@ -16336,6 +17303,15 @@ components:
         openDynamicClientRegistrationEnabled:
           type: boolean
           writeOnly: true
+    PatchDPoPSettings:
+      type: object
+      properties:
+        dpopSigningAlgorithms:
+          type: array
+          items:
+            type: string
+        requireDpopForAll:
+          type: boolean
     PatchDomain:
       type: object
       properties:
@@ -16353,6 +17329,8 @@ components:
           type: string
         enabled:
           type: boolean
+        keyRetrievalSettings:
+          $ref: "#/components/schemas/PatchKeyRetrievalSettings"
         loginSettings:
           $ref: "#/components/schemas/PatchLoginSettings"
         master:
@@ -16438,6 +17416,7 @@ components:
             - PROTECTED_RESOURCE_SETTINGS
             - PROTECTED_RESOURCE_OAUTH
             - PROTECTED_RESOURCE_CERTIFICATE
+            - PROTECTED_RESOURCE_FLOW
             - INSTALLATION
           uniqueItems: true
         saml:
@@ -16465,6 +17444,8 @@ components:
             $ref: "#/components/schemas/VirtualHost"
         webAuthnSettings:
           $ref: "#/components/schemas/WebAuthnSettings"
+        webProtectionSettings:
+          $ref: "#/components/schemas/WebProtectionSettings"
     PatchEnrollSettings:
       type: object
       properties:
@@ -16504,6 +17485,25 @@ components:
             $ref: "#/components/schemas/PatchApplicationFactorSettings"
         defaultFactorId:
           type: string
+    PatchKeyRetrievalSettings:
+      type: object
+      properties:
+        allowPrivateIpAddress:
+          type: boolean
+        allowUnsecuredHttpUri:
+          type: boolean
+        cacheMaxEntries:
+          type: integer
+          format: int32
+        cacheTtlSeconds:
+          type: integer
+          format: int32
+        fetchTimeoutMs:
+          type: integer
+          format: int32
+        maxResponseSizeKb:
+          type: integer
+          format: int32
     PatchLoginSettings:
       type: object
       properties:
@@ -16568,6 +17568,8 @@ components:
           $ref: "#/components/schemas/PatchCIMDSettings"
         clientRegistrationSettings:
           $ref: "#/components/schemas/PatchClientRegistrationSettings"
+        dpopSettings:
+          $ref: "#/components/schemas/PatchDPoPSettings"
         postLogoutRedirectUris:
           type: array
           items:
@@ -16651,6 +17653,7 @@ components:
             - PROTECTED_RESOURCE_SETTINGS
             - PROTECTED_RESOURCE_OAUTH
             - PROTECTED_RESOURCE_CERTIFICATE
+            - PROTECTED_RESOURCE_FLOW
             - INSTALLATION
           uniqueItems: true
         securityProfileSettings:
@@ -16817,6 +17820,7 @@ components:
             - PROTECTED_RESOURCE_SETTINGS
             - PROTECTED_RESOURCE_OAUTH
             - PROTECTED_RESOURCE_CERTIFICATE
+            - PROTECTED_RESOURCE_FLOW
             - INSTALLATION
           uniqueItems: true
     PatchScope:
@@ -16847,14 +17851,22 @@ components:
       properties:
         allowPrivateIpAddress:
           type: boolean
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.allowPrivateIpAddress."
         allowUnsecuredHttpUri:
           type: boolean
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.allowUnsecuredHttpUri."
         cacheMaxEntries:
           type: integer
           format: int32
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.cacheMaxEntries."
         cacheTtlSeconds:
           type: integer
           format: int32
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.cacheTtlSeconds."
         clockSkewSeconds:
           type: integer
           format: int32
@@ -16867,12 +17879,16 @@ components:
         fetchTimeoutMs:
           type: integer
           format: int32
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.fetchTimeoutMs."
         maxJwtLifetimeSeconds:
           type: integer
           format: int32
         maxResponseSizeKb:
           type: integer
           format: int32
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.maxResponseSizeKb."
     PatchStepUpAuthentication:
       type: object
       properties:
@@ -17024,6 +18040,15 @@ components:
     Reporter:
       type: object
       properties:
+        attributeMappingEventTypes:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        attributeMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReporterAttributeMapping"
         configuration:
           type: string
         createdAt:
@@ -17055,6 +18080,20 @@ components:
           type: integer
           format: int64
           description: Epoch timestamp in milliseconds.
+    ReporterAttributeMapping:
+      type: object
+      description: "Exports one additional attribute, read from the audit context\
+        \ by expression, under a chosen field name."
+      properties:
+        exportedName:
+          type: string
+          description: The name the evaluated value takes on the exported payload.
+          example: user_sub
+        expression:
+          type: string
+          description: Expression evaluated against the audit context.
+          example: "{#context.attributes['user'].additionalInformation['sub']}"
+      title: Reporter attribute mapping
     ResetPasswordSettings:
       type: object
       description: Rules applied to a self-service password reset.
@@ -17510,22 +18549,22 @@ components:
       properties:
         allowPrivateIpAddress:
           type: boolean
-          default: false
-          description: Whether trust bundles can be fetched from private IP addresses.
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.allowPrivateIpAddress."
         allowUnsecuredHttpUri:
           type: boolean
-          default: false
-          description: Whether trust bundles can be fetched over unsecured HTTP URIs.
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.allowUnsecuredHttpUri."
         cacheMaxEntries:
           type: integer
           format: int32
-          default: 50
-          description: Maximum number of trust bundle entries retained in the cache.
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.cacheMaxEntries."
         cacheTtlSeconds:
           type: integer
           format: int32
-          default: 300
-          description: "Time-to-live, in seconds, for cached trust bundle entries."
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.cacheTtlSeconds."
         clockSkewSeconds:
           type: integer
           format: int32
@@ -17534,12 +18573,18 @@ components:
             \ claims."
         defaultAllowedAlgorithms:
           type: array
+          default:
+          - RS256
+          - RS384
+          - RS512
+          - ES256
+          - ES384
+          - ES512
+          - EdDSA
           description: Default allowlist of signature algorithms accepted for SPIFFE
             JWT validation.
           items:
             type: string
-            description: Default allowlist of signature algorithms accepted for SPIFFE
-              JWT validation.
         enabled:
           type: boolean
           default: false
@@ -17548,8 +18593,8 @@ components:
         fetchTimeoutMs:
           type: integer
           format: int32
-          default: 5000
-          description: "Timeout, in milliseconds, for fetching trust bundles."
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.fetchTimeoutMs."
         maxJwtLifetimeSeconds:
           type: integer
           format: int32
@@ -17559,8 +18604,27 @@ components:
         maxResponseSizeKb:
           type: integer
           format: int32
-          default: 32
-          description: "Maximum trust bundle response size, in kilobytes."
+          deprecated: true
+          description: "Deprecated: moved to keyRetrievalSettings.maxResponseSizeKb."
+    SpiffeTrustSettings:
+      type: object
+      description: Accepts JWT-SVIDs from this authority as client assertions.
+      properties:
+        allowedAlgorithms:
+          type: array
+          description: Signature algorithms accepted for JWT-SVID validation. Defaults
+            to workloadIdentitySettings.defaultAllowedAlgorithms when absent.
+          items:
+            type: string
+            description: Signature algorithms accepted for JWT-SVID validation. Defaults
+              to workloadIdentitySettings.defaultAllowedAlgorithms when absent.
+        spiffeTrustDomain:
+          type: string
+          description: "SPIFFE trust domain matched against the \"sub\" of a JWT-SVID,\
+            \ without the \"spiffe://\" scheme. Lowercased on write. Unique within\
+            \ the security domain."
+          example: acme.org
+      title: SPIFFE trust settings
     StatusEntity:
       type: object
       properties:
@@ -17702,6 +18766,7 @@ components:
           - ACCESS_TOKEN
           - REFRESH_TOKEN
           - ID_TOKEN
+          - ID_JAG
     TokenExchangeOAuthSettings:
       type: object
       description: "OAuth-specific token-exchange behavior, such as how scopes are\
@@ -17775,30 +18840,78 @@ components:
           type: boolean
           default: false
           description: Whether token exchange is enabled for the domain.
+        idJagSettings:
+          $ref: "#/components/schemas/IdJagSettings"
         maxDelegationDepth:
           type: integer
           format: int32
           default: 25
           description: Maximum depth of the delegation chain (nested "act" claims).
-            Clamped to the range 1–100.
+            Range 1–100.
+          maximum: 100
+          minimum: 1
         tokenExchangeOAuthSettings:
           $ref: "#/components/schemas/TokenExchangeOAuthSettings"
         trustedIssuers:
           type: array
-          description: "External issuers whose JWTs may be accepted as subject or\
-            \ actor tokens. When unset, only domain-issued tokens are accepted."
+          deprecated: true
+          description: "Deprecated: use the trusted-domains API instead. External\
+            \ issuers whose JWTs may be accepted as subject or actor tokens. A projection\
+            \ over the security domain's token-exchange trusted domains; a write replaces\
+            \ the list, so an omitted issuer is no longer trusted."
           items:
             $ref: "#/components/schemas/TrustedIssuer"
       title: Token exchange settings
+    TokenExchangeTrustSettings:
+      type: object
+      description: "Accepts this authority's JWTs as subject or actor tokens during\
+        \ an RFC 8693 exchange, matched by domainIdentifier."
+      properties:
+        enabled:
+          type: boolean
+          default: false
+          description: "Whether AM accepts this authority's JWTs during an RFC 8693\
+            \ exchange. Requires a domainIdentifier. Written false, it drops the block\
+            \ and the settings under it, keeping the identifier Cross App Access needs."
+        scopeMappings:
+          type: object
+          additionalProperties:
+            type: string
+            description: One-to-one mapping from external scope to domain scope. Unmapped
+              issuer scopes are dropped (fail-closed).
+          description: One-to-one mapping from external scope to domain scope. Unmapped
+            issuer scopes are dropped (fail-closed).
+        userBindingCriteria:
+          type: array
+          description: Criteria used to locate a domain user when user binding is
+            enabled. All criteria are combined with AND.
+          items:
+            $ref: "#/components/schemas/UserBindingCriterion"
+        userBindingEnabled:
+          type: boolean
+          default: false
+          description: "Whether the external JWT subject is resolved to a single domain\
+            \ user using the user binding criteria. When false, a virtual user is\
+            \ built from the token claims only."
+      title: Token exchange trust settings
     TrustDomain:
       type: object
+      deprecated: true
+      description: "Deprecated: use the /trusted-domains endpoint instead."
       properties:
         allowedAlgorithms:
           type: array
+          deprecated: true
+          description: Use spiffe.allowedAlgorithms instead.
           items:
             type: string
+            deprecated: true
+            description: Use spiffe.allowedAlgorithms instead.
         bundleSource:
           type: string
+          deprecated: true
+          description: Use keyMaterial.source instead. Null when the key material
+            is a PEM certificate.
           enum:
           - JWKS_URL
           - STATIC_JWKS
@@ -17808,10 +18921,20 @@ components:
           description: Epoch timestamp in milliseconds.
         description:
           type: string
+        domainIdentifier:
+          type: string
         id:
           type: string
+        issuer:
+          type: string
+          deprecated: true
+          description: Use domainIdentifier instead.
         jwksUrl:
           type: string
+          deprecated: true
+          description: Use keyMaterial.jwksUrl instead.
+        keyMaterial:
+          $ref: "#/components/schemas/TrustDomainKeyMaterial"
         name:
           type: string
         referenceId:
@@ -17828,14 +18951,133 @@ components:
         refreshIntervalSeconds:
           type: integer
           format: int32
+          deprecated: true
+          description: Use keyMaterial.refreshIntervalSeconds instead.
+        scopeMappings:
+          type: object
+          additionalProperties:
+            type: string
+            deprecated: true
+            description: Use tokenExchange.scopeMappings instead.
+          deprecated: true
+          description: Use tokenExchange.scopeMappings instead.
+        spiffe:
+          $ref: "#/components/schemas/SpiffeTrustSettings"
+        spiffeTrustDomain:
+          type: string
+          deprecated: true
+          description: Use spiffe.spiffeTrustDomain instead.
         staticJwks:
           $ref: "#/components/schemas/JWKSet"
+        tokenExchange:
+          $ref: "#/components/schemas/TokenExchangeTrustSettings"
         updatedAt:
           type: integer
           format: int64
           description: Epoch timestamp in milliseconds.
+        userBindingCriteria:
+          type: array
+          deprecated: true
+          description: Use tokenExchange.userBindingCriteria instead.
+          items:
+            $ref: "#/components/schemas/UserBindingCriterion"
+        userBindingEnabled:
+          type: boolean
+          deprecated: true
+          description: Use tokenExchange.userBindingEnabled instead.
+      title: Trust domain
+    TrustDomainKeyMaterial:
+      type: object
+      description: Where the trusted domain's signing keys come from. Exactly one
+        source applies.
+      properties:
+        certificate:
+          type: string
+          description: PEM-encoded X.509 certificate. Required when source is PEM.
+        jwkSet:
+          $ref: "#/components/schemas/JWKSet"
+        jwksUrl:
+          type: string
+          description: JWKS endpoint URL. Required when source is JWKS_URL.
+          example: https://issuer.example.com/.well-known/jwks.json
+        refreshIntervalSeconds:
+          type: integer
+          format: int32
+          description: "How often the JWKS endpoint is re-polled, clamped by keyRetrievalSettings.cacheTtlSeconds.\
+            \ Applies only when source is JWKS_URL."
+        source:
+          type: string
+          description: Which of the three key sources this trusted domain uses.
+          enum:
+          - JWKS_URL
+          - JWK_SET
+          - PEM
+      title: Trusted domain key material
+    TrustedDomain:
+      type: object
+      properties:
+        createdAt:
+          type: integer
+          format: int64
+          description: Epoch timestamp in milliseconds.
+        crossAppAccess:
+          $ref: "#/components/schemas/CrossAppAccessSettings"
+        description:
+          type: string
+        domainIdentifier:
+          type: string
+          description: "Issuer identifier of this authority's authorization server.\
+            \ Matched against the \"iss\" of an external JWT during an RFC 8693 exchange,\
+            \ and carried by the \"aud\" claim of an ID-JAG minted towards it. Unique\
+            \ within the security domain."
+          example: https://sso.acme.com
+          maxLength: 512
+        id:
+          type: string
+        keyMaterial:
+          $ref: "#/components/schemas/TrustDomainKeyMaterial"
+        name:
+          type: string
+          description: Label the trusted domain is known by. Unique within the security
+            domain.
+          example: acme-corp
+        referenceId:
+          type: string
+        referenceType:
+          type: string
+          enum:
+          - PLATFORM
+          - DOMAIN
+          - APPLICATION
+          - ORGANIZATION
+          - ENVIRONMENT
+          - PROTECTED_RESOURCE
+        spiffe:
+          $ref: "#/components/schemas/SpiffeTrustSettings"
+        tokenExchange:
+          $ref: "#/components/schemas/TokenExchangeTrustSettings"
+        updatedAt:
+          type: integer
+          format: int64
+          description: Epoch timestamp in milliseconds.
+    TrustedDomainPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustedDomain"
+        nextCursor:
+          type: string
+        page:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int64
     TrustedIssuer:
       type: object
+      deprecated: true
       description: "An external token issuer whose JWTs are accepted as subject or\
         \ actor tokens during token exchange, validated with the configured key material."
       properties:
@@ -18215,6 +19457,15 @@ components:
     UpdateReporter:
       type: object
       properties:
+        attributeMappingEventTypes:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        attributeMappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReporterAttributeMapping"
         configuration:
           type: string
         enabled:
@@ -18294,10 +19545,16 @@ components:
       properties:
         allowedAlgorithms:
           type: array
+          deprecated: true
+          description: Use spiffe.allowedAlgorithms instead.
           items:
             type: string
+            deprecated: true
+            description: Use spiffe.allowedAlgorithms instead.
         bundleSource:
           type: string
+          deprecated: true
+          description: Use keyMaterial.source instead.
           enum:
           - JWKS_URL
           - STATIC_JWKS
@@ -18305,9 +19562,40 @@ components:
           type: string
         jwksUrl:
           type: string
+          deprecated: true
+          description: Use keyMaterial.jwksUrl instead.
         refreshIntervalSeconds:
           type: integer
           format: int32
+          deprecated: true
+          description: Use keyMaterial.refreshIntervalSeconds instead.
+    UpdateTrustedDomain:
+      type: object
+      properties:
+        crossAppAccess:
+          $ref: "#/components/schemas/CrossAppAccessSettings"
+        description:
+          type: string
+        domainIdentifier:
+          type: string
+          description: "Issuer identifier of this authority's authorization server.\
+            \ Matched against the \"iss\" of an external JWT inbound, and carried\
+            \ as the \"aud\" of an ID-JAG outbound. Required when token exchange or\
+            \ Cross App Access is enabled."
+          example: https://sso.acme.com
+          maxLength: 512
+          minLength: 0
+        keyMaterial:
+          $ref: "#/components/schemas/TrustDomainKeyMaterial"
+        name:
+          type: string
+          description: New label for the trusted domain. Kept unchanged when absent.
+          maxLength: 255
+          minLength: 0
+        spiffe:
+          $ref: "#/components/schemas/SpiffeTrustSettings"
+        tokenExchange:
+          $ref: "#/components/schemas/TokenExchangeTrustSettings"
     UpdateUser:
       type: object
       properties:
@@ -18449,6 +19737,8 @@ components:
           type: string
         client:
           type: string
+        consolePreferences:
+          $ref: "#/components/schemas/ConsoleUserPreferences"
         createdAt:
           type: integer
           format: int64
@@ -18677,6 +19967,8 @@ components:
           type: string
         client:
           type: string
+        consolePreferences:
+          $ref: "#/components/schemas/ConsoleUserPreferences"
         createdAt:
           type: integer
           format: int64
@@ -19044,6 +20336,62 @@ components:
           - PREFERRED
           - DISCOURAGED
       title: WebAuthn settings
+    WebProtectionSettings:
+      type: object
+      description: HTTP security headers applied to the domain's login and consent
+        pages.
+      properties:
+        csp:
+          $ref: "#/components/schemas/CspSettings"
+        xframe:
+          $ref: "#/components/schemas/XFrameSettings"
+        xss:
+          $ref: "#/components/schemas/XssProtectionSettings"
+      title: Web protection settings
+    XFrameSettings:
+      type: object
+      description: Controls whether the domain's pages may be embedded in frames on
+        other origins.
+      properties:
+        action:
+          type: string
+          description: X-Frame-Options action. Omit to leave the header out.
+          enum:
+          - DENY
+          - SAMEORIGIN
+          example: DENY
+        enabled:
+          type: boolean
+          default: false
+          description: Whether X-Frame-Options is enabled for the domain when not
+            inherited.
+        inherited:
+          type: boolean
+          default: true
+          description: "Whether X-Frame-Options settings are inherited from the gateway\
+            \ defaults (gravitee.yml). When null, legacy behaviour applies: enabled=true\
+            \ overrides and enabled=false inherits."
+      title: X-Frame-Options settings
+    XssProtectionSettings:
+      type: object
+      description: Controls the legacy X-XSS-Protection response header.
+      properties:
+        action:
+          type: string
+          description: Value of the X-XSS-Protection header.
+          example: 1; mode=block
+        enabled:
+          type: boolean
+          default: false
+          description: Whether X-XSS-Protection is enabled for the domain when not
+            inherited.
+        inherited:
+          type: boolean
+          default: true
+          description: "Whether X-XSS-Protection settings are inherited from the gateway\
+            \ defaults (gravitee.yml). When null, legacy behaviour applies: enabled=true\
+            \ overrides and enabled=false inherits."
+      title: XSS protection settings
   securitySchemes:
     gravitee-auth:
       scheme: Bearer

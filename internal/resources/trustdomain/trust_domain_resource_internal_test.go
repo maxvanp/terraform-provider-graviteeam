@@ -77,27 +77,53 @@ func TestBuildBodyAndReadIntoModel(t *testing.T) {
 		AllowedAlgorithms:      []types.String{types.StringValue("RS256"), types.StringValue("ES256")},
 	}
 	want := map[string]interface{}{
-		"name": "spiffe.example.com", "description": "Workloads", "bundleSource": "JWKS_URL",
-		"jwksUrl": "https://example.com/jwks.json", "refreshIntervalSeconds": int64(300),
-		"allowedAlgorithms": []string{"RS256", "ES256"},
+		"name": "spiffe.example.com", "description": "Workloads",
+		"keyMaterial": map[string]interface{}{
+			"source": "JWKS_URL", "jwksUrl": "https://example.com/jwks.json", "refreshIntervalSeconds": int64(300),
+		},
+		"spiffe": map[string]interface{}{
+			"spiffeTrustDomain": "spiffe.example.com",
+			"allowedAlgorithms": []string{"RS256", "ES256"},
+		},
 	}
 	if got := buildBody(model, true); !reflect.DeepEqual(got, want) {
 		t.Fatalf("create body = %#v, want %#v", got, want)
 	}
-	if got := buildBody(model, false); got["name"] != nil {
-		t.Fatalf("update body should omit name: %#v", got)
+	update := buildBody(model, false)
+	if update["name"] != nil {
+		t.Fatalf("update body should omit name: %#v", update)
+	}
+	if spiffe, ok := update["spiffe"].(map[string]interface{}); !ok || spiffe["spiffeTrustDomain"] != "spiffe.example.com" {
+		t.Fatalf("update body should keep the SPIFFE trust domain: %#v", update)
 	}
 
 	(&TrustDomainResource{}).readIntoModel(&model, map[string]interface{}{
-		"id": "trust-1", "name": "spiffe.example.com", "bundleSource": "jwks_url",
-		"jwksUrl": "https://example.com/jwks.json", "refreshIntervalSeconds": float64(600),
-		"allowedAlgorithms": []interface{}{"RS256"}, "createdAt": float64(100), "updatedAt": int64(200),
+		"id": "trust-1", "name": "spiffe.example.com",
+		"keyMaterial": map[string]interface{}{
+			"source": "jwks_url", "jwksUrl": "https://example.com/jwks.json", "refreshIntervalSeconds": float64(600),
+		},
+		"spiffe": map[string]interface{}{
+			"spiffeTrustDomain": "spiffe.example.com",
+			"allowedAlgorithms": []interface{}{"RS256"},
+		},
+		"createdAt": float64(100), "updatedAt": int64(200),
 	})
 	if model.ID.ValueString() != "trust-1" || model.BundleSource.ValueString() != "JWKS_URL" || model.RefreshIntervalSeconds.ValueInt64() != 600 {
 		t.Fatalf("unexpected model: %#v", model)
 	}
 	if len(model.AllowedAlgorithms) != 1 || model.AllowedAlgorithms[0].ValueString() != "RS256" {
 		t.Fatalf("allowed algorithms = %#v", model.AllowedAlgorithms)
+	}
+
+	legacy := TrustDomainModel{}
+	(&TrustDomainResource{}).readIntoModel(&legacy, map[string]interface{}{
+		"id": "trust-legacy", "bundleSource": "JWKS_URL",
+		"jwksUrl": "https://example.com/jwks.json", "refreshIntervalSeconds": float64(300),
+		"allowedAlgorithms": []interface{}{"ES256"},
+		"spiffe":            map[string]interface{}{"spiffeTrustDomain": "legacy.example.com"},
+	})
+	if legacy.Name.ValueString() != "legacy.example.com" || legacy.JWKsURL.ValueString() != "https://example.com/jwks.json" || legacy.BundleSource.ValueString() != "JWKS_URL" {
+		t.Fatalf("legacy response = %#v", legacy)
 	}
 }
 
@@ -108,7 +134,7 @@ func TestTrustDomainClientCRUD(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"bearer","expires_in":3600}`))
 	})
-	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-1/trust-domains", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-1/trusted-domains", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
 		var body map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -117,7 +143,7 @@ func TestTrustDomainClientCRUD(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"id":"trust-1","name":"spiffe.example.com"}`))
 	})
-	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-1/trust-domains/trust-1", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/management/organizations/DEFAULT/environments/DEFAULT/domains/domain-1/trusted-domains/trust-1", func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
 		if r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)

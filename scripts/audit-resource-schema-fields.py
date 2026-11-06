@@ -169,6 +169,7 @@ AUDITS = [
             "alertEnabled": "advanced domain patch field managed through settings_json",
             "certificateSettings": "domain certificate fallback has a dedicated resource",
             "corsSettings": "advanced domain patch section managed through settings_json",
+            "keyRetrievalSettings": "JWKS fetch policy managed through settings_json and preserved on domain update",
             "master": "API-managed domain role flag",
             "passwordSettings": "advanced domain patch section managed through settings_json",
             "path": "API-managed domain path",
@@ -182,6 +183,7 @@ AUDITS = [
             "vhostMode": "advanced domain patch field managed through settings_json",
             "vhosts": "advanced domain patch section managed through settings_json",
             "webAuthnSettings": "advanced domain patch section managed through settings_json",
+            "webProtectionSettings": "AM 4.13 web protection settings are managed through settings_json",
         },
     ),
     ResourceSchemaAudit(
@@ -321,7 +323,10 @@ AUDITS = [
             "name": "name",
             "type": "type",
         },
-        intentionally_unmanaged={},
+        intentionally_unmanaged={
+            "attributeMappingEventTypes": "AM 4.13 reporter export filter is preserved from the current API object; it is not a Terraform attribute yet",
+            "attributeMappings": "AM 4.13 reporter attribute mappings are preserved from the current API object; they are not Terraform attributes yet",
+        },
     ),
     ResourceSchemaAudit(
         name="graviteeam_org_reporter",
@@ -334,7 +339,10 @@ AUDITS = [
             "name": "name",
             "type": "type",
         },
-        intentionally_unmanaged={},
+        intentionally_unmanaged={
+            "attributeMappingEventTypes": "AM 4.13 reporter export filter is preserved from the current API object; it is not a Terraform attribute yet",
+            "attributeMappings": "AM 4.13 reporter attribute mappings are preserved from the current API object; they are not Terraform attributes yet",
+        },
     ),
     ResourceSchemaAudit(
         name="graviteeam_group",
@@ -607,15 +615,18 @@ AUDITS = [
     ResourceSchemaAudit(
         name="graviteeam_trust_domain",
         package_dir=ROOT / "internal" / "resources" / "trustdomain",
-        schema_name="UpdateTrustDomain",
+        schema_name="UpdateTrustedDomain",
         api_to_tf={
-            "allowedAlgorithms": "allowed_algorithms",
-            "bundleSource": "bundle_source",
             "description": "description",
-            "jwksUrl": "jwks_url",
-            "refreshIntervalSeconds": "refresh_interval_seconds",
+            "name": "name",
         },
-        intentionally_unmanaged={},
+        intentionally_unmanaged={
+            "crossAppAccess": "Cross App Access settings added in AM 4.13 are not modeled yet",
+            "domainIdentifier": "token-exchange issuer identifier is not modeled; this resource manages SPIFFE trust domains",
+            "keyMaterial": "flattened to bundle_source, jwks_url, and refresh_interval_seconds",
+            "spiffe": "flattened to name as spiffeTrustDomain and to allowed_algorithms",
+            "tokenExchange": "token-exchange trust settings are not modeled by this resource",
+        },
     ),
     ResourceSchemaAudit(
         name="graviteeam_user_certificate_credential",
@@ -670,7 +681,7 @@ AUDIT_CANDIDATES = [
     ResourceSchemaCandidate("graviteeam_scope", ROOT / "internal" / "resources" / "scope", "UpdateScope"),
     ResourceSchemaCandidate("graviteeam_service_resource", ROOT / "internal" / "resources" / "serviceresource", "UpdateServiceResource"),
     ResourceSchemaCandidate("graviteeam_theme", ROOT / "internal" / "resources" / "theme", "NewTheme"),
-    ResourceSchemaCandidate("graviteeam_trust_domain", ROOT / "internal" / "resources" / "trustdomain", "UpdateTrustDomain"),
+    ResourceSchemaCandidate("graviteeam_trust_domain", ROOT / "internal" / "resources" / "trustdomain", "UpdateTrustedDomain"),
     ResourceSchemaCandidate("graviteeam_user", ROOT / "internal" / "resources" / "user", "UpdateUser"),
     ResourceSchemaCandidate("graviteeam_user_certificate_credential", ROOT / "internal" / "resources" / "usercertificatecredential", "NewCertificateCredential"),
 ]

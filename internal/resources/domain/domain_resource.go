@@ -63,7 +63,7 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("default"),
-				Description: "The data plane ID used when creating the domain",
+				Description: "Data plane assigned when the domain is created. Gravitee AM 4.13 rejects a change on an existing domain, so Terraform replaces the domain.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -344,6 +344,7 @@ func copyPatchDomainFields(current map[string]interface{}) map[string]interface{
 		"alertEnabled",
 		"certificateSettings",
 		"corsSettings",
+		"keyRetrievalSettings",
 		"dataPlaneId",
 		"description",
 		"enabled",

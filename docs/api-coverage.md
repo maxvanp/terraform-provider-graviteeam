@@ -6,15 +6,15 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM version | `4.12.7` |
+| Target Gravitee AM version | `4.13.2` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.12.7` |
-| OpenAPI path entries | `205` |
-| Path entries with at least one write verb | `126` |
+| Bundled OpenAPI version | `4.13.2` |
+| OpenAPI path entries | `213` |
+| Path entries with at least one write verb | `130` |
 | Terraform resources registered | `53` |
 | Terraform data sources registered | `20` |
 
-The [AM 4.12 changelog](https://documentation.gravitee.io/am/releases-and-changelog/changelog/am-4.12.x) lists 4.12.7 as a bug-fix release, including trusted-issuer token exchange roles, SCIM email handling, CIMD social login, and Enterprise identity-provider secret references. The upstream 4.12.7 snapshot has no path or schema changes from 4.12.6 or 4.12.1, so this update changes the test server version without changing Terraform resource schemas.
+The [AM 4.13 release notes](https://documentation.gravitee.io/am/releases-and-changelog/release-notes/am-4.13) move external trust to trusted domains, relocate JWKS fetch limits to `keyRetrievalSettings`, and remove application-level password settings. Domain and identity-provider password policies remain. A domain update that names a different `dataPlaneId` is rejected. Compared with 4.12.7, the upstream snapshot grows from 205 paths and 249 schemas to 213 paths and 275 schemas. `graviteeam_trust_domain` calls the new `/trusted-domains` API. The deprecated `/trust-domains` paths stay in the snapshot and are not called.
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -44,13 +44,13 @@ Current automated audit summary:
 
 | Item | Value |
 |------|-------|
-| OpenAPI families | `135` |
-| Writable families | `79` |
-| Read-only families | `56` |
-| Uncovered writable families without Terraform resource | `12` |
+| OpenAPI families | `142` |
+| Writable families | `82` |
+| Read-only families | `60` |
+| Uncovered writable families without Terraform resource | `15` |
 | Unclassified writable resource candidates | `0` |
 | Writable families covered only by data source | `7` |
-| Uncovered read-only families | `0` |
+| Uncovered read-only families | `4` |
 | Registered resources missing test/doc/example artifact | `0` |
 | Registered data sources missing test/doc/example artifact | `0` |
 
@@ -66,7 +66,7 @@ Current test coverage baseline:
 | Resources with disabled import verification | `0` |
 | `go test ./... -coverprofile=/tmp/graviteeam-coverage.out -covermode=atomic` | `97.4%` total statement coverage |
 
-The remaining local compose acceptance gap is `graviteeam_authorization_engine`. In the Gravitee AM 4.12.1 baseline probe, the image loaded the `openfga` authorization engine zip, but the local API reported it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint did not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise.
+The remaining local compose acceptance gap is `graviteeam_authorization_engine`. In the Gravitee AM 4.12.1 baseline probe, the image loaded the `openfga` authorization engine zip, but the local API reported it as `deployed=false` with `feature=am-authorizationengine-openfga`, and its platform schema endpoint did not return a usable schema body. Gravitee documents this OpenFGA authorization engine as a technical preview that requires access from Gravitee, and the plugin marketplace marks it as Enterprise. AM 4.13 deprecates that engine and plans its removal in 4.15.
 
 ## Covered Resources
 
@@ -113,7 +113,7 @@ The remaining local compose acceptance gap is `graviteeam_authorization_engine`.
 | `domain:roles` | `graviteeam_role` |
 | `domain:scopes` | `graviteeam_scope` |
 | `domain:themes` | `graviteeam_theme` |
-| `domain:trust-domains` | `graviteeam_trust_domain` |
+| `domain:trusted-domains` | `graviteeam_trust_domain` |
 | `domain:users` | `graviteeam_user` |
 | `domain:users/cert-credentials` | `graviteeam_user_certificate_credential` |
 | `domain:users/lock` | `graviteeam_user` |
@@ -215,7 +215,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-None currently identified in the 4.12.7 OpenAPI audit. Compared with 4.12.1, all 205 paths and 249 schemas are unchanged; only `info.version` differs in the upstream snapshot.
+No unclassified resource candidate remains in the 4.13.2 audit. `graviteeam_trust_domain` covers `domain:trusted-domains`. The deprecated `domain:trust-domains` API and the new protected-resource flow list stay unmanaged and are listed below.
 
 ### Read-Like POST Endpoints Not Covered
 
@@ -242,14 +242,27 @@ These endpoints may be better represented as explicit resources, one-shot action
 | `domain:users/identities` | User identity lifecycle; read-only state is exposed by `graviteeam_user_identities`, unlink remains unmanaged; local gap probe returned `204` for a missing identity id. |
 | `org:users/bulk` | Reachable in local gap probe, but this is a batch alternative to `graviteeam_org_user` create/update/delete rather than a distinct durable object. |
 | `self:notifications/acknowledge` | Current-user notification acknowledgement operation; reachable in local gap probe but scoped to ephemeral current-user notification state. |
+| `self:preferences` | Current-user console preferences added in AM 4.13. They belong to the authenticated admin session rather than a durable managed object. |
 
-### Read-Only and Admin Metadata Not Covered
+### Deferred AM 4.13 families
 
-The provider currently exposes all read-only and platform metadata families identified by the audit.
+These writable families are real APIs, and this upgrade leaves them unmanaged on purpose.
 
 | API family | Notes |
 |------------|-------|
-| None | No uncovered read-only families remain in the bundled OpenAPI snapshot. |
+| `domain:protected-resources/flows` | Protected-resource flow list added in AM 4.13. The provider does not manage that list yet. |
+| `domain:trust-domains` | Deprecated AM 4.12 trust-domain API. AM 4.13 still serves it and projects each record onto a trusted domain. `graviteeam_trust_domain` calls `/trusted-domains` instead. |
+
+### Read-Only and Admin Metadata Not Covered
+
+AM 4.13 adds four read-only families that this provider does not expose yet.
+
+| API family | Notes |
+|------------|-------|
+| `domain:trusted-domains/_cursor` | Cursor listing for trusted domains. Item lifecycle is managed by `graviteeam_trust_domain`. |
+| `domain:xaa-resource-servers` | Read-only Cross App Access resource-server catalog. |
+| `org:license` | Organization license document used by Gravitee-managed deployments. The local Compose stack does not model it. |
+| `platform:configuration/installation` | Installation configuration metadata. This is separate from the existing `platform:installation` data source family. |
 
 ## Suggested Implementation Order
 

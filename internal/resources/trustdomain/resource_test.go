@@ -57,11 +57,13 @@ resource "graviteeam_domain" "test" {
   description = "Domain for trust-domain acceptance test"
 
   settings_json = jsonencode({
+    keyRetrievalSettings = {
+      allowPrivateIpAddress = true
+      allowUnsecuredHttpUri = true
+    }
     oidc = {
       workloadIdentitySettings = {
         enabled = true
-        allowPrivateIpAddress = true
-        allowUnsecuredHttpUri = true
       }
     }
   })

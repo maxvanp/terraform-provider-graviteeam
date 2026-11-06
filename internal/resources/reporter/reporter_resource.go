@@ -192,7 +192,19 @@ func buildBody(plan ReporterModel, current map[string]interface{}) map[string]in
 			body["inherited"] = inherited
 		}
 	}
+	preserveReporterAttributeMappings(body, current)
 	return body
+}
+
+func preserveReporterAttributeMappings(body, current map[string]interface{}) {
+	if current == nil {
+		return
+	}
+	for _, key := range []string{"attributeMappings", "attributeMappingEventTypes"} {
+		if value, ok := current[key]; ok {
+			body[key] = value
+		}
+	}
 }
 
 func readIntoModel(model *ReporterModel, data map[string]interface{}) {
