@@ -3,12 +3,12 @@
 page_title: "graviteeam_trust_domain Resource - graviteeam"
 subcategory: ""
 description: |-
-  Manages a Gravitee AM workload identity trust domain
+  Manages a Gravitee AM workload identity trust domain through the trusted-domains API. The name is the trusted-domain label and the SPIFFE trust domain. A JWKS URL that uses HTTP or a private address is rejected unless the domain keyRetrievalSettings allow it.
 ---
 
 # graviteeam_trust_domain (Resource)
 
-Manages a Gravitee AM workload identity trust domain
+Manages a Gravitee AM workload identity trust domain through the trusted-domains API. The name is the trusted-domain label and the SPIFFE trust domain. A JWKS URL that uses HTTP or a private address is rejected unless the domain keyRetrievalSettings allow it.
 
 ## Example Usage
 
@@ -29,10 +29,10 @@ resource "graviteeam_trust_domain" "example" {
 
 ### Required
 
-- `bundle_source` (String) The trust bundle source. Gravitee AM 4.12 supports JWKS_URL
+- `bundle_source` (String) Key material source sent as keyMaterial.source. This resource manages JWKS_URL.
 - `domain_id` (String) The ID of the domain this trust domain belongs to
-- `jwks_url` (String) The URL from which Gravitee AM refreshes the JWKS trust bundle
-- `name` (String) The SPIFFE trust domain name
+- `jwks_url` (String) JWKS endpoint URL. HTTP and private addresses require the domain keyRetrievalSettings allowUnsecuredHttpUri and allowPrivateIpAddress.
+- `name` (String) Trusted domain label. Also stored as the SPIFFE trust domain, which Gravitee AM lowercases.
 
 ### Optional
 

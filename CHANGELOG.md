@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update the Gravitee AM compatibility target, local acceptance stack, and OpenAPI refresh default to 4.13.2. The Management API and Gateway images move together; the Gateway pin landed ahead of this change in #34
+- Refresh the upstream 4.13.2 API reference (213 paths and 275 schemas, up from 205 paths and 249 schemas in 4.12.7)
+- Point `graviteeam_trust_domain` at `/trusted-domains`. The resource name is the trusted-domain label and the SPIFFE trust domain, and the JWKS URL is sent as `keyMaterial`
+- Keep domain `keyRetrievalSettings` when a domain is updated, and record that `data_plane_id` cannot change after creation on AM 4.13
+- Keep reporter `attributeMappings` and `attributeMappingEventTypes` on update so an AM 4.13 reporter change does not clear mappings the provider does not manage yet
+- Document the AM 4.13 gaps that stay unmanaged: deprecated `/trust-domains`, protected-resource flows, current-user preferences, and the new read-only license, installation, cursor, and Cross App Access catalogs
+
 ### Fixed
 
 - Upgrade Go to 1.26.10 and `golang.org/x/net` to v0.62.0 so `govulncheck ./...` is clean (GO-2026-6809, GO-2026-6617, GO-2026-6613, GO-2026-6612, GO-2026-6611, GO-2026-6610, GO-2026-6608, GO-2026-6607, GO-2026-6605, GO-2026-6603, GO-2026-6866, GO-2026-6860)
+- Send the trust-domain acceptance domain's JWKS policy through `keyRetrievalSettings`, which is where AM 4.13 enforces HTTP and private-address checks
 
 ## [0.1.1] - 2026-10-01
 

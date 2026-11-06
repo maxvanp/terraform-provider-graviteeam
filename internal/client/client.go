@@ -277,7 +277,7 @@ func (c *Client) SearchApplications(ctx context.Context, domainID string, cursor
 // Trust Domain operations
 
 func (c *Client) CreateTrustDomain(ctx context.Context, domainID string, body map[string]interface{}) (map[string]interface{}, error) {
-	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/trust-domains", body)
+	data, err := c.DoRequest(ctx, http.MethodPost, "/domains/"+domainID+"/trusted-domains", body)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func (c *Client) CreateTrustDomain(ctx context.Context, domainID string, body ma
 }
 
 func (c *Client) GetTrustDomain(ctx context.Context, domainID, id string) (map[string]interface{}, error) {
-	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/trust-domains/"+id, nil)
+	data, err := c.DoRequest(ctx, http.MethodGet, "/domains/"+domainID+"/trusted-domains/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (c *Client) GetTrustDomain(ctx context.Context, domainID, id string) (map[s
 }
 
 func (c *Client) UpdateTrustDomain(ctx context.Context, domainID, id string, body map[string]interface{}) (map[string]interface{}, error) {
-	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/trust-domains/"+id, body)
+	data, err := c.DoRequest(ctx, http.MethodPut, "/domains/"+domainID+"/trusted-domains/"+id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +313,7 @@ func (c *Client) UpdateTrustDomain(ctx context.Context, domainID, id string, bod
 }
 
 func (c *Client) DeleteTrustDomain(ctx context.Context, domainID, id string) error {
-	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/trust-domains/"+id, nil)
+	_, err := c.DoRequest(ctx, http.MethodDelete, "/domains/"+domainID+"/trusted-domains/"+id, nil)
 	return err
 }
 

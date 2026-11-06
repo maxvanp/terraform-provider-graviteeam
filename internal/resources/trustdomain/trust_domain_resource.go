@@ -36,7 +36,7 @@ func (r *TrustDomainResource) Metadata(_ context.Context, req resource.MetadataR
 
 func (r *TrustDomainResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Gravitee AM workload identity trust domain",
+		Description: "Manages a Gravitee AM workload identity trust domain through the trusted-domains API. The name is the trusted-domain label and the SPIFFE trust domain. A JWKS URL that uses HTTP or a private address is rejected unless the domain keyRetrievalSettings allow it.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
@@ -54,7 +54,7 @@ func (r *TrustDomainResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "The SPIFFE trust domain name",
+				Description: "Trusted domain label. Also stored as the SPIFFE trust domain, which Gravitee AM lowercases.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -65,12 +65,12 @@ func (r *TrustDomainResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"bundle_source": schema.StringAttribute{
 				Required:    true,
-				Description: "The trust bundle source. Gravitee AM 4.12 supports JWKS_URL",
+				Description: "Key material source sent as keyMaterial.source. This resource manages JWKS_URL.",
 				Validators:  []validator.String{bundleSourceValidator{}},
 			},
 			"jwks_url": schema.StringAttribute{
 				Required:    true,
-				Description: "The URL from which Gravitee AM refreshes the JWKS trust bundle",
+				Description: "JWKS endpoint URL. HTTP and private addresses require the domain keyRetrievalSettings allowUnsecuredHttpUri and allowPrivateIpAddress.",
 			},
 			"refresh_interval_seconds": schema.Int64Attribute{
 				Optional:    true,
@@ -191,25 +191,39 @@ func parseImportID(id string) (string, string, bool) {
 }
 
 func buildBody(model TrustDomainModel, includeName bool) map[string]interface{} {
-	body := map[string]interface{}{
-		"bundleSource": model.BundleSource.ValueString(),
-		"jwksUrl":      model.JWKsURL.ValueString(),
+	keyMaterial := map[string]interface{}{
+		"source":  model.BundleSource.ValueString(),
+		"jwksUrl": model.JWKsURL.ValueString(),
 	}
-	if includeName {
+	if !model.RefreshIntervalSeconds.IsNull() && !model.RefreshIntervalSeconds.IsUnknown() {
+		keyMaterial["refreshIntervalSeconds"] = model.RefreshIntervalSeconds.ValueInt64()
+	}
+
+	body := map[string]interface{}{
+		"keyMaterial": keyMaterial,
+	}
+	if includeName && !model.Name.IsNull() && !model.Name.IsUnknown() {
 		body["name"] = model.Name.ValueString()
 	}
 	if !model.Description.IsNull() && !model.Description.IsUnknown() {
 		body["description"] = model.Description.ValueString()
 	}
-	if !model.RefreshIntervalSeconds.IsNull() && !model.RefreshIntervalSeconds.IsUnknown() {
-		body["refreshIntervalSeconds"] = model.RefreshIntervalSeconds.ValueInt64()
-	}
-	if model.AllowedAlgorithms != nil {
-		algorithms := make([]string, len(model.AllowedAlgorithms))
-		for i, algorithm := range model.AllowedAlgorithms {
-			algorithms[i] = algorithm.ValueString()
+
+	// An update replaces the whole spiffe object. Omit it when algorithms are
+	// unset so an existing SPIFFE trust domain is left in place. Name changes
+	// already force a new resource.
+	if includeName || model.AllowedAlgorithms != nil {
+		spiffe := map[string]interface{}{
+			"spiffeTrustDomain": model.Name.ValueString(),
 		}
-		body["allowedAlgorithms"] = algorithms
+		if model.AllowedAlgorithms != nil {
+			algorithms := make([]string, len(model.AllowedAlgorithms))
+			for i, algorithm := range model.AllowedAlgorithms {
+				algorithms[i] = algorithm.ValueString()
+			}
+			spiffe["allowedAlgorithms"] = algorithms
+		}
+		body["spiffe"] = spiffe
 	}
 	return body
 }
@@ -218,12 +232,27 @@ func (r *TrustDomainResource) readIntoModel(model *TrustDomainModel, data map[st
 	model.ID = readString(data, "id")
 	model.Name = readString(data, "name")
 	model.Description = readString(data, "description")
-	model.BundleSource = readStringUpper(data, "bundleSource")
-	model.JWKsURL = readString(data, "jwksUrl")
-	model.RefreshIntervalSeconds = readInt64(data, "refreshIntervalSeconds")
 	model.CreatedAt = readInt64(data, "createdAt")
 	model.UpdatedAt = readInt64(data, "updatedAt")
-	model.AllowedAlgorithms = readStringList(data, "allowedAlgorithms")
+
+	if keyMaterial, ok := data["keyMaterial"].(map[string]interface{}); ok {
+		model.BundleSource = readStringUpper(keyMaterial, "source")
+		model.JWKsURL = readString(keyMaterial, "jwksUrl")
+		model.RefreshIntervalSeconds = readInt64(keyMaterial, "refreshIntervalSeconds")
+	} else {
+		model.BundleSource = readStringUpper(data, "bundleSource")
+		model.JWKsURL = readString(data, "jwksUrl")
+		model.RefreshIntervalSeconds = readInt64(data, "refreshIntervalSeconds")
+	}
+
+	if spiffe, ok := data["spiffe"].(map[string]interface{}); ok {
+		model.AllowedAlgorithms = readStringList(spiffe, "allowedAlgorithms")
+		if model.Name.IsNull() {
+			model.Name = readString(spiffe, "spiffeTrustDomain")
+		}
+	} else {
+		model.AllowedAlgorithms = readStringList(data, "allowedAlgorithms")
+	}
 }
 
 func readString(data map[string]interface{}, key string) types.String {
@@ -281,7 +310,7 @@ func (bundleSourceValidator) ValidateString(_ context.Context, req validator.Str
 		return
 	}
 	if req.ConfigValue.ValueString() != "JWKS_URL" {
-		resp.Diagnostics.AddError("Unsupported trust bundle source", "Gravitee AM 4.12 supports only JWKS_URL trust domains")
+		resp.Diagnostics.AddError("Unsupported trust bundle source", "graviteeam_trust_domain manages JWKS_URL key material")
 	}
 }
 

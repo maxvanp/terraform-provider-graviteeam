@@ -35,6 +35,15 @@ ACTION_OR_LIFECYCLE_GAPS = {
     "domain:users/identities",
     "org:users/bulk",
     "self:notifications/acknowledge",
+    "self:preferences",
+}
+
+# Writable families that stay unmanaged in this upgrade. trust-domains is the
+# deprecated AM 4.12 endpoint; graviteeam_trust_domain now calls trusted-domains.
+# protected-resources/flows is a new list API with no Terraform resource yet.
+DEFERRED_WRITABLE_GAPS = {
+    "domain:protected-resources/flows",
+    "domain:trust-domains",
 }
 
 RESOURCE_DOCS = ROOT / "docs" / "resources"
@@ -219,7 +228,7 @@ def check_doc_consistency(
     for family in extra_gaps:
         errors.append(f"unknown or non-writable family listed in Known Gaps: {family}")
 
-    classified_writable_gaps = READ_LIKE_POST_GAPS | ACTION_OR_LIFECYCLE_GAPS
+    classified_writable_gaps = READ_LIKE_POST_GAPS | ACTION_OR_LIFECYCLE_GAPS | DEFERRED_WRITABLE_GAPS
     unclassified_writable_gaps = sorted(uncovered_writable - classified_writable_gaps)
     for family in unclassified_writable_gaps:
         errors.append(f"uncovered writable family is not classified as a known non-resource gap: {family}")
@@ -268,7 +277,7 @@ def main() -> None:
     uncovered_writable = sorted(set(writable) - covered_resources)
     writable_datasource_only = sorted((set(writable) & covered_datasources) - covered_resources)
     uncovered_read_only = sorted(set(read_only) - covered_any)
-    resource_candidate_gaps = sorted(set(uncovered_writable) - READ_LIKE_POST_GAPS - ACTION_OR_LIFECYCLE_GAPS)
+    resource_candidate_gaps = sorted(set(uncovered_writable) - READ_LIKE_POST_GAPS - ACTION_OR_LIFECYCLE_GAPS - DEFERRED_WRITABLE_GAPS)
 
     resource_dirs = source_dirs(RESOURCE_SRC)
     datasource_dirs = source_dirs(DATASOURCE_SRC)

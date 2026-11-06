@@ -39,3 +39,25 @@ func TestReporterBuildBodyPreservesUnknownInherited(t *testing.T) {
 		t.Fatalf("expected inherited to be preserved when unknown, got %#v", body["inherited"])
 	}
 }
+
+func TestReporterBuildBodyPreservesAttributeMappings(t *testing.T) {
+	mappings := []interface{}{map[string]interface{}{"name": "userId", "expression": "{#user.id}"}}
+	eventTypes := []interface{}{"USER_LOGIN"}
+	body := buildBody(
+		ReporterModel{
+			Name:          types.StringValue("reporter"),
+			Type:          types.StringValue("reporter-am-file"),
+			Configuration: types.StringValue(`{}`),
+			Enabled:       types.BoolValue(true),
+			Inherited:     types.BoolValue(false),
+		},
+		map[string]interface{}{
+			"attributeMappings":          mappings,
+			"attributeMappingEventTypes": eventTypes,
+		},
+	)
+
+	if body["attributeMappings"] == nil || body["attributeMappingEventTypes"] == nil {
+		t.Fatalf("expected attribute mappings to be preserved, got %#v", body)
+	}
+}

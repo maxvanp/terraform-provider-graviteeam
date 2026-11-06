@@ -48,7 +48,7 @@ resource "graviteeam_domain" "example" {
 
 ### Optional
 
-- `data_plane_id` (String) The data plane ID used when creating the domain
+- `data_plane_id` (String) Data plane assigned when the domain is created. Gravitee AM 4.13 rejects a change on an existing domain, so Terraform replaces the domain.
 - `description` (String) The description of the domain
 - `enabled` (Boolean) Whether the domain is enabled
 - `login_settings` (Block, Optional) Login page settings (see [below for nested schema](#nestedblock--login_settings))
