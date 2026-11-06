@@ -10,7 +10,7 @@ services:
       retries: 10
 
   mongodb:
-    image: mongo:6.0
+    image: mongo:9.0
     ports:
       - "27017:27017"
     healthcheck:
