@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
 ### Changed
 
 - Update the Gravitee AM compatibility target, local acceptance stack, and OpenAPI refresh default to 4.13.2. The Management API and Gateway images move together; the Gateway pin landed ahead of this change in #34
@@ -15,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep domain `keyRetrievalSettings` when a domain is updated, and record that `data_plane_id` cannot change after creation on AM 4.13
 - Keep reporter `attributeMappings` and `attributeMappingEventTypes` on update so an AM 4.13 reporter change does not clear mappings the provider does not manage yet
 - Document the AM 4.13 gaps that stay unmanaged: deprecated `/trust-domains`, protected-resource flows, current-user preferences, and the new read-only license, installation, cursor, and Cross App Access catalogs
+- Upgrade `golang.org/x/oauth2` from 0.36.0 to 0.37.0 (#26)
+- Update the local installation version and usage example to 0.2.0
 
 ### Fixed
 
