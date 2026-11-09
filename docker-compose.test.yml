@@ -40,7 +40,7 @@ services:
       start_period: 30s
 
   am-gateway:
-    image: graviteeio/am-gateway:4.13.2
+    image: graviteeio/am-gateway:4.13.3
     ports:
       - "8092:8092"
     depends_on:
