@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Move the acceptance-test MongoDB image from 6.0 to 8.0 and ignore Dependabot updates to `mongo` versions >= 9, so the stack does not follow the unsupported 9.0 bump in #32. Gravitee AM 4.13 documents MongoDB 4.4 through 8.2; 8.0 stays inside that range
 - Target Gravitee AM 4.13.3 for Management API and Gateway (#37, #38)
 - Refresh the bundled OpenAPI reference to 4.13.3. The snapshot still has 213 paths and 275 schemas; only the document version changed from 4.13.2, so provider resources are unchanged
 

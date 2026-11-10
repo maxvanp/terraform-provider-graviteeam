@@ -17,3 +17,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Gravitee AM supports MongoDB up to 8.0
+      - dependency-name: mongo
+        versions:
+          - ">= 9"
