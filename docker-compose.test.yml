@@ -10,7 +10,7 @@ services:
       retries: 10
 
   mongodb:
-    image: mongo:8.0
+    image: mongo:8.3
     # glibc owns rseq, so TCMalloc leaves its per-CPU cache off and mongod
     # skips the kernel check. GitHub-hosted runners report uname -r as 7.0.0,
     # which 8.0 refuses (SERVER-121912) even when Ubuntu carries the upstream
