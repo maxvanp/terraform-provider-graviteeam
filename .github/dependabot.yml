@@ -17,3 +17,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Gravitee AM 4.13 documents MongoDB 4.4 through 8.2
+      - dependency-name: mongo
+        versions:
+          - ">= 9"
