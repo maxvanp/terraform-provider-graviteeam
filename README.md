@@ -6,11 +6,11 @@ A Terraform provider for managing [Gravitee Access Management](https://www.gravi
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.26.10 (for building from source)
-- [Gravitee Access Management](https://www.gravitee.io/platform/access-management) 4.13.2 (the tested compatibility target)
+- [Gravitee Access Management](https://www.gravitee.io/platform/access-management) 4.13.3 (the tested compatibility target)
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.13.2** Management API. Acceptance tests are run against Gravitee AM 4.13.2. Management API and Gateway images in the acceptance stack are upgraded together.
+This provider targets the **Gravitee AM 4.13.3** Management API. Acceptance tests are run against Gravitee AM 4.13.3. Management API and Gateway images in the acceptance stack are upgraded together.
 
 The bundled [`docs/openapi.yaml`](docs/openapi.yaml) file is a local API reference and is not used by the provider runtime or CI for compatibility validation. Refresh it from the official Gravitee source with `./scripts/update-openapi.sh` when you bump the target AM version.
 

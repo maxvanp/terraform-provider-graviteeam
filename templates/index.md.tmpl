@@ -10,7 +10,7 @@ The Gravitee AM provider allows you to manage [Gravitee Access Management](https
 
 ## Compatibility
 
-This provider targets the **Gravitee AM 4.13.2** Management API. Acceptance tests are run against Gravitee AM 4.13.2. Management API and Gateway images in the acceptance stack are upgraded together.
+This provider targets the **Gravitee AM 4.13.3** Management API. Acceptance tests are run against Gravitee AM 4.13.3. Management API and Gateway images in the acceptance stack are upgraded together.
 
 ## Authentication
 

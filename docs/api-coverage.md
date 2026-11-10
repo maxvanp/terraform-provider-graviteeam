@@ -6,15 +6,15 @@ This document tracks the provider coverage against the bundled Gravitee AM Manag
 
 | Item | Value |
 |------|-------|
-| Target Gravitee AM version | `4.13.2` |
+| Target Gravitee AM version | `4.13.3` |
 | Bundled OpenAPI file | [`docs/openapi.yaml`](openapi.yaml) |
-| Bundled OpenAPI version | `4.13.2` |
+| Bundled OpenAPI version | `4.13.3` |
 | OpenAPI path entries | `213` |
 | Path entries with at least one write verb | `130` |
 | Terraform resources registered | `53` |
 | Terraform data sources registered | `20` |
 
-The [AM 4.13 release notes](https://documentation.gravitee.io/am/releases-and-changelog/release-notes/am-4.13) move external trust to trusted domains, relocate JWKS fetch limits to `keyRetrievalSettings`, and remove application-level password settings. Domain and identity-provider password policies remain. A domain update that names a different `dataPlaneId` is rejected. Compared with 4.12.7, the upstream snapshot grows from 205 paths and 249 schemas to 213 paths and 275 schemas. `graviteeam_trust_domain` calls the new `/trusted-domains` API. The deprecated `/trust-domains` paths stay in the snapshot and are not called.
+The [AM 4.13 release notes](https://documentation.gravitee.io/am/releases-and-changelog/release-notes/am-4.13) move external trust to trusted domains, relocate JWKS fetch limits to `keyRetrievalSettings`, and remove application-level password settings. Domain and identity-provider password policies remain. A domain update that names a different `dataPlaneId` is rejected. Compared with 4.12.7, the upstream snapshot grows from 205 paths and 249 schemas to 213 paths and 275 schemas. The 4.13.3 reference keeps those counts; the only difference from the 4.13.2 snapshot is the document version, so no provider resource changes are required. `graviteeam_trust_domain` calls the new `/trusted-domains` API. The deprecated `/trust-domains` paths stay in the snapshot and are not called.
 
 The OpenAPI file is a reference snapshot only. Refresh it from the official Gravitee repository with:
 
@@ -215,7 +215,7 @@ These API families expose write operations in the OpenAPI reference but are not 
 
 ### High-Value Resource Candidates
 
-No unclassified resource candidate remains in the 4.13.2 audit. `graviteeam_trust_domain` covers `domain:trusted-domains`. The deprecated `domain:trust-domains` API and the new protected-resource flow list stay unmanaged and are listed below.
+No unclassified resource candidate remains in the 4.13.3 audit. `graviteeam_trust_domain` covers `domain:trusted-domains`. The deprecated `domain:trust-domains` API and the new protected-resource flow list stay unmanaged and are listed below.
 
 ### Read-Like POST Endpoints Not Covered
 
