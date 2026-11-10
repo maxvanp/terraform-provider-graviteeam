@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Target Gravitee AM 4.13.3 for Management API and Gateway (#37, #38)
 - Refresh the bundled OpenAPI reference to 4.13.3. The snapshot still has 213 paths and 275 schemas; only the document version changed from 4.13.2, so provider resources are unchanged
+- Upgrade the Go toolchain from 1.26.10 to 1.27.3, including the `crypto/x509` CA trust mitigation (CVE-2026-111943)
+- Upgrade `golangci-lint` from v2.11.4 to v2.15.0 so lint can typecheck Go 1.27
 
 ## [0.2.0] - 2026-11-07
 
