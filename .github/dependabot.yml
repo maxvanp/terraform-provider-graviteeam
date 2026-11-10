@@ -18,7 +18,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     ignore:
-      # Gravitee AM 4.13 documents MongoDB 4.4 through 8.2
+      # Gravitee AM 4.13 documents MongoDB 4.4 through 8.2, so 8.3 and later (including 9+) stay ignored
       - dependency-name: mongo
         versions:
-          - ">= 9"
+          - ">= 8.3"
