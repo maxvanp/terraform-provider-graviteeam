@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgrade the Go toolchain from 1.26.10 to 1.27.3, including the `crypto/x509` CA trust mitigation (CVE-2026-111943)
 - Upgrade `golangci-lint` from v2.11.4 to v2.15.0 so lint can typecheck Go 1.27
 
+### Fixed
+
+- Upgrade Go from 1.27.3 to 1.27.4 so `govulncheck ./...` is clean (GO-2026-6859)
+
 ## [0.2.0] - 2026-11-07
 
 ### Changed
