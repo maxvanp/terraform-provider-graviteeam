@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Upgrade the Go toolchain from 1.27.3 to 1.27.4 so `govulncheck` is clean (GO-2026-6859, CVE-2026-97054)
+- Move the acceptance-test MongoDB image from 8.0 to 8.2, the highest version Gravitee AM 4.13 officially supports (4.4–8.2). Ignore Dependabot updates to the `mongo` image for versions >= 8.3 so only 8.2.x patches are proposed; going beyond 8.2 is a manual decision. Keep `GLIBC_TUNABLES=glibc.pthread.rseq=1` so 8.2 starts on GitHub-hosted runners
 - Move the acceptance-test MongoDB image from 6.0 to 8.0 and ignore Dependabot updates to `mongo` versions >= 9, so the stack does not follow the unsupported 9.0 bump in #32. Gravitee AM 4.13 documents MongoDB 4.4 through 8.2; 8.0 stays inside that range. Set `GLIBC_TUNABLES=glibc.pthread.rseq=1` on the MongoDB container so 8.0 starts on GitHub-hosted runners: they report kernel `7.0.0`, which trips the rseq startup check (SERVER-121912), and Ubuntu's fix level is not visible in `uname -r` (SERVER-136848). glibc then owns rseq and TCMalloc leaves its per-CPU cache off
 - Ignore Dependabot updates to the acceptance-test `mongo` image for versions >= 8.1. Gravitee AM 4.13 is tested up to 8.2; the stack stays on the 8.0 LTS line, and moving to a newer major or minor is a manual decision
 - Target Gravitee AM 4.13.3 for Management API and Gateway (#37, #38)

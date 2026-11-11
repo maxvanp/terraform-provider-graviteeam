@@ -18,8 +18,8 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     ignore:
-      # AM 4.13 is tested up to MongoDB 8.2. Stay on the 8.0 LTS line;
-      # moving to a newer major or minor is a manual decision.
+      # AM 4.13 is tested on MongoDB 4.4–8.2. Going beyond 8.2 is a
+      # manual decision.
       - dependency-name: mongo
         versions:
-          - ">= 8.1"
+          - ">= 8.3"
