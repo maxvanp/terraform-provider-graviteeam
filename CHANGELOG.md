@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-12
+
 ### Changed
 
 - Move the acceptance-test MongoDB image from 6.0 to `mongo:8.2` and ignore Dependabot updates to `mongo` versions >= 8.3. Gravitee AM 4.13 supports MongoDB 4.4–8.2, so 8.2 is the top of that range and going beyond it is a manual decision. Set `GLIBC_TUNABLES=glibc.pthread.rseq=1` on the MongoDB container so 8.2 starts on GitHub-hosted runners: they report kernel `7.0.0`, which trips the rseq startup check (SERVER-121912), and Ubuntu's fix level is not visible in `uname -r` (SERVER-136848). glibc then owns rseq and TCMalloc leaves its per-CPU cache off
@@ -14,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refresh the bundled OpenAPI reference to 4.13.3. The snapshot still has 213 paths and 275 schemas; only the document version changed from 4.13.2, so provider resources are unchanged
 - Upgrade the Go toolchain from 1.26.10 to 1.27.3, including the `crypto/x509` CA trust mitigation (CVE-2026-111943)
 - Upgrade `golangci-lint` from v2.11.4 to v2.15.0 so lint can typecheck Go 1.27
+- Update the local installation version and usage example to 0.2.1
 
 ### Fixed
 
