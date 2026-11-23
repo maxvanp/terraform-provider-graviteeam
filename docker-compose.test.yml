@@ -26,7 +26,7 @@ services:
       retries: 10
 
   am-management-api:
-    image: graviteeio/am-management-api:4.13.3
+    image: graviteeio/am-management-api:4.13.6
     ports:
       - "8093:8093"
     depends_on:
