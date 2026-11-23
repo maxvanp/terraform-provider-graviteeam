@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Complete the Gravitee AM 4.13.6 compatibility target after the Management API and Gateway image pins (#54, #55), and refresh the bundled OpenAPI reference. The snapshot still has 213 paths and 275 schemas; only the document version changed from 4.13.3, so provider resources are unchanged
+
 ## [0.2.1] - 2026-11-12
 
 ### Changed
