@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ref="${1:-4.13.3}"
+ref="${1:-4.13.6}"
 url="https://raw.githubusercontent.com/gravitee-io/gravitee-access-management/${ref}/docs/mapi/openapi.yaml"
 
 curl -fsSL "${url}" -o docs/openapi.yaml
